@@ -30,6 +30,7 @@ BETA = 3.29e-18
 E_I = 1.30
 K_0I = 1.2e13
 T_0 = 1.0
+V=1
 
 class Parameters:
     """
@@ -45,6 +46,7 @@ class Parameters:
         self.alpha_0 = ALPHA_0
         self.beta = BETA
         self.t_0 = T_0
+        self.V = V
         
     def set_E_I_star(self, value: float):
         self.E_I_star = value
@@ -69,6 +71,9 @@ class Parameters:
         
     def set_t_0(self, value: float):
         self.t_0 = value
+    
+    def set_V(self, value: float):
+        self.V = value
 
 def load_data():
     """

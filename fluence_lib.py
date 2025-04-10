@@ -10,9 +10,6 @@ import matplotlib.pyplot as plt
 from datetime import datetime, timedelta
 import tqdm
 
-KB = 8.617333262145e-5
-T_REF = 293.15
-E_I_STAR = 1.0
 
 def load_avg_fluence(file_path: str) -> pd.DataFrame:
     df = pd.read_csv(file_path, skiprows=4)
@@ -29,19 +26,21 @@ def load_temperature_data(file_path: str) -> pd.DataFrame:
     df = df.dropna(how='all')
     return df
 
-def calculate_temperature_factor(T_a: float, E_I_star: float, T_ref: float) -> float:
-    return np.exp(-E_I_star / KB * (1/T_a - 1/T_ref))
+def calculate_temperature_factor_theta(T_a: float, E_I_star: float, T_ref: float, kB: float) -> float:
+    return np.exp(-E_I_star / kB * (1/T_a - 1/T_ref))
 
-def calculate_intrinsic_lifetime(k_0I: float, E_I: float, T_a: float) -> float:
-    return 1.0 / (k_0I * np.exp(-E_I / (KB * T_a)))
+def calculate_intrinsic_lifetime_tau(k_0I: float, E_I: float, T_a: float, kB: float) -> float:
+    return 1.0 / (k_0I * np.exp(-E_I / (kB * T_a)))
+
+def calculate_temperature_factor_theta_vectorized(T_a: np.ndarray, E_I_star: float, T_ref: float, kB: float) -> np.ndarray:
+    return np.exp(-E_I_star / kB * (1/T_a - 1/T_ref))
+
+def calculate_intrinsic_lifetime_tau_vectorized(k_0I: float, E_I: float, T_a: np.ndarray, kB: float) -> np.ndarray:
+    return 1.0 / (k_0I * np.exp(-E_I / (kB * T_a)))
 
 def align_temperature_to_fluence(fluence_df: pd.DataFrame, temp_df: pd.DataFrame, sensor_name: str) -> pd.DataFrame:
     fluence_series = fluence_df[sensor_name]
     temp_series = temp_df[sensor_name]
-    
-    print("\nTime ranges before filtering:")
-    print(f"Fluence range: {fluence_series.index[0]} to {fluence_series.index[-1]}")
-    print(f"Temp range: {temp_series.index[0]} to {temp_series.index[-1]}")
         
     fluence_start = fluence_series.index[0]
     fluence_end = fluence_series.index[-1]
@@ -51,16 +50,9 @@ def align_temperature_to_fluence(fluence_df: pd.DataFrame, temp_df: pd.DataFrame
     start_time = max(fluence_start, temp_start)
     end_time = min(fluence_end, temp_end)
     
-    print(f"\nCalculated overlap: {start_time} to {end_time}")
     
     fluence_series = fluence_series[(fluence_series.index >= start_time) & (fluence_series.index <= end_time)]
     temp_series = temp_series[(temp_series.index >= start_time) & (temp_series.index <= end_time)]
-    
-    print("\nFluence data for sensor after time selection:")
-    print(fluence_series.head())
-    
-    print("\nTemperature data for sensor after time selection:")
-    print(temp_series.head())
     
     temp_series = temp_series.resample('10min').mean()
     
@@ -69,102 +61,83 @@ def align_temperature_to_fluence(fluence_df: pd.DataFrame, temp_df: pd.DataFrame
     
     temp_first = temp_series.index[0]
     fluence_first = fluence_series.index[0]
-    
-    print(f"\nBefore alignment:")
-    print(f"Fluence first timestamp: {fluence_first}")
-    print(f"Temperature first timestamp: {temp_first}")
+
     
     time_diff = (fluence_first - temp_first).total_seconds() % 600
     if time_diff > 300:
         time_diff = time_diff - 600
     
     shift = timedelta(seconds=time_diff)
-    print(f"Calculated shift: {shift} seconds")
     
     fluence_series.index = fluence_series.index - shift
-    
-    print(f"\nAfter alignment:")
-    print(f"Fluence first timestamp: {fluence_series.index[0]}")
-    print(f"Temperature first timestamp: {temp_first}")
-    
+    fluence_series = fluence_series.reindex(pd.date_range(fluence_series.index.min(), fluence_series.index.max(), freq='10T'), fill_value=0)
+        
     return fluence_series, temp_series
 
-def prepare_sensor_data(fluence_df: pd.DataFrame, temp_df: pd.DataFrame, sensor_name: str) -> tuple:
-    return align_temperature_to_fluence(fluence_df, temp_df, sensor_name)
+import pandas as pd
 
-def simulate_current_sensor(fluence_series: pd.Series, temp_series: pd.Series, sensor_name: str, params) -> pd.DataFrame:
+def prepare_sensor_data(fluence_df: pd.DataFrame, temp_df: pd.DataFrame, sensor_name: str) -> tuple:
+    fluence_series, temp_series = align_temperature_to_fluence(fluence_df, temp_df, sensor_name)
+    common_index = fluence_series.index.intersection(temp_series.index)
+    fluence_series_filtered = fluence_series[common_index]
+    temp_series_filtered = temp_series[common_index]
+    
+    fluence_df_result = pd.DataFrame({fluence_series.name: fluence_series_filtered})
+    temp_df_result = pd.DataFrame({temp_series.name: temp_series_filtered})
+    
+    fluence_df_result.index.name = 'ts'
+    temp_df_result.index.name = 'ts'
+    
+    return fluence_df_result, temp_df_result
+
+
+def simulate_current_sensor(fluence_df: pd.Series, temp_df: pd.Series, sensor_name: str, params) -> pd.DataFrame:
     print("Starting current simulation...")
-    
-    result = pd.DataFrame(index=fluence_series.index)
+    time = 600  # s
+
+    if not fluence_df.index.equals(temp_df.index):
+        raise ValueError("Indexes of fluence_df and temp_df must match!")
+
+    result = pd.DataFrame(index=fluence_df.index)
     result['current'] = 0.0
-    result['fluence'] = fluence_series.values
+    result['fluence'] = fluence_df.values
+    result['temperature'] = temp_df.values
+
+    # Vectorized calculation of tau_j and Theta_j
+    temperatures = result['temperature'].values
+    tau_j = calculate_intrinsic_lifetime_tau_vectorized(params.k_0I, params.E_I, temperatures, params.kb)
+    theta_j = calculate_temperature_factor_theta_vectorized(temperatures, params.E_I_star, params.T_ref, params.kb)
     
-    temp_reindexed = temp_series.reindex(fluence_series.index, method='nearest')
-    result['temperature'] = temp_reindexed.values
+    print("Calculating time factors...")
+    # Pre-calculate time factors
+    time_tau = time / tau_j
+    time_theta = theta_j * time / params.t_0
     
-    delta_t_minutes = 10.0  # 10 minutes between samples
-    
-    irradiation_periods = []
-    current_period_start = None
-    
-    # Find irradiation periods
-    for i in range(1, len(result)):
-        phi_eq = result.iloc[i]['fluence'] - result.iloc[i-1]['fluence']
+    print("Starting main calculation loop...")
+    n = len(result)
+    for i in tqdm.tqdm(range(n)):
+        # Use numpy slicing for faster sum calculation
+        sum_1 = np.sum(time_tau[:i-1])
+        sum_2 = np.sum(time_theta[:i-1])
         
-        if phi_eq > 0 and current_period_start is None:
-            current_period_start = i - 1
-        elif phi_eq == 0 and current_period_start is not None:
-            irradiation_periods.append((current_period_start, i))
-            current_period_start = None
-    
-    if current_period_start is not None:
-        irradiation_periods.append((current_period_start, len(result) - 1))
-    
-    print(f"Found {len(irradiation_periods)} irradiation periods")
-    
-    # Process each irradiation period separately
-    for period_start, period_end in irradiation_periods:
-        print(f"Processing period from {result.index[period_start]} to {result.index[period_end]}")
+        # Calculate alpha and current
+        alpha = params.alpha_I * np.exp(-sum_1) + params.alpha_0_star - params.beta * np.log(sum_2)
+        result.loc[result.index[i], 'current'] = result['fluence'].iloc[i] * params.V * alpha
         
-        # Reset sums for each period
-        sum_t_tau = 0
-        sum_theta_t = 0
-        
-        for i in tqdm.tqdm(range(period_start + 1, period_end + 1)):
-            phi_eq = result.iloc[i]['fluence'] - result.iloc[i-1]['fluence']
-            
-            if phi_eq <= 0:
-                continue
-                
-            T_j = result.iloc[i]['temperature']
-            
-            tau = calculate_intrinsic_lifetime(params.k_0I, params.E_I, T_j)
-            theta = calculate_temperature_factor(T_j, params.E_I_star, params.T_ref)
-            
-            # Update sums
-            sum_t_tau += delta_t_minutes / tau
-            sum_theta_t += theta * delta_t_minutes
-            
-            # Calculate current increment
-            delta_I = phi_eq * (
-                params.alpha_I * np.exp(-sum_t_tau) + 
-                params.alpha_0 - 
-                params.beta * np.log(max(1e-10, sum_theta_t / params.t_0))
-            )
-            
-            # Accumulate current
-            if i > 0:
-                result.iloc[i, result.columns.get_loc('current')] = result.iloc[i-1]['current'] + delta_I
-    
+        # Print progress info every 10% of total
+        if i % (n//10) == 0:
+            print(f"Progress: {i/n*100:.1f}%, Current sum_1: {sum_1:.2e}, sum_2: {sum_2:.2e}")
+
     print("Simulation completed!")
     return result
+
 
 def plot_leakage_current(result_df: pd.DataFrame, sensor_name: str, output_path: str = None):
     plt.figure(figsize=(12, 8))
     
     # Plot leakage current
     plt.subplot(3, 1, 1)
-    plt.plot(result_df.index, result_df['current'], 'b-', label='Leakage Current')
+    plt.plot(result_df.index, result_df['current'], 'bo', label='Leakage Current')
     plt.ylabel('Current (A)')
     plt.title(f'Leakage Current for Sensor {sensor_name}')
     plt.grid(True)
@@ -172,7 +145,7 @@ def plot_leakage_current(result_df: pd.DataFrame, sensor_name: str, output_path:
     
     # Plot fluence
     plt.subplot(3, 1, 2)
-    plt.plot(result_df.index, result_df['fluence'], 'r-', label='Fluence')
+    plt.plot(result_df.index, result_df['fluence'], 'ro', label='Fluence')
     plt.ylabel('Fluence (n/cm²)')
     plt.title('Fluence')
     plt.grid(True)
@@ -180,7 +153,7 @@ def plot_leakage_current(result_df: pd.DataFrame, sensor_name: str, output_path:
     
     # Plot temperature
     plt.subplot(3, 1, 3)
-    plt.plot(result_df.index, result_df['temperature'], 'g-', label='Temperature')
+    plt.plot(result_df.index, result_df['temperature'], 'go', label='Temperature')
     plt.ylabel('Temperature (K)')
     plt.xlabel('Time')
     plt.title('Temperature')
