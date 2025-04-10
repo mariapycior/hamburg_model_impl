@@ -90,6 +90,26 @@ def prepare_sensor_data(fluence_df: pd.DataFrame, temp_df: pd.DataFrame, sensor_
     
     return fluence_df_result, temp_df_result
 
+from numba import njit
+import numpy as np
+
+@njit
+def calculate_leakage_current(fluence, time_tau, time_theta, alpha_I, alpha_0_star, beta, V):
+    I_leak = 0.0
+    N = len(fluence)
+    
+    for i in range(N):
+        sum_1 = np.sum(time_tau[i:])
+        sum_2 = np.sum(time_theta[i:])
+        
+        # Calculate alpha
+        alpha = alpha_I * np.exp(-sum_1) + alpha_0_star - beta * np.log(sum_2)
+        
+        # Calculate leakage current
+        I_leak += fluence[i] * V * alpha
+        
+    return I_leak
+
 
 def simulate_current_sensor(fluence_df: pd.Series, temp_df: pd.Series, sensor_name: str, params) -> pd.DataFrame:
     print("Starting current simulation...")
@@ -117,17 +137,14 @@ def simulate_current_sensor(fluence_df: pd.Series, temp_df: pd.Series, sensor_na
     N = len(result)
     for n in tqdm.tqdm(range(N)):
         I_leak = 0.0
-        if n == 2000:
+        if n == 5000:
             break
-        for i in (range(n)):
-            # Use numpy slicing for faster sum calculation
-            sum_1 = np.sum(time_tau[i:])
-            sum_2 = np.sum(time_theta[i:])
-            
-            # Calculate alpha and current
-            alpha = params.alpha_I * np.exp(-sum_1) + params.alpha_0_star - params.beta * np.log(sum_2)
-            I_leak = I_leak + result['fluence'].iloc[i] * params.V * alpha
-    
+        # Call the Numba-optimized leakage current function
+        I_leak = calculate_leakage_current(result['fluence'].iloc[:n].values, time_tau[:n], time_theta[:n], 
+                                           params.alpha_I, params.alpha_0_star, params.beta, params.V)
+        
+        # Store the result in the dataframe
+        result.loc[result.index[n], 'current'] = I_leak
         result.loc[result.index[n], 'current'] = I_leak
 
     print("Simulation completed!")
