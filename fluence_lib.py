@@ -114,19 +114,21 @@ def simulate_current_sensor(fluence_df: pd.Series, temp_df: pd.Series, sensor_na
     time_theta = theta_j * time / params.t_0
     
     print("Starting main calculation loop...")
-    n = len(result)
-    for i in tqdm.tqdm(range(n)):
-        # Use numpy slicing for faster sum calculation
-        sum_1 = np.sum(time_tau[:i-1])
-        sum_2 = np.sum(time_theta[:i-1])
-        
-        # Calculate alpha and current
-        alpha = params.alpha_I * np.exp(-sum_1) + params.alpha_0_star - params.beta * np.log(sum_2)
-        result.loc[result.index[i], 'current'] = result['fluence'].iloc[i] * params.V * alpha
-        
-        # Print progress info every 10% of total
-        if i % (n//10) == 0:
-            print(f"Progress: {i/n*100:.1f}%, Current sum_1: {sum_1:.2e}, sum_2: {sum_2:.2e}")
+    N = len(result)
+    for n in tqdm.tqdm(range(N)):
+        I_leak = 0.0
+        if n == 2000:
+            break
+        for i in (range(n)):
+            # Use numpy slicing for faster sum calculation
+            sum_1 = np.sum(time_tau[i:])
+            sum_2 = np.sum(time_theta[i:])
+            
+            # Calculate alpha and current
+            alpha = params.alpha_I * np.exp(-sum_1) + params.alpha_0_star - params.beta * np.log(sum_2)
+            I_leak = I_leak + result['fluence'].iloc[i] * params.V * alpha
+    
+        result.loc[result.index[n], 'current'] = I_leak
 
     print("Simulation completed!")
     return result
