@@ -10,7 +10,7 @@ from config import Paths
 
 # Physical constants
 KB = 8.617333262145e-5  # Boltzmann constant in eV/K
-T_REF = 294.15  # Reference temperature in K (20°C)
+T_REF = 294.15  # Reference temperature in K (21°C)
 E_I_STAR = 1.30  # Activation energy in eV
 
 # Default parameters for leakage current calculation
@@ -20,7 +20,7 @@ BETA = 3.29e-18  # A/cm
 E_I = 1.11  # eV
 K_0I = 1.2e13  # 1/s
 T_0 = 1.0  # min
-V = 4.0  # cm3
+V = 8.5  # cm3
 
 class Parameters:
     """Class to store physical parameters for leakage current calculations."""
@@ -45,16 +45,18 @@ def main():
     fluence_file = paths.get_fluence_file('avgFluenceBinned.csv')
     
     # Select years for simulation
-    selected_years = [2018]  # Example: Change this to select different years
+    selected_years = [2011,2012,2013,2014,2015,2016,2017,2018]  # Example: Change this to select different years
     print(f"Selected years: {selected_years}")
     
     temp_files = paths.get_temperature_files_for_years(selected_years)
     print(f"Temperature files: {temp_files}")
     
-    # Determine which current files to use based on years
+    # Determine which current files to use based on years  
     current_files = []
-    if any(year in selected_years for year in [2011, 2012, 2013, 2014, 2015]):
+    if any(year in selected_years for year in [2011, 2012]):
         current_files.append(paths.get_current_file('run1_current_sample.csv'))
+    if any(year in selected_years for year in [2013, 2014, 2015]):
+        current_files.append(paths.get_current_file('ls1_current_sample.csv'))
     if any(year in selected_years for year in [2016, 2017, 2018]):
         current_files.append(paths.get_current_file('run2_current_sample.csv'))
     
@@ -84,7 +86,16 @@ def main():
     
     # Plot results
     fluence_lib.plot_leakage_current(
-        simulated_current, current_adjusted, sensor_name
+        simulated_current, current_adjusted, sensor_name,
+        start_date=pd.Timestamp('2018-01-01'),
+        end_date=pd.Timestamp('2018-12-31')
+    )
+    
+    # Plot simulated vs real on the same plot
+    fluence_lib.plot_simulated_vs_real(
+        simulated_current, current_adjusted, sensor_name,
+        start_date=pd.Timestamp('2018-01-01'),
+        end_date=pd.Timestamp('2018-12-31')
     )
 
 if __name__ == "__main__":

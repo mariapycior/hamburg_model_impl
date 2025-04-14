@@ -155,7 +155,7 @@ def combine_periods(df: pd.DataFrame, temp_tolerance: float = 1, fluence_toleran
         # Tworzymy okres
         period_df = df.iloc[current_start:i]
         avg_temp = period_df['temperature'].mean()
-        avg_flu = period_df['fluence'].mean()
+        avg_flu = period_df['fluence'].sum()
         time = (i - current_start) * 10  # zakładamy krok co 10 minut
 
         combined.append({
@@ -182,9 +182,9 @@ def simulate_current_sensor(fluence_df: pd.Series, temp_df: pd.Series, params) -
 
     # Combine periods with small changes
     combined = result.copy() 
-    #combined = combine_periods(result, temp_tolerance=0.0, fluence_tolerance=0.0)
+    combined = combine_periods(result, temp_tolerance=0.0, fluence_tolerance=0.0)
     combined['current'] = 0.0
-    combined['time'] = 10.0
+    #combined['time'] = 100.0
     print(combined)
 
     # Calculate reduction percentage
@@ -201,12 +201,13 @@ def simulate_current_sensor(fluence_df: pd.Series, temp_df: pd.Series, params) -
     tau_j = calculate_intrinsic_lifetime_tau_vectorized(params.k_0I, params.E_I, temperatures, params.kb)
     theta_j = calculate_temperature_factor_theta_vectorized(temperatures, params.E_I_star, params.T_ref, params.kb)
     
-    times = 10
+    #times = 10
     print("Calculating time factors...")
     time_tau = times / tau_j
     time_theta = theta_j * times / params.t_0
-    
-    time_tau.to_csv('time_tau_old.csv')
+    print(time_theta)
+    print(theta_j)
+    #time_tau.to_csv('time_tau_old.csv')
     
     print("Starting main calculation loop...")
     N = len(combined)
@@ -217,7 +218,7 @@ def simulate_current_sensor(fluence_df: pd.Series, temp_df: pd.Series, params) -
             #break
         I_leak = calculate_leakage_current(fluences[:n], time_tau[:n], time_theta[:n], 
                                            params.alpha_I, params.alpha_0_star, params.beta, params.V)
-        combined.loc[combined.index[n], 'current'] = I_leak*1000
+        combined.loc[combined.index[n], 'current'] = I_leak*1000 + 0.5
 
     print("Simulation completed!")
     return combined
@@ -234,13 +235,14 @@ def plot_leakage_current(result_df: pd.DataFrame, current_sample_df: pd.DataFram
     if start_date is None:
         start_date = min(result_df.index.min(), real_current.index.min())
     if end_date is None:
-        end_date = min(result_df.index.max(), real_current.index.max())
+        end_date = max(result_df.index.max(), real_current.index.max())
 
     plt.figure(figsize=(12, 16))
     
     plt.subplot(4, 1, 1)
     plt.scatter(result_df.index, result_df['current'], color='blue', s=10, label='Leakage Current Simulated')
     plt.xlim(start_date, end_date)
+    plt.ylim(0, 50)
     plt.ylabel('Current (mA)')
     plt.title(f'Simulated Leakage Current for Sensor {sensor_name}')
     plt.grid(True)
@@ -250,7 +252,7 @@ def plot_leakage_current(result_df: pd.DataFrame, current_sample_df: pd.DataFram
     plt.scatter(real_current.index, real_current, color='red', s=10, label='Leakage Current (Real Data)')
     plt.xlim(start_date, end_date)
     plt.ylabel('Current (mA)')
-    #plt.ylim(6, 30)
+    plt.ylim(0, 50)
     plt.title(f'Real Leakage Current for Sensor {sensor_name}')
     plt.grid(True)
     plt.legend()
@@ -297,3 +299,44 @@ def adjust_current_with_temperature(
 
     adjusted_current = current_data[column].values * R_Tref
     return pd.DataFrame({f"{column}": adjusted_current}, index=current_data.index)
+
+def plot_simulated_vs_real(result_df: pd.DataFrame, current_sample_df: pd.DataFrame, sensor_name: str, 
+                          output_path: str = None, start_date: pd.Timestamp = None, end_date: pd.Timestamp = None):
+    """
+    Plot simulated and real current on the same plot.
+    
+    Args:
+        result_df: DataFrame with simulation results
+        current_sample_df: DataFrame with real current data
+        sensor_name: Name of the sensor
+        output_path: Path to save the plot
+        start_date: Start date for plotting
+        end_date: End date for plotting
+    """
+    if sensor_name in current_sample_df.columns:
+        real_current = current_sample_df[sensor_name]
+    else:
+        raise ValueError(f"Sensor {sensor_name} not found in the current sample file.")
+
+    if start_date is None:
+        start_date = min(result_df.index.min(), real_current.index.min())
+    if end_date is None:
+        end_date = max(result_df.index.max(), real_current.index.max())
+
+    plt.figure(figsize=(12, 8))
+    
+    # Plot both real and simulated current on the same plot
+    plt.scatter(real_current.index, real_current, color='red', s=1, label='Real Current')
+    plt.scatter(result_df.index, result_df['current'], color='blue', s=1, label='Simulated Current')
+    
+    plt.xlim(start_date, end_date)
+    plt.ylim(0, 50)
+    plt.ylabel('Current (mA)')
+    plt.title(f'Comparison of Real vs Simulated Current for Sensor {sensor_name}')
+    plt.grid(True)
+    plt.legend()
+
+    if output_path:
+        plt.savefig(output_path)
+    plt.show()
+
