@@ -45,7 +45,7 @@ def main():
     fluence_file = paths.get_fluence_file('avgFluenceBinned.csv')
     
     # Select years for simulation
-    selected_years = [2015, 2016, 2017, 2018]  # Example: Change this to select different years
+    selected_years = [2018]  # Example: Change this to select different years
     print(f"Selected years: {selected_years}")
     
     temp_files = paths.get_temperature_files_for_years(selected_years)

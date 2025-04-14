@@ -133,39 +133,96 @@ def calculate_leakage_current(fluence, time_tau, time_theta, alpha_I, alpha_0_st
 
     return I_leak
 
+
+def combine_periods(df: pd.DataFrame, temp_tolerance: float = 1, fluence_tolerance: float = 0.01) -> pd.DataFrame:
+    combined = []
+    i = 0
+
+    while i < len(df):
+        current_start = i
+        base_temp = df['temperature'].iloc[i]
+        base_flu = df['fluence'].iloc[i]
+        
+        # Idziemy do przodu aż coś przekroczy tolerancję
+        while i < len(df):
+            temp_change = abs(df['temperature'].iloc[i] - base_temp)
+            flu_change = abs(df['fluence'].iloc[i] - base_flu)
+            
+            if temp_change > temp_tolerance or flu_change > fluence_tolerance:
+                break
+            i += 1
+
+        # Tworzymy okres
+        period_df = df.iloc[current_start:i]
+        avg_temp = period_df['temperature'].mean()
+        avg_flu = period_df['fluence'].mean()
+        time = (i - current_start) * 10  # zakładamy krok co 10 minut
+
+        combined.append({
+            'start_time': df.index[current_start],  # zapamiętujemy czas początku
+            'temperature': avg_temp,
+            'fluence': avg_flu,
+            'time': float(time)
+        })
+
+    # Tworzymy wynikowy DataFrame z czasem jako indeksem
+    result = pd.DataFrame(combined).set_index('start_time')
+    return result
+
+
+
+
 def simulate_current_sensor(fluence_df: pd.Series, temp_df: pd.Series, params) -> pd.DataFrame:
     print("Starting current simulation...")
-    time = 10  # minutes
-
-    if not fluence_df.index.equals(temp_df.index):
-        raise ValueError("Indexes of fluence_df and temp_df must match!")
-
+    
+    # Create initial result DataFrame
     result = pd.DataFrame(index=fluence_df.index)
-    result['current'] = 0.0
     result['fluence'] = fluence_df.values
     result['temperature'] = temp_df.values
 
-    temperatures = result['temperature'].values
+    # Combine periods with small changes
+    combined = result.copy() 
+    #combined = combine_periods(result, temp_tolerance=0.0, fluence_tolerance=0.0)
+    combined['current'] = 0.0
+    combined['time'] = 10.0
+    print(combined)
+
+    # Calculate reduction percentage
+    original_periods = len(result)
+    combined_periods = len(combined)
+    reduction_percentage = ((original_periods - combined_periods) / original_periods) * 100
+    print(f"Combined periods: {combined_periods} (reduced by {reduction_percentage:.1f}%)")
+    
+    # Calculate time-dependent values for combined periods
+    temperatures = combined['temperature'].values
+    fluences = combined['fluence'].values
+    times = combined['time'].values
+    
     tau_j = calculate_intrinsic_lifetime_tau_vectorized(params.k_0I, params.E_I, temperatures, params.kb)
     theta_j = calculate_temperature_factor_theta_vectorized(temperatures, params.E_I_star, params.T_ref, params.kb)
     
+    times = 10
     print("Calculating time factors...")
-    time_tau = time / tau_j
-    time_theta = theta_j * time / params.t_0
+    time_tau = times / tau_j
+    time_theta = theta_j * times / params.t_0
+    
+    time_tau.to_csv('time_tau_old.csv')
     
     print("Starting main calculation loop...")
-    N = len(result)
+    N = len(combined)
     for n in tqdm.tqdm(range(N)):
         I_leak = 0.0
         if n == 30000:
             print(n)
-            break
-        I_leak = calculate_leakage_current(result['fluence'].iloc[:n].values, time_tau[:n], time_theta[:n], 
+            #break
+        I_leak = calculate_leakage_current(fluences[:n], time_tau[:n], time_theta[:n], 
                                            params.alpha_I, params.alpha_0_star, params.beta, params.V)
-        result.loc[result.index[n], 'current'] = I_leak*1000
+        combined.loc[combined.index[n], 'current'] = I_leak*1000
 
     print("Simulation completed!")
-    return result
+    return combined
+
+
 
 def plot_leakage_current(result_df: pd.DataFrame, current_sample_df: pd.DataFrame, sensor_name: str, 
                          output_path: str = None, start_date: pd.Timestamp = None, end_date: pd.Timestamp = None):
