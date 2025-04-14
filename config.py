@@ -23,3 +23,7 @@ class Paths:
     def get_temperature_file(self, filename: str) -> str:
         """Get full path to a temperature file."""
         return os.path.join(self.temperature_dir, filename)
+
+    def get_temperature_files_for_years(self, years: list) -> list:
+        """Get temperature files for specified years."""
+        return [self.get_temperature_file(f'temperature_10T_{year}.csv') for year in years]

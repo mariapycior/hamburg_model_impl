@@ -42,13 +42,35 @@ def main():
     paths = Paths()
     
     # File paths for run1
-    fluence_file = paths.get_fluence_file('avgFluenceBinned.csv')  # Using avgFluenceBinned.csv for run1
-    temp_file = paths.get_temperature_file('run1_temp_C_60s.csv')
-    current_file = paths.get_current_file('run1_current_sample.csv')
+    fluence_file = paths.get_fluence_file('avgFluenceBinned.csv')
+    
+    # Select years for simulation
+    selected_years = [2015, 2016, 2017, 2018]  # Example: Change this to select different years
+    print(f"Selected years: {selected_years}")
+    
+    temp_files = paths.get_temperature_files_for_years(selected_years)
+    print(f"Temperature files: {temp_files}")
+    
+    # Determine which current files to use based on years
+    current_files = []
+    if any(year in selected_years for year in [2011, 2012, 2013, 2014, 2015]):
+        current_files.append(paths.get_current_file('run1_current_sample.csv'))
+    if any(year in selected_years for year in [2016, 2017, 2018]):
+        current_files.append(paths.get_current_file('run2_current_sample.csv'))
+    
+    # Load and concatenate current files if needed
+    if len(current_files) == 1:
+        current_df = fluence_lib.load_sensor_current(current_files[0])
+    else:
+        # Load both files and concatenate them
+        current_dfs = [fluence_lib.load_sensor_current(file) for file in current_files]
+        current_df = pd.concat(current_dfs, axis=0)
+        # Drop duplicates, keeping the last (most recent) value
+        current_df = current_df.groupby(current_df.index).last()
+        current_df = current_df.sort_index()
     
     # Load data
-    fluence_df, temp_df = fluence_lib.load_data(fluence_file, temp_file)
-    current_df = fluence_lib.load_sensor_current(current_file)
+    fluence_df, temp_df = fluence_lib.load_data(fluence_file, temp_files)
     
     # Sensor configuration
     sensor_name = 'VL02_CT'  # Change this to select different sensor

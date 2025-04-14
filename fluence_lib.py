@@ -30,7 +30,7 @@ def load_sensor_current(file_path: str) -> pd.DataFrame:
     current_df.set_index('TS', inplace=True)
     return current_df
 
-def load_data(fluence_file: str, temp_file: str) -> tuple:
+def load_data(fluence_file: str, temp_files: list) -> tuple:
     """
     Load fluence and temperature data from CSV files.
     
@@ -43,8 +43,21 @@ def load_data(fluence_file: str, temp_file: str) -> tuple:
     """
     fluence_df = load_avg_fluence(fluence_file)
     
-    temp_df = load_temperature_data(temp_file)
-
+    # Sort files by year (assuming they are named with year in the filename)
+    temp_files = sorted(temp_files, key=lambda x: int(x.split('_')[-1].split('.')[0]))
+    
+    # Load and concatenate temperature files
+    temp_dfs = []
+    for temp_file in temp_files:
+        temp_df = load_temperature_data(temp_file)
+        temp_dfs.append(temp_df)
+    
+    temp_df = pd.concat(temp_dfs, axis=0, join='outer')
+    
+    temp_df = temp_df.groupby(temp_df.index).max()
+    
+    # Sort by index to ensure proper order
+    temp_df = temp_df.sort_index()
     
     return fluence_df, temp_df
 
@@ -63,38 +76,31 @@ def calculate_intrinsic_lifetime_tau_vectorized(k_0I: float, E_I: float, T_a: np
 def align_temperature_to_fluence(fluence_df: pd.DataFrame, temp_df: pd.DataFrame, sensor_name: str) -> pd.DataFrame:
     fluence_series = fluence_df[sensor_name]
     temp_series = temp_df[sensor_name]
-        
-    fluence_start = fluence_series.index[0]
-    fluence_end = fluence_series.index[-1]
+
+    temp_series = temp_series.resample('10min').mean()
     temp_start = temp_series.index[0]
     temp_end = temp_series.index[-1]
-    
-    start_time = max(fluence_start, temp_start)
-    end_time = min(fluence_end, temp_end)
-    
-    
-    fluence_series = fluence_series[(fluence_series.index >= start_time) & (fluence_series.index <= end_time)]
-    temp_series = temp_series[(temp_series.index >= start_time) & (temp_series.index <= end_time)]
-    
-    temp_series = temp_series.resample('10min').mean()
-    
-    temp_series = temp_series.bfill()
-    temp_series = temp_series.ffill()
-    
+
+    temp_series = temp_series.bfill().ffill()
+
     temp_first = temp_series.index[0]
     fluence_first = fluence_series.index[0]
 
-    
     time_diff = (fluence_first - temp_first).total_seconds() % 600
     if time_diff > 300:
-        time_diff = time_diff - 600
-    
+        time_diff -= 600
+
     shift = timedelta(seconds=time_diff)
-    
+
+    # Przesuń indeks fluencji
     fluence_series.index = fluence_series.index - shift
-    fluence_series = fluence_series.reindex(pd.date_range(fluence_series.index.min(), fluence_series.index.max(), freq='10T'), fill_value=0)
-        
+
+    # Uzupełnij zerami brakujące okresy na pełnym zakresie temperatury
+    full_index = pd.date_range(start=temp_start, end=temp_end, freq='10T')
+    fluence_series = fluence_series.reindex(full_index, fill_value=0)
+
     return fluence_series, temp_series
+
 
 def prepare_sensor_data(fluence_df: pd.DataFrame, temp_df: pd.DataFrame, sensor_name: str) -> tuple:
     fluence_series, temp_series = align_temperature_to_fluence(fluence_df, temp_df, sensor_name)
@@ -171,7 +177,7 @@ def plot_leakage_current(result_df: pd.DataFrame, current_sample_df: pd.DataFram
     if start_date is None:
         start_date = min(result_df.index.min(), real_current.index.min())
     if end_date is None:
-        end_date = max(result_df.index.max(), real_current.index.max())
+        end_date = min(result_df.index.max(), real_current.index.max())
 
     plt.figure(figsize=(12, 16))
     
