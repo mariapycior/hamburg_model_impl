@@ -45,13 +45,13 @@ def main():
     fluence_file = paths.get_fluence_file('avgFluenceBinned.csv')
     
     # Select years for simulation
-    selected_years = [2011,2012,2013,2014,2015,2016,2017,2018]  # Example: Change this to select different years
+    selected_years = [2011,2012,2013,2014,2015,2016,2017,2018]
     print(f"Selected years: {selected_years}")
     
     temp_files = paths.get_temperature_files_for_years(selected_years)
     print(f"Temperature files: {temp_files}")
     
-    # Determine which current files to use based on years  
+    # Determine which current files to use based on years
     current_files = []
     if any(year in selected_years for year in [2011, 2012]):
         current_files.append(paths.get_current_file('run1_current_sample.csv'))
@@ -64,38 +64,32 @@ def main():
     if len(current_files) == 1:
         current_df = fluence_lib.load_sensor_current(current_files[0])
     else:
-        # Load both files and concatenate them
         current_dfs = [fluence_lib.load_sensor_current(file) for file in current_files]
         current_df = pd.concat(current_dfs, axis=0)
-        # Drop duplicates, keeping the last (most recent) value
         current_df = current_df.groupby(current_df.index).last()
         current_df = current_df.sort_index()
     
     # Load data
     fluence_df, temp_df = fluence_lib.load_data(fluence_file, temp_files)
     
-    # Sensor configuration
-    sensor_name = 'VL02_CT'  # Change this to select different sensor
+    # Load all current sample files for common sensors check
+    all_current_dfs = []
+    for file in ['run1_current_sample.csv', 'ls1_current_sample.csv', 'run2_current_sample.csv']:
+        all_current_dfs.append(fluence_lib.load_sensor_current(paths.get_current_file(file)))
     
-    # Simulate current for sensor
-    fdf, tdf = fluence_lib.prepare_sensor_data(fluence_df, temp_df, sensor_name)
-    simulated_current = fluence_lib.simulate_current_sensor(fdf, tdf, params)
+    # Process all sensors that are present in all current sample files
+    common_sensors = set(all_current_dfs[0].columns)
+    for df in all_current_dfs[1:]:
+        common_sensors &= set(df.columns)
     
-    # Prepare current data
-    current_adjusted = fluence_lib.prepare_sensor_current(current_df, temp_df, params, sensor_name)
+    # Convert set to list for DataFrame indexing
+    common_sensors_list = list(common_sensors)
     
-    # Plot results
-    fluence_lib.plot_leakage_current(
-        simulated_current, current_adjusted, sensor_name,
-        start_date=pd.Timestamp('2018-01-01'),
-        end_date=pd.Timestamp('2018-12-31')
-    )
-    
-    # Plot simulated vs real on the same plot
-    fluence_lib.plot_simulated_vs_real(
-        simulated_current, current_adjusted, sensor_name,
-        start_date=pd.Timestamp('2018-01-01'),
-        end_date=pd.Timestamp('2018-12-31')
+    fluence_lib.process_all_sensors(
+        fluence_df, temp_df, current_df[common_sensors_list], params,
+        output_dir="out_data",
+        #start_date=pd.Timestamp('2018-01-01'),
+        #end_date=pd.Timestamp('2018-12-31')
     )
 
 if __name__ == "__main__":
