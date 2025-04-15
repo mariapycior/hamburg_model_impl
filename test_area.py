@@ -20,7 +20,7 @@ BETA = 3.29e-18  # A/cm
 E_I = 1.11  # eV
 K_0I = 1.2e13  # 1/s
 T_0 = 1.0  # min
-V = 8.5  # cm3
+V = 4  # cm3
 
 class Parameters:
     """Class to store physical parameters for leakage current calculations."""
@@ -87,15 +87,15 @@ def main():
     # Plot results
     fluence_lib.plot_leakage_current(
         simulated_current, current_adjusted, sensor_name,
-        start_date=pd.Timestamp('2018-01-01'),
-        end_date=pd.Timestamp('2018-12-31')
+        #start_date=pd.Timestamp('2018-01-01'),
+        #end_date=pd.Timestamp('2018-12-31')
     )
     
     # Plot simulated vs real on the same plot
     fluence_lib.plot_simulated_vs_real(
         simulated_current, current_adjusted, sensor_name,
-        start_date=pd.Timestamp('2018-01-01'),
-        end_date=pd.Timestamp('2018-12-31')
+        #start_date=pd.Timestamp('2018-01-01'),
+        #end_date=pd.Timestamp('2018-12-31')
     )
 
 if __name__ == "__main__":

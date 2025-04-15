@@ -184,8 +184,6 @@ def simulate_current_sensor(fluence_df: pd.Series, temp_df: pd.Series, params) -
     combined = result.copy() 
     combined = combine_periods(result, temp_tolerance=0.0, fluence_tolerance=0.0)
     combined['current'] = 0.0
-    #combined['time'] = 100.0
-    print(combined)
 
     # Calculate reduction percentage
     original_periods = len(result)
@@ -205,8 +203,7 @@ def simulate_current_sensor(fluence_df: pd.Series, temp_df: pd.Series, params) -
     print("Calculating time factors...")
     time_tau = times / tau_j
     time_theta = theta_j * times / params.t_0
-    print(time_theta)
-    print(theta_j)
+
     #time_tau.to_csv('time_tau_old.csv')
     
     print("Starting main calculation loop...")
@@ -219,6 +216,11 @@ def simulate_current_sensor(fluence_df: pd.Series, temp_df: pd.Series, params) -
         I_leak = calculate_leakage_current(fluences[:n], time_tau[:n], time_theta[:n], 
                                            params.alpha_I, params.alpha_0_star, params.beta, params.V)
         combined.loc[combined.index[n], 'current'] = I_leak*1000 + 0.5
+
+    combined = adjust_simulated_current_with_temperature(
+        data = combined,
+        params=params,
+    )
 
     print("Simulation completed!")
     return combined
@@ -242,7 +244,7 @@ def plot_leakage_current(result_df: pd.DataFrame, current_sample_df: pd.DataFram
     plt.subplot(4, 1, 1)
     plt.scatter(result_df.index, result_df['current'], color='blue', s=10, label='Leakage Current Simulated')
     plt.xlim(start_date, end_date)
-    plt.ylim(0, 50)
+    plt.ylim(0, 1)
     plt.ylabel('Current (mA)')
     plt.title(f'Simulated Leakage Current for Sensor {sensor_name}')
     plt.grid(True)
@@ -252,7 +254,7 @@ def plot_leakage_current(result_df: pd.DataFrame, current_sample_df: pd.DataFram
     plt.scatter(real_current.index, real_current, color='red', s=10, label='Leakage Current (Real Data)')
     plt.xlim(start_date, end_date)
     plt.ylabel('Current (mA)')
-    plt.ylim(0, 50)
+    plt.ylim(0, 1)
     plt.title(f'Real Leakage Current for Sensor {sensor_name}')
     plt.grid(True)
     plt.legend()
@@ -278,10 +280,10 @@ def plot_leakage_current(result_df: pd.DataFrame, current_sample_df: pd.DataFram
     plt.show()
 
 def prepare_sensor_current(current_df: pd.DataFrame, temp_df: pd.DataFrame, params, sensor_name: str) -> pd.DataFrame:
-    current_adjusted = adjust_current_with_temperature(current_df, temp_df, params, sensor_name)
+    current_adjusted = adjust_real_current_with_temperature(current_df, temp_df, params, sensor_name)
     return current_adjusted
 
-def adjust_current_with_temperature(
+def adjust_real_current_with_temperature(
     current_data: pd.DataFrame,
     temperature_data: pd.DataFrame,
     params,
@@ -292,13 +294,29 @@ def adjust_current_with_temperature(
     aligned_temp = temperature_data[column].reindex(current_data.index, method='nearest')
     T = aligned_temp.values
     T_ref = params.T_ref
-    E_eff = 1.21 #params.E_I_star
+    E_eff = 1.24 # Eg
     kB = params.kb
     
-    R_Tref = (T_ref / T) ** 2 * np.exp(-(E_eff / (2 * kB)) * (1 / T_ref - 1 / T))
+    R_Tref = 1#(T_ref / T) ** 2 * np.exp(-(E_eff / (2 * kB)) * (1 / T_ref - 1 / T))
 
     adjusted_current = current_data[column].values * R_Tref
     return pd.DataFrame({f"{column}": adjusted_current}, index=current_data.index)
+
+def adjust_simulated_current_with_temperature(
+    data: pd.DataFrame,
+    params,
+) -> pd.DataFrame:
+    data = data.sort_index()
+    T = data['temperature'].values
+    T_ref = params.T_ref
+    E_eff = 1.24  # Eg
+    kB = params.kb
+    print(len(T))
+    R_Tref = (T_ref / T) ** 2 * np.exp(-(E_eff / (2 * kB)) * (1/T - 1/T_ref))
+    
+    adjusted_current = data.copy()
+    adjusted_current['current'] = adjusted_current['current'].values * R_Tref
+    return adjusted_current
 
 def plot_simulated_vs_real(result_df: pd.DataFrame, current_sample_df: pd.DataFrame, sensor_name: str, 
                           output_path: str = None, start_date: pd.Timestamp = None, end_date: pd.Timestamp = None):
@@ -330,7 +348,7 @@ def plot_simulated_vs_real(result_df: pd.DataFrame, current_sample_df: pd.DataFr
     plt.scatter(result_df.index, result_df['current'], color='blue', s=1, label='Simulated Current')
     
     plt.xlim(start_date, end_date)
-    plt.ylim(0, 50)
+    plt.ylim(0,0.25)
     plt.ylabel('Current (mA)')
     plt.title(f'Comparison of Real vs Simulated Current for Sensor {sensor_name}')
     plt.grid(True)
