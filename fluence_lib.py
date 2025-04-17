@@ -141,29 +141,36 @@ def process_single_sensor(fluence_df, temp_df, current_df, params, sensor_name):
     fdf, tdf = prepare_sensor_data(fluence_df, temp_df, sensor_name)
     return simulate_current_sensor(fdf[sensor_name], tdf[sensor_name], params)['current'], prepare_sensor_current(current_df, temp_df, params, sensor_name)[sensor_name]
 
-def process_all_sensors(fluence_df, temp_df, current_df, params):
-    common_sensors = find_common_sensors(fluence_df, temp_df, current_df)[:2]
+def process_all_sensors(fluence_df, temp_df, current_df, params, sensor_name=None):
+    if sensor_name is not None:
+        common_sensors = [sensor_name]
+    else:
+        common_sensors = find_common_sensors(fluence_df, temp_df, current_df)
     all_simulated = {}
     all_real = {}
-    for sensor_name in tqdm.tqdm(common_sensors):
-        sim_current, real_current = process_single_sensor(fluence_df, temp_df, current_df, params, sensor_name)
-        all_simulated[sensor_name] = sim_current
-        all_real[sensor_name] = real_current
+    for sensor in tqdm.tqdm(common_sensors):
+        all_simulated[sensor], all_real[sensor] = process_single_sensor(fluence_df, temp_df, current_df, params, sensor)
     return pd.DataFrame(all_simulated), pd.DataFrame(all_real), common_sensors
 
 def load_and_combine_currents(current_files):
     dfs = [load_sensor_current(f) for f in current_files]
     return dfs[0] if len(dfs) == 1 else pd.concat(dfs, axis=0).groupby(level=0).last().sort_index()
 
-def run_leakage_current_pipeline(fluence_file, temp_files, current_files, params, paths):
+def run_leakage_current_pipeline(fluence_file, temp_files, current_files, params, paths, sensor_name=None):
     current_df = load_and_combine_currents(current_files)
     fluence_df, temp_df = load_data(fluence_file, temp_files)
-    common_sensors = find_common_sensors(fluence_df, temp_df, current_df)
-    print(f"Found {len(common_sensors)} common sensors across all datasets")
-    fluence_df = fluence_df[common_sensors]
-    temp_df = temp_df[common_sensors]
-    current_df = current_df[common_sensors]
-    return process_all_sensors(fluence_df, temp_df, current_df, params)
+    if sensor_name is not None:
+        common_sensors = [sensor_name]
+        fluence_df = fluence_df[[sensor_name]]
+        temp_df = temp_df[[sensor_name]]
+        current_df = current_df[[sensor_name]]
+    else:
+        common_sensors = find_common_sensors(fluence_df, temp_df, current_df)
+        print(f"Found {len(common_sensors)} common sensors across all datasets")
+        fluence_df = fluence_df[common_sensors]
+        temp_df = temp_df[common_sensors]
+        current_df = current_df[common_sensors]
+    return process_all_sensors(fluence_df, temp_df, current_df, params, sensor_name=sensor_name)
 
 def adjust_real_current_with_temperature(current_data: pd.DataFrame, temperature_data: pd.DataFrame, params, column: str) -> pd.DataFrame:
     T = temperature_data[column].reindex(current_data.index, method='nearest').values
