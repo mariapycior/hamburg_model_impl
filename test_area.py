@@ -13,7 +13,7 @@ BETA = 3.29e-18
 E_I = 1.11
 K_0I = 1.2e13
 T_0 = 1.0
-V = 0.805
+V = 8.5
 
 class Parameters:
     def __init__(self):
