@@ -142,7 +142,7 @@ def simulate_current_sensor(fluence_df: pd.Series, temp_df: pd.Series, params) -
     for n in range(N):
         I_leak = calculate_leakage_current(fluences[:n], time_tau[:n], time_theta[:n], 
                                            params.alpha_I, params.alpha_0_star, params.beta, params.V)
-        combined.loc[combined.index[n], 'current'] = I_leak*1000 + 0.5
+        combined.loc[combined.index[n], 'current'] = I_leak*1000#+ 0.5
     return combined
 
 def prepare_sensor_current(current_df: pd.DataFrame, temp_df: pd.DataFrame, params, sensor_name: str) -> pd.DataFrame:
@@ -180,6 +180,7 @@ def process_single_sensor(fluence_df: pd.DataFrame, temp_df: pd.DataFrame, curre
 
 def process_all_sensors(fluence_df: pd.DataFrame, temp_df: pd.DataFrame, current_df: pd.DataFrame, params):
     common_sensors = find_common_sensors(fluence_df, temp_df, current_df)
+    common_sensors = common_sensors[:15]
     all_simulated = {}
     all_real = {}
     
@@ -209,7 +210,7 @@ def run_leakage_current_pipeline(fluence_file, temp_files, current_files, params
     # Get common sensors across all dataframes
     common_sensors = find_common_sensors(fluence_df, temp_df, current_df)
     print(f"Found {len(common_sensors)} common sensors across all datasets")
-    common_sensors = common_sensors[:5]  # Exclude 'TS' column
+    #common_sensors = common_sensors[:5]  # Exclude 'TS' column
     # Filter dataframes to only include common sensors
     fluence_df = fluence_df[common_sensors]
     temp_df = temp_df[common_sensors]
@@ -220,7 +221,8 @@ def run_leakage_current_pipeline(fluence_file, temp_files, current_files, params
 def plot_leakage_current(result_df: pd.DataFrame, current_sample_df: pd.DataFrame, sensor_name: str, 
                          output_path: str = None, start_date: pd.Timestamp = None, end_date: pd.Timestamp = None):
     if sensor_name in current_sample_df.columns:
-        real_current = current_sample_df[sensor_name]
+        # Resample real current data to daily averages
+        real_current = current_sample_df[sensor_name].resample('1D').mean()
     else:
         raise ValueError(f"Sensor {sensor_name} not found in the current sample file.")
     if start_date is None:
@@ -265,7 +267,8 @@ def plot_leakage_current(result_df: pd.DataFrame, current_sample_df: pd.DataFram
 def plot_simulated_vs_real(result_df: pd.DataFrame, current_sample_df: pd.DataFrame, sensor_name: str, 
                           output_path: str = None, start_date: pd.Timestamp = None, end_date: pd.Timestamp = None):
     if sensor_name in current_sample_df.columns:
-        real_current = current_sample_df[sensor_name]
+        # Resample real current data to daily averages
+        real_current = current_sample_df[sensor_name].resample('1D').mean()
     else:
         raise ValueError(f"Sensor {sensor_name} not found in the current sample file.")
     if start_date is None:
@@ -286,27 +289,74 @@ def plot_simulated_vs_real(result_df: pd.DataFrame, current_sample_df: pd.DataFr
     plt.show()
 
 def plot_all_sensors(simulated_df: pd.DataFrame, real_df: pd.DataFrame, sensors, output_dir: str = "out_data", start_date=None, end_date=None):
-    plt.figure(figsize=(12, 6))
+    plt.figure(figsize=(12, 12))
     for sensor in sensors:
         plt.scatter(simulated_df.index, simulated_df[sensor], s=1, label=sensor)
     plt.xlim(start_date, end_date)
-    plt.ylim(0, 50)
+    plt.ylim(0, 10)
     plt.ylabel('Current (mA)')
     plt.title('Simulated Current for All Sensors')
     plt.grid(True)
-    plt.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
+    
+    
+    
+    #plt.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
     plt.tight_layout()
     plt.savefig(os.path.join(output_dir, "all_simulated.png"))
+    plt.show()
     plt.close()
-    plt.figure(figsize=(12, 6))
+    plt.figure(figsize=(12, 12))
+    # Resample real data for each sensor
+    real_df_daily = real_df.resample('1D').mean()
     for sensor in sensors:
-        plt.scatter(real_df.index, real_df[sensor], s=1, label=sensor)
+        plt.scatter(real_df_daily.index, real_df_daily[sensor], s=1, label=sensor)
     plt.xlim(start_date, end_date)
-    plt.ylim(0, 50)
+    plt.ylim(0, 10)
     plt.ylabel('Current (mA)')
     plt.title('Real Current for All Sensors')
     plt.grid(True)
-    plt.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
+    #plt.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
+    
     plt.tight_layout()
     plt.savefig(os.path.join(output_dir, "all_real.png"))
+    plt.show()
     plt.close()
+
+def adjust_real_current_with_temperature(
+    current_data: pd.DataFrame,
+    temperature_data: pd.DataFrame,
+    params,
+    column: str
+) -> pd.DataFrame:
+    current_data = current_data.sort_index()
+    temperature_data = temperature_data.sort_index()
+    aligned_temp = temperature_data[column].reindex(current_data.index, method='nearest')
+    T = aligned_temp.values
+    T_ref = params.T_ref
+    E_eff = 1.24 # Eg
+    kB = params.kb
+    
+    R_Tref = 1#(T_ref / T) ** 2 * np.exp(-(E_eff / (2 * kB)) * (1 / T_ref - 1 / T))
+
+    adjusted_current = current_data[column].values * R_Tref
+    return pd.DataFrame({f"{column}": adjusted_current}, index=current_data.index)
+
+def adjust_simulated_current_with_temperature(
+    data: pd.DataFrame,
+    params,
+) -> pd.DataFrame:
+    data = data.sort_index()
+    T = data['temperature'].values
+    #T = np.zeros_like(data['temperature'].values)+262.15
+    T_ref = params.T_ref
+    E_eff = 1.24  # Eg
+    kB = params.kb
+    
+    R_Tref = (T_ref / T) ** 2 * np.exp(-(E_eff / (2 * kB)) * (1/T - 1/T_ref))
+    
+    adjusted_current = data.copy()
+    adjusted_current['current'] = adjusted_current['current'].values * R_Tref
+    
+    # Set current to NaN where fluence is 0
+    adjusted_current.loc[adjusted_current['fluence'] == 0, 'current'] = np.nan
+    return adjusted_current
