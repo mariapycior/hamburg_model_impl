@@ -2,7 +2,8 @@ import os
 import pandas as pd
 from datetime import datetime
 import fluence_lib
-from config import Paths
+from config import Paths, CURRENT_YEAR_RANGES, CURRENT_YEAR_LIST
+import plot_utils
 
 KB = 8.617333262145e-5
 T_REF = 294.15
@@ -29,60 +30,38 @@ class Parameters:
         self.V = V
 
 def get_available_sensors(paths, selected_years):
-    year_ranges = {
-        'run1_current_all.csv': [2011, 2012],
-        'ls1_current_all.csv': [2013, 2014, 2015],
-        'run2_current_all.csv': [2016, 2017, 2018]
-    }
-    
-    # Only load current files for selected years
     relevant_files = [
-        file for file, years in year_ranges.items()
+        file for file, years in CURRENT_YEAR_RANGES.items()
         if any(year in selected_years for year in years)
     ]
-    
     all_current_dfs = [
         pd.read_csv(paths.get_current_file(file))
         for file in relevant_files
     ]
-    
-    # Get common columns excluding 'TS'
     common_sensors = set(all_current_dfs[0].columns) - {'TS'}
     for df in all_current_dfs[1:]:
         common_sensors &= (set(df.columns) - {'TS'})
-    
     return sorted(list(common_sensors))
 
 def get_current_files(paths, selected_years):
-    year_ranges = [
-        ('run1_current_all.csv', [2011, 2012]),
-        ('ls1_current_all.csv', [2013, 2014, 2015]),
-        ('run2_current_all.csv', [2016, 2017, 2018])
-    ]
-    return [paths.get_current_file(f) for f, years in year_ranges 
+    return [paths.get_current_file(f) for f, years in CURRENT_YEAR_LIST 
             if any(year in selected_years for year in years)]
 
 def main():
     params = Parameters()
     paths = Paths()
     selected_years = range(2011, 2019)
-    
-    # Get available sensors first
     available_sensors = get_available_sensors(paths, selected_years)
     print(f"Found {len(available_sensors)} sensors available across all runs")
-    
     fluence_file = paths.get_fluence_file('avgFluenceBinned.csv')
     temp_files = paths.get_temperature_files_for_years(selected_years)
     current_files = get_current_files(paths, selected_years)
-
     simulated_df, real_df, sensors = fluence_lib.run_leakage_current_pipeline(
         fluence_file, temp_files, current_files, params, paths
     )
-    
     if len(sensors) < len(available_sensors):
         print(f"Warning: Only {len(sensors)} out of {len(available_sensors)} sensors have complete data")
-    
-    fluence_lib.plot_all_sensors(simulated_df, real_df, sensors, output_dir="out_data")
+    plot_utils.plot_all_sensors(simulated_df, real_df, sensors, output_dir="out_data")
 
 if __name__ == "__main__":
     main()

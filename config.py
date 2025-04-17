@@ -27,3 +27,14 @@ class Paths:
     def get_temperature_files_for_years(self, years: list) -> list:
         """Get temperature files for specified years."""
         return [self.get_temperature_file(f'temperature_10T_{year}.csv') for year in years]
+
+CURRENT_YEAR_RANGES = {
+    'run1_current_all.csv': [2011, 2012],
+    'ls1_current_all.csv': [2013, 2014, 2015],
+    'run2_current_all.csv': [2016, 2017, 2018]
+}
+CURRENT_YEAR_LIST = [
+    ('run1_current_all.csv', [2011, 2012]),
+    ('ls1_current_all.csv', [2013, 2014, 2015]),
+    ('run2_current_all.csv', [2016, 2017, 2018])
+]

@@ -4,41 +4,32 @@ import matplotlib.pyplot as plt
 from datetime import datetime, timedelta
 import tqdm
 import os
+from config import CURRENT_YEAR_LIST, CURRENT_YEAR_RANGES
 
 def load_avg_fluence(file_path: str) -> pd.DataFrame:
     df = pd.read_csv(file_path, skiprows=4)
     df['bin_centre_date'] = pd.to_datetime(df['bin_centre_date'], format='%d-%m-%Y %H:%M:%S')
-    df['TS'] = df['bin_centre_date'] - pd.Timedelta(minutes=5)
-    df.set_index('TS', inplace=True)
-    df.drop('bin_centre_date', axis=1, inplace=True)
+    df.set_index('bin_centre_date', inplace=True)
+    df.index = df.index - pd.Timedelta(minutes=5)
+    df.index.name = "TS"
     print(f"Loaded fluence data from {file_path}")
     return df
 
 def load_temperature_data(file_path: str) -> pd.DataFrame:
-    df = pd.read_csv(file_path)
-    df['TS'] = pd.to_datetime(df['TS'])
-    df.set_index('TS', inplace=True)
+    df = pd.read_csv(file_path, index_col="TS", parse_dates=["TS"])
     df = df.dropna(how='all')
     print(f"Loaded temperature data from {file_path}")
     return df
 
 def load_sensor_current(file_path: str) -> pd.DataFrame:
-    current_df = pd.read_csv(file_path)
-    current_df['TS'] = pd.to_datetime(current_df['TS'])
-    current_df.set_index('TS', inplace=True)
+    df = pd.read_csv(file_path, index_col="TS", parse_dates=["TS"])
     print(f"Loaded sensor current from {file_path}")
-    return current_df
+    return df
 
 def load_data(fluence_file: str, temp_files: list) -> tuple:
     fluence_df = load_avg_fluence(fluence_file)
-    temp_files = sorted(temp_files, key=lambda x: int(x.split('_')[-1].split('.')[0]))
-    temp_dfs = []
-    for temp_file in temp_files:
-        temp_df = load_temperature_data(temp_file)
-        temp_dfs.append(temp_df)
-    temp_df = pd.concat(temp_dfs, axis=0, join='outer')
-    temp_df = temp_df.groupby(temp_df.index).max()
-    temp_df = temp_df.sort_index()
+    temp_df = pd.concat([load_temperature_data(f) for f in sorted(temp_files, key=lambda x: int(x.split('_')[-1].split('.')[0]))], axis=0, join='outer')
+    temp_df = temp_df.groupby(temp_df.index).max().sort_index()
     print("Loaded all fluence and temperature data")
     return fluence_df, temp_df
 
@@ -52,36 +43,29 @@ def calculate_temperature_factor_theta_vectorized(T_a: np.ndarray, E_I_star: flo
     return np.exp(-E_I_star / kB * (1/T_a - 1/T_ref))
 
 def calculate_intrinsic_lifetime_tau_vectorized(k_0I: float, E_I: float, T_a: np.ndarray, kB: float) -> np.ndarray:
-    return (k_0I * np.exp(-E_I / (kB * T_a))) / 60
+    return np.exp(-E_I / (kB * T_a)) / 60 * k_0I
 
 def align_temperature_to_fluence(fluence_df: pd.DataFrame, temp_df: pd.DataFrame, sensor_name: str) -> pd.DataFrame:
     fluence_series = fluence_df[sensor_name]
-    temp_series = temp_df[sensor_name]
-    temp_series = temp_series.resample('10min').mean()
-    temp_start = temp_series.index[0]
-    temp_end = temp_series.index[-1]
-    temp_series = temp_series.bfill().ffill()
-    temp_first = temp_series.index[0]
-    fluence_first = fluence_series.index[0]
-    time_diff = (fluence_first - temp_first).total_seconds() % 600
-    if time_diff > 300:
-        time_diff -= 600
-    shift = timedelta(seconds=time_diff)
+    temp_series = temp_df[sensor_name].resample('10min').mean().bfill().ffill()
+    shift = timedelta(seconds=((fluence_series.index[0] - temp_series.index[0]).total_seconds() % 600) - (600 if (fluence_series.index[0] - temp_series.index[0]).total_seconds() % 600 > 300 else 0))
     fluence_series.index = fluence_series.index - shift
-    full_index = pd.date_range(start=temp_start, end=temp_end, freq='10min')
+    full_index = pd.date_range(start=temp_series.index[0], end=temp_series.index[-1], freq='10min')
     fluence_series = fluence_series.reindex(full_index, fill_value=0)
     return fluence_series, temp_series
 
 def prepare_sensor_data(fluence_df: pd.DataFrame, temp_df: pd.DataFrame, sensor_name: str) -> tuple:
     fluence_series, temp_series = align_temperature_to_fluence(fluence_df, temp_df, sensor_name)
     common_index = fluence_series.index.intersection(temp_series.index)
-    fluence_series_filtered = fluence_series[common_index]
-    temp_series_filtered = temp_series[common_index]
-    fluence_df_result = pd.DataFrame({fluence_series.name: fluence_series_filtered})
-    temp_df_result = pd.DataFrame({temp_series.name: temp_series_filtered})
+    fluence_df_result = pd.DataFrame({fluence_series.name: fluence_series[common_index]})
+    temp_df_result = pd.DataFrame({temp_series.name: temp_series[common_index]})
     fluence_df_result.index.name = 'ts'
     temp_df_result.index.name = 'ts'
     return fluence_df_result, temp_df_result
+
+def find_common_sensors(*dfs) -> list:
+    cols = [set(df.columns) for df in dfs]
+    return sorted(set.intersection(*cols))
 
 from numba import njit
 
@@ -146,217 +130,71 @@ def simulate_current_sensor(fluence_df: pd.Series, temp_df: pd.Series, params) -
     return combined
 
 def prepare_sensor_current(current_df: pd.DataFrame, temp_df: pd.DataFrame, params, sensor_name: str) -> pd.DataFrame:
-    current_adjusted = adjust_current_with_temperature(current_df, temp_df, params, sensor_name)
-    return current_adjusted
+    return adjust_current_with_temperature(current_df, temp_df, params, sensor_name)
 
-def adjust_current_with_temperature(
-    current_data: pd.DataFrame,
-    temperature_data: pd.DataFrame,
-    params,
-    column: str
-) -> pd.DataFrame:
-    current_data = current_data.sort_index()
-    temperature_data = temperature_data.sort_index()
-    aligned_temp = temperature_data[column].reindex(current_data.index, method='nearest')
-    T = aligned_temp.values
-    T_ref = params.T_ref
-    E_eff = 1.21 
-    kB = params.kb
-    R_Tref = (T_ref / T) ** 2 * np.exp(-(E_eff / (2 * kB)) * (1 / T_ref - 1 / T))
-    adjusted_current = current_data[column].values * R_Tref
-    return pd.DataFrame({f"{column}": adjusted_current}, index=current_data.index)
+def adjust_current_with_temperature(current_data: pd.DataFrame, temperature_data: pd.DataFrame, params, column: str) -> pd.DataFrame:
+    T = temperature_data[column].reindex(current_data.index, method='nearest').values
+    R_Tref = (params.T_ref / T) ** 2 * np.exp(-(1.21 / (2 * params.kb)) * (1 / params.T_ref - 1 / T))
+    return pd.DataFrame({f"{column}": current_data[column].values * R_Tref}, index=current_data.index)
 
-def find_common_sensors(*dfs: pd.DataFrame) -> list:
-    common_sensors = set(dfs[0].columns)
-    for df in dfs[1:]:
-        common_sensors.intersection_update(df.columns)
-    return sorted(list(common_sensors))
-
-def process_single_sensor(fluence_df: pd.DataFrame, temp_df: pd.DataFrame, current_df: pd.DataFrame, params, sensor_name: str) -> tuple:
+def process_single_sensor(fluence_df, temp_df, current_df, params, sensor_name):
     fdf, tdf = prepare_sensor_data(fluence_df, temp_df, sensor_name)
-    simulated_current = simulate_current_sensor(fdf[sensor_name], tdf[sensor_name], params)
-    current_adjusted = prepare_sensor_current(current_df, temp_df, params, sensor_name)
-    return simulated_current['current'], current_adjusted[sensor_name]
+    return simulate_current_sensor(fdf[sensor_name], tdf[sensor_name], params)['current'], prepare_sensor_current(current_df, temp_df, params, sensor_name)[sensor_name]
 
-def process_all_sensors(fluence_df: pd.DataFrame, temp_df: pd.DataFrame, current_df: pd.DataFrame, params):
-    common_sensors = find_common_sensors(fluence_df, temp_df, current_df)
-    common_sensors = common_sensors[:15]
+def process_all_sensors(fluence_df, temp_df, current_df, params):
+    common_sensors = find_common_sensors(fluence_df, temp_df, current_df)[:2]
     all_simulated = {}
     all_real = {}
-    
     for sensor_name in tqdm.tqdm(common_sensors):
-        sim_current, real_current = process_single_sensor(
-            fluence_df,
-            temp_df,
-            current_df,
-            params,
-            sensor_name
-        )
+        sim_current, real_current = process_single_sensor(fluence_df, temp_df, current_df, params, sensor_name)
         all_simulated[sensor_name] = sim_current
         all_real[sensor_name] = real_current
-    
     return pd.DataFrame(all_simulated), pd.DataFrame(all_real), common_sensors
 
 def load_and_combine_currents(current_files):
-    if len(current_files) == 1:
-        return load_sensor_current(current_files[0])
-    current_dfs = [load_sensor_current(file) for file in current_files]
-    return pd.concat(current_dfs, axis=0).groupby(level=0).last().sort_index()
+    dfs = [load_sensor_current(f) for f in current_files]
+    return dfs[0] if len(dfs) == 1 else pd.concat(dfs, axis=0).groupby(level=0).last().sort_index()
 
 def run_leakage_current_pipeline(fluence_file, temp_files, current_files, params, paths):
     current_df = load_and_combine_currents(current_files)
     fluence_df, temp_df = load_data(fluence_file, temp_files)
-    
-    # Get common sensors across all dataframes
     common_sensors = find_common_sensors(fluence_df, temp_df, current_df)
     print(f"Found {len(common_sensors)} common sensors across all datasets")
-    #common_sensors = common_sensors[:5]  # Exclude 'TS' column
-    # Filter dataframes to only include common sensors
     fluence_df = fluence_df[common_sensors]
     temp_df = temp_df[common_sensors]
     current_df = current_df[common_sensors]
-    
     return process_all_sensors(fluence_df, temp_df, current_df, params)
 
-def plot_leakage_current(result_df: pd.DataFrame, current_sample_df: pd.DataFrame, sensor_name: str, 
-                         output_path: str = None, start_date: pd.Timestamp = None, end_date: pd.Timestamp = None):
-    if sensor_name in current_sample_df.columns:
-        # Resample real current data to daily averages
-        real_current = current_sample_df[sensor_name].resample('1D').mean()
-    else:
-        raise ValueError(f"Sensor {sensor_name} not found in the current sample file.")
-    if start_date is None:
-        start_date = min(result_df.index.min(), real_current.index.min())
-    if end_date is None:
-        end_date = max(result_df.index.max(), real_current.index.max())
-    plt.figure(figsize=(12, 16))
-    plt.subplot(4, 1, 1)
-    plt.scatter(result_df.index, result_df['current'], color='blue', s=10, label='Leakage Current Simulated')
-    plt.xlim(start_date, end_date)
-    plt.ylim(0, 50)
-    plt.ylabel('Current (mA)')
-    plt.title(f'Simulated Leakage Current for Sensor {sensor_name}')
-    plt.grid(True)
-    plt.legend()
-    plt.subplot(4, 1, 2)
-    plt.scatter(real_current.index, real_current, color='red', s=10, label='Leakage Current (Real Data)')
-    plt.xlim(start_date, end_date)
-    plt.ylabel('Current (mA)')
-    plt.ylim(0, 50)
-    plt.title(f'Real Leakage Current for Sensor {sensor_name}')
-    plt.grid(True)
-    plt.legend()
-    plt.subplot(4, 1, 3)
-    plt.scatter(result_df.index, result_df['fluence'], color='green', s=10, label='Fluence')
-    plt.xlim(start_date, end_date)
-    plt.ylabel('Fluence (n/cm²)')
-    plt.title('Fluence')
-    plt.grid(True)
-    plt.legend()
-    plt.subplot(4, 1, 4)
-    plt.scatter(result_df.index, result_df['temperature'], color='magenta', s=10, label='Temperature')
-    plt.xlim(start_date, end_date)
-    plt.ylabel('Temperature (K)')
-    plt.title('Temperature')
-    plt.grid(True)
-    plt.legend()
-    if output_path:
-        plt.savefig(output_path)
-    plt.show()
-
-def plot_simulated_vs_real(result_df: pd.DataFrame, current_sample_df: pd.DataFrame, sensor_name: str, 
-                          output_path: str = None, start_date: pd.Timestamp = None, end_date: pd.Timestamp = None):
-    if sensor_name in current_sample_df.columns:
-        # Resample real current data to daily averages
-        real_current = current_sample_df[sensor_name].resample('1D').mean()
-    else:
-        raise ValueError(f"Sensor {sensor_name} not found in the current sample file.")
-    if start_date is None:
-        start_date = min(result_df.index.min(), real_current.index.min())
-    if end_date is None:
-        end_date = max(result_df.index.max(), real_current.index.max())
-    plt.figure(figsize=(12, 8))
-    plt.scatter(real_current.index, real_current, color='red', s=1, label='Real Current')
-    plt.scatter(result_df.index, result_df['current'], color='blue', s=1, label='Simulated Current')
-    plt.xlim(start_date, end_date)
-    plt.ylim(0, 50)
-    plt.ylabel('Current (mA)')
-    plt.title(f'Comparison of Real vs Simulated Current for Sensor {sensor_name}')
-    plt.grid(True)
-    plt.legend()
-    if output_path:
-        plt.savefig(output_path)
-    plt.show()
-
-def plot_all_sensors(simulated_df: pd.DataFrame, real_df: pd.DataFrame, sensors, output_dir: str = "out_data", start_date=None, end_date=None):
-    plt.figure(figsize=(12, 12))
-    for sensor in sensors:
-        plt.scatter(simulated_df.index, simulated_df[sensor], s=1, label=sensor)
-    plt.xlim(start_date, end_date)
-    plt.ylim(0, 10)
-    plt.ylabel('Current (mA)')
-    plt.title('Simulated Current for All Sensors')
-    plt.grid(True)
-    
-    
-    
-    #plt.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
-    plt.tight_layout()
-    plt.savefig(os.path.join(output_dir, "all_simulated.png"))
-    plt.show()
-    plt.close()
-    plt.figure(figsize=(12, 12))
-    # Resample real data for each sensor
-    real_df_daily = real_df.resample('1D').mean()
-    for sensor in sensors:
-        plt.scatter(real_df_daily.index, real_df_daily[sensor], s=1, label=sensor)
-    plt.xlim(start_date, end_date)
-    plt.ylim(0, 10)
-    plt.ylabel('Current (mA)')
-    plt.title('Real Current for All Sensors')
-    plt.grid(True)
-    #plt.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
-    
-    plt.tight_layout()
-    plt.savefig(os.path.join(output_dir, "all_real.png"))
-    plt.show()
-    plt.close()
-
-def adjust_real_current_with_temperature(
-    current_data: pd.DataFrame,
-    temperature_data: pd.DataFrame,
-    params,
-    column: str
-) -> pd.DataFrame:
-    current_data = current_data.sort_index()
-    temperature_data = temperature_data.sort_index()
-    aligned_temp = temperature_data[column].reindex(current_data.index, method='nearest')
-    T = aligned_temp.values
+def adjust_real_current_with_temperature(current_data: pd.DataFrame, temperature_data: pd.DataFrame, params, column: str) -> pd.DataFrame:
+    T = temperature_data[column].reindex(current_data.index, method='nearest').values
     T_ref = params.T_ref
-    E_eff = 1.24 # Eg
+    E_eff = getattr(params, 'E_eff', 1.24)
     kB = params.kb
-    
-    R_Tref = 1#(T_ref / T) ** 2 * np.exp(-(E_eff / (2 * kB)) * (1 / T_ref - 1 / T))
+    R_Tref = (T_ref / T) ** 2 * np.exp(-(E_eff / (2 * kB)) * (1 / T_ref - 1 / T))
+    out = current_data.copy()
+    out[column] = out[column].values * R_Tref
+    return out
 
-    adjusted_current = current_data[column].values * R_Tref
-    return pd.DataFrame({f"{column}": adjusted_current}, index=current_data.index)
-
-def adjust_simulated_current_with_temperature(
-    data: pd.DataFrame,
-    params,
-) -> pd.DataFrame:
-    data = data.sort_index()
+def adjust_simulated_current_with_temperature(data: pd.DataFrame, params) -> pd.DataFrame:
     T = data['temperature'].values
-    #T = np.zeros_like(data['temperature'].values)+262.15
     T_ref = params.T_ref
-    E_eff = 1.24  # Eg
+    E_eff = getattr(params, 'E_eff', 1.24)
     kB = params.kb
-    
     R_Tref = (T_ref / T) ** 2 * np.exp(-(E_eff / (2 * kB)) * (1/T - 1/T_ref))
-    
-    adjusted_current = data.copy()
-    adjusted_current['current'] = adjusted_current['current'].values * R_Tref
-    
-    # Set current to NaN where fluence is 0
-    adjusted_current.loc[adjusted_current['fluence'] == 0, 'current'] = np.nan
-    return adjusted_current
+    out = data.copy()
+    out['current'] = out['current'].values * R_Tref
+    out.loc[out['fluence'] == 0, 'current'] = np.nan
+    return out
+
+def get_current_files(paths, selected_years):
+    return [paths.get_current_file(f) for f, years in CURRENT_YEAR_LIST
+            if any(year in selected_years for year in years)]
+
+def get_available_sensors(paths, selected_years):
+    relevant_files = [f for f, years in CURRENT_YEAR_RANGES.items()
+                      if any(year in selected_years for year in years)]
+    all_current_dfs = [pd.read_csv(paths.get_current_file(f)) for f in relevant_files]
+    common_sensors = set(all_current_dfs[0].columns) - {'TS'}
+    for df in all_current_dfs[1:]:
+        common_sensors &= (set(df.columns) - {'TS'})
+    return sorted(common_sensors)
