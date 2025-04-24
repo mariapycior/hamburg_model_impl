@@ -73,7 +73,8 @@ def run_single_sensor(selected_years, sensor_name):
     )
     if sensor_name not in sensors:
         raise ValueError(f"Sensor {sensor_name} not found in the available sensors: {sensors}")
-    return simulated_df[sensor_name], real_df[sensor_name], sensor_name
+    # simulated_df już ma kolumny: current, fluence, temperature
+    return simulated_df, real_df[sensor_name], sensor_name
 
 if __name__ == "__main__":
     # Run for all sensors
@@ -85,7 +86,10 @@ if __name__ == "__main__":
     # print(sensors)
     # Run for a single sensor by name
     sensor_name = "VL02_CT"  # <- put the desired sensor name here, e.g. "S1"
-    sim, real, name = run_single_sensor(selected_years, sensor_name)    # Prepare DataFrame for time series overlay plot
-    sim_df = sim.to_frame(name='current')
+    sim, real, name = run_single_sensor(selected_years, sensor_name)
+    # sim: DataFrame z current, fluence, temperature
+    sim_df = sim[['current']]
     real_df = real.to_frame(name=name)
     plot_utils.plot_simulated_vs_real(sim_df, real_df, name, output_path=f"out_data/sim_vs_real_{name}.png")
+    # Dodane: wykres z plot_leakage_current
+    plot_utils.plot_leakage_current(sim, real_df, name, output_path=f"out_data/leakage_current_{name}.png")

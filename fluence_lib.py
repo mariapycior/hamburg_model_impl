@@ -143,7 +143,9 @@ def prepare_sensor_current(current_df: pd.DataFrame, temp_df: pd.DataFrame, para
 
 def process_single_sensor(fluence_df, temp_df, current_df, params, sensor_name):
     fdf, tdf = prepare_sensor_data(fluence_df, temp_df, sensor_name)
-    return simulate_current_sensor(fdf[sensor_name], tdf[sensor_name], params)['current'], prepare_sensor_current(current_df, temp_df, params, sensor_name)[sensor_name]
+    sim_df = simulate_current_sensor(fdf[sensor_name], tdf[sensor_name], params)
+    real_current = prepare_sensor_current(current_df, temp_df, params, sensor_name)[sensor_name]
+    return sim_df, real_current
 
 def process_all_sensors(fluence_df, temp_df, current_df, params, sensor_name=None):
     if sensor_name is not None:
@@ -153,8 +155,12 @@ def process_all_sensors(fluence_df, temp_df, current_df, params, sensor_name=Non
     all_simulated = {}
     all_real = {}
     for sensor in tqdm.tqdm(common_sensors):
-        all_simulated[sensor], all_real[sensor] = process_single_sensor(fluence_df, temp_df, current_df, params, sensor)
-    return pd.DataFrame(all_simulated), pd.DataFrame(all_real), common_sensors
+        sim_df, real_current = process_single_sensor(fluence_df, temp_df, current_df, params, sensor)
+        all_simulated[sensor] = sim_df  
+        all_real[sensor] = real_current
+    if len(common_sensors) == 1:
+        return all_simulated[common_sensors[0]], pd.DataFrame({common_sensors[0]: all_real[common_sensors[0]]}), common_sensors
+    return pd.concat(all_simulated, axis=1), pd.DataFrame(all_real), common_sensors
 
 def load_and_combine_currents(current_files):
     dfs = [load_sensor_current(f) for f in current_files]
