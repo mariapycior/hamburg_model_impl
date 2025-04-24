@@ -30,7 +30,7 @@ BETA = 3.29e-18
 E_I = 1.30
 K_0I = 1.2e13
 T_0 = 1.0
-V=1
+V=0.8
 
 class Parameters:
     """
@@ -98,6 +98,7 @@ def test_single_sensor(fluence_df: pd.DataFrame, temp_df: pd.DataFrame, params):
     
     # Prepare data for this sensor
     fluence_series, temp_series = prepare_sensor_data(fluence_df, temp_df, sensor_name)
+
     
     # Print first records
     print("\nFirst record of fluence data:")

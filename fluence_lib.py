@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 from datetime import datetime, timedelta
 import tqdm
 import os
-from config import CURRENT_YEAR_LIST, CURRENT_YEAR_RANGES
+from config import CURRENT_YEAR_LIST, CURRENT_YEAR_RANGES, CURRENT_TEMP_MODE
 
 def load_avg_fluence(file_path: str) -> pd.DataFrame:
     df = pd.read_csv(file_path, skiprows=4)
@@ -127,15 +127,19 @@ def simulate_current_sensor(fluence_df: pd.Series, temp_df: pd.Series, params) -
         I_leak = calculate_leakage_current(fluences[:n], time_tau[:n], time_theta[:n], 
                                            params.alpha_I, params.alpha_0_star, params.beta, params.V)
         combined.loc[combined.index[n], 'current'] = I_leak*1000#+ 0.5
+    if CURRENT_TEMP_MODE == 'adjust_sim':
+        combined = adjust_simulated_current_with_temperature(
+            data = combined,
+            params=params,
+        )
+    print("Simulation completed!")
     return combined
 
 def prepare_sensor_current(current_df: pd.DataFrame, temp_df: pd.DataFrame, params, sensor_name: str) -> pd.DataFrame:
-    return adjust_current_with_temperature(current_df, temp_df, params, sensor_name)
-
-def adjust_current_with_temperature(current_data: pd.DataFrame, temperature_data: pd.DataFrame, params, column: str) -> pd.DataFrame:
-    T = temperature_data[column].reindex(current_data.index, method='nearest').values
-    R_Tref = (params.T_ref / T) ** 2 * np.exp(-(1.21 / (2 * params.kb)) * (1 / params.T_ref - 1 / T))
-    return pd.DataFrame({f"{column}": current_data[column].values * R_Tref}, index=current_data.index)
+    if CURRENT_TEMP_MODE == 'adjust_real':
+        return adjust_real_current_with_temperature(current_df, temp_df, params, sensor_name)
+    else:
+        return current_df
 
 def process_single_sensor(fluence_df, temp_df, current_df, params, sensor_name):
     fdf, tdf = prepare_sensor_data(fluence_df, temp_df, sensor_name)
@@ -173,6 +177,8 @@ def run_leakage_current_pipeline(fluence_file, temp_files, current_files, params
     return process_all_sensors(fluence_df, temp_df, current_df, params, sensor_name=sensor_name)
 
 def adjust_real_current_with_temperature(current_data: pd.DataFrame, temperature_data: pd.DataFrame, params, column: str) -> pd.DataFrame:
+    if CURRENT_TEMP_MODE == 'none':
+        return current_data
     T = temperature_data[column].reindex(current_data.index, method='nearest').values
     T_ref = params.T_ref
     E_eff = getattr(params, 'E_eff', 1.24)
@@ -183,6 +189,8 @@ def adjust_real_current_with_temperature(current_data: pd.DataFrame, temperature
     return out
 
 def adjust_simulated_current_with_temperature(data: pd.DataFrame, params) -> pd.DataFrame:
+    if CURRENT_TEMP_MODE == 'none':
+        return data
     T = data['temperature'].values
     T_ref = params.T_ref
     E_eff = getattr(params, 'E_eff', 1.24)
