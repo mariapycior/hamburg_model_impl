@@ -41,3 +41,8 @@ CURRENT_YEAR_LIST = [
     ('ls1_current_all.csv', [2013, 2014, 2015]),
     ('run2_current_all.csv', [2016, 2017, 2018])
 ]
+
+# --- Ustawienia uruchamiania ---
+RUN_MODE = "single"  # "single" albo "all"
+SENSOR_NAME = "VL02_CT"
+SELECTED_YEARS = range(2011, 2019)

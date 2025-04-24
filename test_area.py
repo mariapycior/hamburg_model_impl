@@ -1,8 +1,8 @@
 import os
 import pandas as pd
 from datetime import datetime
+from config import Paths, RUN_MODE, SENSOR_NAME, SELECTED_YEARS, CURRENT_YEAR_RANGES, CURRENT_YEAR_LIST
 import fluence_lib
-from config import Paths, CURRENT_YEAR_RANGES, CURRENT_YEAR_LIST
 import plot_utils
 
 KB = 8.617333262145e-5
@@ -47,49 +47,41 @@ def get_current_files(paths, selected_years):
     return [paths.get_current_file(f) for f, years in CURRENT_YEAR_LIST 
             if any(year in selected_years for year in years)]
 
-def run_pipeline(selected_years):
-    params = Parameters()
+def prepare_inputs(selected_years):
     paths = Paths()
-    available_sensors = get_available_sensors(paths, selected_years)
-    print(f"Found {len(available_sensors)} sensors available across all runs")
+    params = Parameters()
     fluence_file = paths.get_fluence_file('avgFluenceBinned.csv')
     temp_files = paths.get_temperature_files_for_years(selected_years)
     current_files = get_current_files(paths, selected_years)
+    return params, paths, fluence_file, temp_files, current_files
+
+def run_all_sensors(selected_years):
+    params, paths, fluence_file, temp_files, current_files = prepare_inputs(selected_years)
+    available_sensors = get_available_sensors(paths, selected_years)
+    print(f"Found {len(available_sensors)} sensors available across all runs")
     simulated_df, real_df, sensors = fluence_lib.run_leakage_current_pipeline(
         fluence_file, temp_files, current_files, params, paths
     )
     if len(sensors) < len(available_sensors):
         print(f"Warning: Only {len(sensors)} out of {len(available_sensors)} sensors have complete data")
-    return simulated_df, real_df, sensors, available_sensors
+    return simulated_df, real_df, sensors
 
 def run_single_sensor(selected_years, sensor_name):
-    params = Parameters()
-    paths = Paths()
-    fluence_file = paths.get_fluence_file('avgFluenceBinned.csv')
-    temp_files = paths.get_temperature_files_for_years(selected_years)
-    current_files = get_current_files(paths, selected_years)
+    params, paths, fluence_file, temp_files, current_files = prepare_inputs(selected_years)
     simulated_df, real_df, sensors = fluence_lib.run_leakage_current_pipeline(
         fluence_file, temp_files, current_files, params, paths, sensor_name=sensor_name
     )
     if sensor_name not in sensors:
         raise ValueError(f"Sensor {sensor_name} not found in the available sensors: {sensors}")
-    # simulated_df już ma kolumny: current, fluence, temperature
     return simulated_df, real_df[sensor_name], sensor_name
 
 if __name__ == "__main__":
-    # Run for all sensors
-    selected_years = range(2011, 2019)
-    #simulated_df, real_df, sensors, available_sensors = run_pipeline(selected_years)
-    #plot_utils.plot_all_sensors(simulated_df, real_df, sensors, output_dir="out_data")
-    # Helper: print available sensor names
-    # _, _, sensors, _ = run_pipeline(selected_years)
-    # print(sensors)
-    # Run for a single sensor by name
-    sensor_name = "VL02_CT"  # <- put the desired sensor name here, e.g. "S1"
-    sim, real, name = run_single_sensor(selected_years, sensor_name)
-    # sim: DataFrame z current, fluence, temperature
-    sim_df = sim[['current']]
-    real_df = real.to_frame(name=name)
-    plot_utils.plot_simulated_vs_real(sim_df, real_df, name, output_path=f"out_data/sim_vs_real_{name}.png")
-    # Dodane: wykres z plot_leakage_current
-    plot_utils.plot_leakage_current(sim, real_df, name, output_path=f"out_data/leakage_current_{name}.png")
+    if RUN_MODE == "single":
+        sim, real, name = run_single_sensor(SELECTED_YEARS, SENSOR_NAME)
+        sim_df = sim[['current']]
+        real_df = real.to_frame(name=name)
+        plot_utils.plot_simulated_vs_real(sim_df, real_df, name, output_path=f"out_data/sim_vs_real_{name}.png")
+        plot_utils.plot_leakage_current(sim, real_df, name, output_path=f"out_data/leakage_current_{name}.png")
+    else:
+        simulated_df, real_df, sensors = run_all_sensors(SELECTED_YEARS)
+        plot_utils.plot_all_sensors(simulated_df, real_df, sensors, output_dir="out_data")
