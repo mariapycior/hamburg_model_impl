@@ -18,21 +18,6 @@ def plot_leakage_current(simulated, real, sensor_name, output_dir=None):
     plt.show()
     plt.close()
 
-def plot_simulated_vs_real(simulated, real, sensor_name, output_dir=None):
-    # Align indices
-    aligned_real, aligned_sim = real.align(simulated, join='inner')
-    plt.figure(figsize=(6, 6))
-    plt.scatter(aligned_real, aligned_sim, alpha=0.5)
-    plt.plot([aligned_real.min(), aligned_real.max()], [aligned_real.min(), aligned_real.max()], 'r--')
-    plt.title(f'Simulated vs Real - {sensor_name}')
-    plt.xlabel('Real Current [nA]')
-    plt.ylabel('Simulated Current [nA]')
-    plt.tight_layout()
-    if output_dir:
-        os.makedirs(output_dir, exist_ok=True)
-        plt.savefig(os.path.join(output_dir, f'sim_vs_real_{sensor_name}.png'))
-    plt.show()
-    plt.close()
 
 def plot_simulated_vs_real(result_df, current_sample_df, sensor_name, output_path=None, start_date=None, end_date=None):
     """

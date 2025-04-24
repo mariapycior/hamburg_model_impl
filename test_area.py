@@ -85,9 +85,7 @@ if __name__ == "__main__":
     # print(sensors)
     # Run for a single sensor by name
     sensor_name = "VL02_CT"  # <- put the desired sensor name here, e.g. "S1"
-    sim, real, name = run_single_sensor(selected_years, sensor_name)
-    plot_utils.plot_leakage_current(sim, real, output_dir="out_data", sensor_name=name)
-    # Prepare DataFrame for time series overlay plot
+    sim, real, name = run_single_sensor(selected_years, sensor_name)    # Prepare DataFrame for time series overlay plot
     sim_df = sim.to_frame(name='current')
     real_df = real.to_frame(name=name)
     plot_utils.plot_simulated_vs_real(sim_df, real_df, name, output_path=f"out_data/sim_vs_real_{name}.png")
