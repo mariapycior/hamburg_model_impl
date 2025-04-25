@@ -44,5 +44,5 @@ CURRENT_YEAR_LIST = [
 
 # --- Ustawienia uruchamiania ---
 RUN_MODE = "single"  # "single" albo "all"
-SENSOR_NAME = "VL02_CT"
+SENSOR_NAME = "VL12_CT"
 SELECTED_YEARS = range(2011, 2019)

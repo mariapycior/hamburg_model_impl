@@ -18,25 +18,25 @@ def plot_leakage_current(result_df: pd.DataFrame, current_sample_df: pd.DataFram
     plt.figure(figsize=(12, 16))
     
     plt.subplot(4, 1, 1)
-    plt.scatter(result_df.index, result_df['current'], color='blue', s=10, label='Leakage Current Simulated')
+    plt.scatter(result_df.index, result_df['current'], color='blue', s=1, label='Leakage Current Simulated')
     plt.xlim(start_date, end_date)
-    plt.ylim(0, 6)
+    plt.ylim(0, 0.4)
     plt.ylabel('Current (mA)')
     plt.title(f'Simulated Leakage Current for Sensor {sensor_name}')
     plt.grid(True)
     plt.legend()
     
     plt.subplot(4, 1, 2)
-    plt.scatter(real_current.index, real_current, color='red', s=10, label='Leakage Current (Real Data)')
+    plt.scatter(real_current.index, real_current, color='red', s=1, label='Leakage Current (Real Data)')
     plt.xlim(start_date, end_date)
     plt.ylabel('Current (mA)')
-    plt.ylim(0, 6)
+    plt.ylim(0, 0.4)
     plt.title(f'Real Leakage Current for Sensor {sensor_name}')
     plt.grid(True)
     plt.legend()
     
     plt.subplot(4, 1, 3)
-    plt.scatter(result_df.index, result_df['fluence'], color='green', s=10, label='Fluence')
+    plt.scatter(result_df.index, result_df['fluence'], color='green', s=1, label='Fluence')
     plt.xlim(start_date, end_date)
     plt.ylabel('Fluence (n/cm²)')
     plt.title('Fluence')
@@ -44,7 +44,7 @@ def plot_leakage_current(result_df: pd.DataFrame, current_sample_df: pd.DataFram
     plt.legend()
     
     plt.subplot(4, 1, 4)
-    plt.scatter(result_df.index, result_df['temperature'], color='magenta', s=10, label='Temperature')
+    plt.scatter(result_df.index, result_df['temperature'], color='magenta', s=1, label='Temperature')
     plt.xlim(start_date, end_date)
     plt.ylabel('Temperature (K)')
     plt.title('Temperature')
@@ -83,6 +83,7 @@ def plot_simulated_vs_real(simulated_df: pd.Series, real_series: pd.Series, sens
     if end_date is None:
         end_date = max(simulated_df.index.max(), real_series.index.max())
     plt.figure(figsize=(12, 8))
+    plt.ylim(0, 0.4)
     plt.scatter(real_series.index, real_series.values, color='red', s=1, label='Real Current')
     plt.scatter(simulated_df.index, simulated_df.values, color='blue', s=1, label='Simulated Current')
     plt.xlim(start_date, end_date)
@@ -124,3 +125,21 @@ def plot_all_sensors(simulated_df, real_df, sensors, output_dir="out_data", star
     plt.savefig(os.path.join(output_dir, "all_real.png"))
     plt.show()
     plt.close()
+
+
+def plot_temperature_only(result_df: pd.DataFrame, output_path: str = None, start_date: pd.Timestamp = None, end_date: pd.Timestamp = None):
+    if start_date is None:
+        start_date = result_df.index.min()
+    if end_date is None:
+        end_date = result_df.index.max()
+    plt.figure(figsize=(12, 8))
+    plt.scatter(result_df.index, result_df['temperature'], color='magenta', s=1, label='Temperature')
+    plt.xlim(start_date, end_date)
+    plt.ylabel('Temperature (K)')
+    plt.title('Temperature')
+    plt.grid(True, which='both', linestyle=':', linewidth=0.5)
+    plt.minorticks_on()
+    plt.legend()
+    if output_path:
+        plt.savefig(output_path)
+    plt.show()

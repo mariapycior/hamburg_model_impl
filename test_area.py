@@ -82,6 +82,7 @@ if __name__ == "__main__":
         real_df = real.to_frame(name=name)
         plot_utils.plot_simulated_vs_real(sim_df, real_df, name, output_path=f"out_data/sim_vs_real_{name}.png")
         plot_utils.plot_leakage_current(sim, real_df, name, output_path=f"out_data/leakage_current_{name}.png")
+        plot_utils.plot_temperature_only(sim, output_path=f"out_data/temperature_{name}.png")
     else:
         simulated_df, real_df, sensors = run_all_sensors(SELECTED_YEARS)
         plot_utils.plot_all_sensors(simulated_df, real_df, sensors, output_dir="out_data")

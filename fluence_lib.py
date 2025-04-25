@@ -47,7 +47,26 @@ def calculate_intrinsic_lifetime_tau_vectorized(k_0I: float, E_I: float, T_a: np
 
 def align_temperature_to_fluence(fluence_df: pd.DataFrame, temp_df: pd.DataFrame, sensor_name: str) -> pd.DataFrame:
     fluence_series = fluence_df[sensor_name]
-    temp_series = temp_df[sensor_name].resample('10min').mean().bfill().ffill()
+    temp_series_raw = temp_df[sensor_name].resample('10min').mean()
+    is_nan = temp_series_raw.isna()
+    nan_periods = []
+    start = None
+    for idx, val in is_nan.items():
+        if val and start is None:
+            start = idx
+        elif not val and start is not None:
+            nan_periods.append((start, idx))
+            start = None
+    if start is not None:
+        nan_periods.append((start, temp_series_raw.index[-1]))
+    mask_265 = pd.Series(False, index=temp_series_raw.index)
+    for s, e in nan_periods:
+        duration_min = (e - s).total_seconds() / 60
+        if duration_min > 24*60:
+            mask_265[(mask_265.index >= s) & (mask_265.index < e)] = True
+    temp_series = temp_series_raw.ffill()
+    temp_series[mask_265] = 261.15
+    temp_series = temp_series.bfill()
     shift = timedelta(seconds=((fluence_series.index[0] - temp_series.index[0]).total_seconds() % 600) - (600 if (fluence_series.index[0] - temp_series.index[0]).total_seconds() % 600 > 300 else 0))
     fluence_series.index = fluence_series.index - shift
     full_index = pd.date_range(start=temp_series.index[0], end=temp_series.index[-1], freq='10min')
@@ -204,7 +223,7 @@ def adjust_simulated_current_with_temperature(data: pd.DataFrame, params) -> pd.
     R_Tref = (T_ref / T) ** 2 * np.exp(-(E_eff / (2 * kB)) * (1/T - 1/T_ref))
     out = data.copy()
     out['current'] = out['current'].values * R_Tref
-    out.loc[out['fluence'] == 0, 'current'] = np.nan
+    #out.loc[out['fluence'] == 0, 'current'] = np.nan
     return out
 
 def get_current_files(paths, selected_years):
