@@ -26,7 +26,7 @@ class Paths:
 
     def get_temperature_files_for_years(self, years: list) -> list:
         """Get temperature files for specified years."""
-        return [self.get_temperature_file(f'temperature_10T_{year}.csv') for year in years]
+        return [self.get_temperature_file(f'temperature_1T_{year}.csv') for year in years]
 
 # Mode for current-temperature adjustment: 'adjust_sim', 'adjust_real', or 'none'
 CURRENT_TEMP_MODE = 'adjust_sim'  # Możesz zmienić na 'adjust_real' lub 'none'
@@ -41,6 +41,10 @@ CURRENT_YEAR_LIST = [
     ('ls1_current_all.csv', [2013, 2014, 2015]),
     ('run2_current_all.csv', [2016, 2017, 2018])
 ]
+
+# --- Ustawienia okresów czasowych (resampling/interwały) ---
+# Dostępne wartości: '1min', '1H', '10H', '24H', '1W'
+SIMULATION_PERIOD = '24H'  # <- Zmień tutaj na: '1min', '1H', '10H', '24H', '1W' wg potrzeb
 
 # --- Ustawienia uruchamiania ---
 RUN_MODE = "single"  # "single" albo "all"

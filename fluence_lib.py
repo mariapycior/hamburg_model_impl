@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 from datetime import datetime, timedelta
 import tqdm
 import os
-from config import CURRENT_YEAR_LIST, CURRENT_YEAR_RANGES, CURRENT_TEMP_MODE
+from config import CURRENT_YEAR_LIST, CURRENT_YEAR_RANGES, CURRENT_TEMP_MODE, SIMULATION_PERIOD
 
 def load_avg_fluence(file_path: str) -> pd.DataFrame:
     df = pd.read_csv(file_path, skiprows=4)
@@ -47,10 +47,33 @@ def calculate_intrinsic_lifetime_tau_vectorized(k_0I: float, E_I: float, T_a: np
 
 def align_temperature_to_fluence(fluence_df: pd.DataFrame, temp_df: pd.DataFrame, sensor_name: str) -> pd.DataFrame:
     fluence_series = fluence_df[sensor_name]
-    temp_series = temp_df[sensor_name].resample('10min').mean().bfill().ffill()
-    shift = timedelta(seconds=((fluence_series.index[0] - temp_series.index[0]).total_seconds() % 600) - (600 if (fluence_series.index[0] - temp_series.index[0]).total_seconds() % 600 > 300 else 0))
+    # Agregacja fluencji do wybranego kroku czasowego
+    fluence_series = fluence_series.resample(SIMULATION_PERIOD).sum()
+    temp_series_raw = temp_df[sensor_name].resample(SIMULATION_PERIOD).mean()
+    is_nan = temp_series_raw.isna()
+    nan_periods = []
+    start = None
+    for idx, val in is_nan.items():
+        if val and start is None:
+            start = idx
+        elif not val and start is not None:
+            nan_periods.append((start, idx))
+            start = None
+    if start is not None:
+        nan_periods.append((start, temp_series_raw.index[-1]))
+    mask_265 = pd.Series(False, index=temp_series_raw.index)
+    for s, e in nan_periods:
+        duration_min = (e - s).total_seconds() / 60
+        if duration_min > 24*60:
+            mask_265[(mask_265.index >= s) & (mask_265.index < e)] = True
+    temp_series = temp_series_raw.ffill()
+    temp_series[mask_265] = 261.15
+    temp_series = temp_series.bfill()
+    freq_seconds = pd.to_timedelta(SIMULATION_PERIOD).total_seconds()
+    shift = timedelta(seconds=((fluence_series.index[0] - temp_series.index[0]).total_seconds() % freq_seconds) - (freq_seconds if (fluence_series.index[0] - temp_series.index[0]).total_seconds() % freq_seconds > freq_seconds/2 else 0))
+    print(f"[align_temperature_to_fluence] shift: {shift}, before: {fluence_series.index[0]}, after: {fluence_series.index[0] - shift}")
     fluence_series.index = fluence_series.index - shift
-    full_index = pd.date_range(start=temp_series.index[0], end=temp_series.index[-1], freq='10min')
+    full_index = pd.date_range(start=temp_series.index[0], end=temp_series.index[-1], freq=SIMULATION_PERIOD)
     fluence_series = fluence_series.reindex(full_index, fill_value=0)
     return fluence_series, temp_series
 
@@ -98,7 +121,8 @@ def combine_periods(df: pd.DataFrame, temp_tolerance: float = 1, fluence_toleran
         period_df = df.iloc[current_start:i]
         avg_temp = period_df['temperature'].mean()
         avg_flu = period_df['fluence'].sum()
-        time = (i - current_start) * 10  
+        freq_minutes = int(pd.to_timedelta(SIMULATION_PERIOD).total_seconds() // 60)
+        time = (i - current_start) * freq_minutes  # czas trwania okresu w minutach
         combined.append({
             'start_time': df.index[current_start],  
             'temperature': avg_temp,
@@ -123,7 +147,7 @@ def simulate_current_sensor(fluence_df: pd.Series, temp_df: pd.Series, params) -
     time_tau = times / tau_j
     time_theta = theta_j * times / params.t_0
     N = len(combined)
-    for n in range(N):
+    for n in tqdm.tqdm(range(N), desc='Simulating current', total=N):
         I_leak = calculate_leakage_current(fluences[:n], time_tau[:n], time_theta[:n], 
                                            params.alpha_I, params.alpha_0_star, params.beta, params.V)
         combined.loc[combined.index[n], 'current'] = I_leak*1000#+ 0.5
@@ -204,7 +228,7 @@ def adjust_simulated_current_with_temperature(data: pd.DataFrame, params) -> pd.
     R_Tref = (T_ref / T) ** 2 * np.exp(-(E_eff / (2 * kB)) * (1/T - 1/T_ref))
     out = data.copy()
     out['current'] = out['current'].values * R_Tref
-    out.loc[out['fluence'] == 0, 'current'] = np.nan
+    #out.loc[out['fluence'] == 0, 'current'] = np.nan
     return out
 
 def get_current_files(paths, selected_years):
