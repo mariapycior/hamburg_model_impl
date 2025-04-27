@@ -50,7 +50,7 @@ def get_current_files(paths, selected_years):
 def prepare_inputs(selected_years):
     paths = Paths()
     params = Parameters()
-    fluence_file = paths.get_fluence_file('avgFluenceBinned.csv')
+    fluence_file = paths.get_fluence_file('avgFluenceBinned_1h.csv')
     temp_files = paths.get_temperature_files_for_years(selected_years)
     current_files = get_current_files(paths, selected_years)
     return params, paths, fluence_file, temp_files, current_files

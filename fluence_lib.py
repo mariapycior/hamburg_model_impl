@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 from datetime import datetime, timedelta
 import tqdm
 import os
-from config import CURRENT_YEAR_LIST, CURRENT_YEAR_RANGES, CURRENT_TEMP_MODE
+from config import CURRENT_YEAR_LIST, CURRENT_YEAR_RANGES, CURRENT_TEMP_MODE, SIMULATION_PERIOD
 
 def load_avg_fluence(file_path: str) -> pd.DataFrame:
     df = pd.read_csv(file_path, skiprows=4)
@@ -47,7 +47,9 @@ def calculate_intrinsic_lifetime_tau_vectorized(k_0I: float, E_I: float, T_a: np
 
 def align_temperature_to_fluence(fluence_df: pd.DataFrame, temp_df: pd.DataFrame, sensor_name: str) -> pd.DataFrame:
     fluence_series = fluence_df[sensor_name]
-    temp_series_raw = temp_df[sensor_name].resample('10min').mean()
+    # Agregacja fluencji do wybranego kroku czasowego
+    fluence_series = fluence_series.resample(SIMULATION_PERIOD).sum()
+    temp_series_raw = temp_df[sensor_name].resample(SIMULATION_PERIOD).mean()
     is_nan = temp_series_raw.isna()
     nan_periods = []
     start = None
@@ -67,9 +69,11 @@ def align_temperature_to_fluence(fluence_df: pd.DataFrame, temp_df: pd.DataFrame
     temp_series = temp_series_raw.ffill()
     temp_series[mask_265] = 261.15
     temp_series = temp_series.bfill()
-    shift = timedelta(seconds=((fluence_series.index[0] - temp_series.index[0]).total_seconds() % 600) - (600 if (fluence_series.index[0] - temp_series.index[0]).total_seconds() % 600 > 300 else 0))
+    freq_seconds = pd.to_timedelta(SIMULATION_PERIOD).total_seconds()
+    shift = timedelta(seconds=((fluence_series.index[0] - temp_series.index[0]).total_seconds() % freq_seconds) - (freq_seconds if (fluence_series.index[0] - temp_series.index[0]).total_seconds() % freq_seconds > freq_seconds/2 else 0))
+    print(f"[align_temperature_to_fluence] shift: {shift}, before: {fluence_series.index[0]}, after: {fluence_series.index[0] - shift}")
     fluence_series.index = fluence_series.index - shift
-    full_index = pd.date_range(start=temp_series.index[0], end=temp_series.index[-1], freq='10min')
+    full_index = pd.date_range(start=temp_series.index[0], end=temp_series.index[-1], freq=SIMULATION_PERIOD)
     fluence_series = fluence_series.reindex(full_index, fill_value=0)
     return fluence_series, temp_series
 
@@ -117,7 +121,8 @@ def combine_periods(df: pd.DataFrame, temp_tolerance: float = 1, fluence_toleran
         period_df = df.iloc[current_start:i]
         avg_temp = period_df['temperature'].mean()
         avg_flu = period_df['fluence'].sum()
-        time = (i - current_start) * 10  
+        freq_minutes = int(pd.to_timedelta(SIMULATION_PERIOD).total_seconds() // 60)
+        time = (i - current_start) * freq_minutes  # czas trwania okresu w minutach
         combined.append({
             'start_time': df.index[current_start],  
             'temperature': avg_temp,
@@ -142,7 +147,7 @@ def simulate_current_sensor(fluence_df: pd.Series, temp_df: pd.Series, params) -
     time_tau = times / tau_j
     time_theta = theta_j * times / params.t_0
     N = len(combined)
-    for n in range(N):
+    for n in tqdm.tqdm(range(N), desc='Simulating current', total=N):
         I_leak = calculate_leakage_current(fluences[:n], time_tau[:n], time_theta[:n], 
                                            params.alpha_I, params.alpha_0_star, params.beta, params.V)
         combined.loc[combined.index[n], 'current'] = I_leak*1000#+ 0.5

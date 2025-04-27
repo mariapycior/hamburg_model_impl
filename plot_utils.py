@@ -88,7 +88,7 @@ def plot_simulated_vs_real(simulated_df: pd.Series, real_series: pd.Series, sens
     plt.scatter(simulated_df.index, simulated_df.values, color='blue', s=1, label='Simulated Current')
     plt.xlim(start_date, end_date)
     plt.ylabel('Current (mA)')
-    plt.title(f'Comparison of Real vs Simulated Current for Sensor {sensor_name}')
+    plt.title(f'Comparison of Real vs Simulated Current for Sensor {sensor_name} 1min step')
     plt.grid(True)
     plt.legend()
     if output_path:
