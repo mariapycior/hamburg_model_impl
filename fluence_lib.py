@@ -48,12 +48,12 @@ def calculate_intrinsic_lifetime_tau_vectorized(k_0I: float, E_I: float, T_a: np
 def align_temperature_to_fluence(fluence_df: pd.DataFrame, temp_df: pd.DataFrame, sensor_name: str) -> pd.DataFrame:
     fluence_series = fluence_df[sensor_name]
     # Agregacja fluencji do wybranego kroku czasowego
-    fluence_series = fluence_series.resample(SIMULATION_PERIOD).sum()
-    temp_series_raw = temp_df[sensor_name].resample(SIMULATION_PERIOD).mean()
+    fluence_series = fluence_series.resample(SIMULATION_PERIOD.lower()).sum()
+    temp_series_raw = temp_df[sensor_name].resample(SIMULATION_PERIOD.lower()).mean()
     is_nan = temp_series_raw.isna()
     nan_periods = []
     start = None
-    for idx, val in is_nan.items():
+    '''for idx, val in is_nan.items():
         if val and start is None:
             start = idx
         elif not val and start is not None:
@@ -64,17 +64,18 @@ def align_temperature_to_fluence(fluence_df: pd.DataFrame, temp_df: pd.DataFrame
     mask_265 = pd.Series(False, index=temp_series_raw.index)
     for s, e in nan_periods:
         duration_min = (e - s).total_seconds() / 60
-        if duration_min > 24*60:
+        if duration_min > 5*60:
             mask_265[(mask_265.index >= s) & (mask_265.index < e)] = True
+    temp_series[mask_265] = 261.15'''
     temp_series = temp_series_raw.ffill()
-    temp_series[mask_265] = 261.15
     temp_series = temp_series.bfill()
-    freq_seconds = pd.to_timedelta(SIMULATION_PERIOD).total_seconds()
+    freq_seconds = pd.to_timedelta(SIMULATION_PERIOD.lower()).total_seconds()
     shift = timedelta(seconds=((fluence_series.index[0] - temp_series.index[0]).total_seconds() % freq_seconds) - (freq_seconds if (fluence_series.index[0] - temp_series.index[0]).total_seconds() % freq_seconds > freq_seconds/2 else 0))
     print(f"[align_temperature_to_fluence] shift: {shift}, before: {fluence_series.index[0]}, after: {fluence_series.index[0] - shift}")
     fluence_series.index = fluence_series.index - shift
-    full_index = pd.date_range(start=temp_series.index[0], end=temp_series.index[-1], freq=SIMULATION_PERIOD)
+    full_index = pd.date_range(start=temp_series.index[0], end=temp_series.index[-1], freq=SIMULATION_PERIOD.lower())
     fluence_series = fluence_series.reindex(full_index, fill_value=0)
+
     return fluence_series, temp_series
 
 def prepare_sensor_data(fluence_df: pd.DataFrame, temp_df: pd.DataFrame, sensor_name: str) -> tuple:
@@ -121,7 +122,7 @@ def combine_periods(df: pd.DataFrame, temp_tolerance: float = 1, fluence_toleran
         period_df = df.iloc[current_start:i]
         avg_temp = period_df['temperature'].mean()
         avg_flu = period_df['fluence'].sum()
-        freq_minutes = int(pd.to_timedelta(SIMULATION_PERIOD).total_seconds() // 60)
+        freq_minutes = int(pd.to_timedelta(SIMULATION_PERIOD.lower()).total_seconds() // 60)
         time = (i - current_start) * freq_minutes  # czas trwania okresu w minutach
         combined.append({
             'start_time': df.index[current_start],  
@@ -180,6 +181,8 @@ def process_all_sensors(fluence_df, temp_df, current_df, params, sensor_name=Non
     all_real = {}
     for sensor in tqdm.tqdm(common_sensors):
         sim_df, real_current = process_single_sensor(fluence_df, temp_df, current_df, params, sensor)
+        # ZAWSZE dostosuj simulated current do temperatury (niezależnie od CURRENT_TEMP_MODE)
+        sim_df = adjust_simulated_current_with_temperature(sim_df, params)
         all_simulated[sensor] = sim_df  
         all_real[sensor] = real_current
     if len(common_sensors) == 1:
@@ -218,17 +221,28 @@ def adjust_real_current_with_temperature(current_data: pd.DataFrame, temperature
     out[column] = out[column].values * R_Tref
     return out
 
-def adjust_simulated_current_with_temperature(data: pd.DataFrame, params) -> pd.DataFrame:
-    if CURRENT_TEMP_MODE == 'none':
-        return data
-    T = data['temperature'].values
-    T_ref = params.T_ref
-    E_eff = getattr(params, 'E_eff', 1.24)
-    kB = params.kb
-    R_Tref = (T_ref / T) ** 2 * np.exp(-(E_eff / (2 * kB)) * (1/T - 1/T_ref))
+def set_temperature_where_fluence_zero(data: pd.DataFrame, value: float = 261.15, min_duration_days: int = 30) -> pd.DataFrame:
     out = data.copy()
-    out['current'] = out['current'].values * R_Tref
-    #out.loc[out['fluence'] == 0, 'current'] = np.nan
+    if 'fluence' not in out.columns or 'temperature' not in out.columns:
+        return out
+    zero_mask = (out['fluence'] == 0)
+    if zero_mask.sum() == 0:
+        # Usuń wszystkie temperatury poniżej 260 i powyżej 264 (ustaw na NaN)
+        out.loc[(out['temperature'] < 260) | (out['temperature'] > 264), 'temperature'] = float('nan')
+        return out
+    # Find consecutive zero-fluence intervals
+    zero_groups = (zero_mask != zero_mask.shift()).cumsum()
+    group_ids = zero_groups[zero_mask].unique()
+    freq_minutes = int(pd.to_timedelta(SIMULATION_PERIOD.lower()).total_seconds() // 60)
+    min_points = (min_duration_days * 24 * 60) // freq_minutes
+    for gid in group_ids:
+        idx = zero_groups[zero_groups == gid].index
+        if len(idx) >= min_points:
+            out.loc[idx, 'temperature'] = value
+        else:
+            out.loc[idx, 'temperature'] = float('nan')
+    # Usuń wszystkie temperatury poniżej 260 i powyżej 264 (ustaw na NaN)
+    out.loc[(out['temperature'] < 260) | (out['temperature'] > 264), 'temperature'] = float('nan')
     return out
 
 def get_current_files(paths, selected_years):
@@ -243,3 +257,17 @@ def get_available_sensors(paths, selected_years):
     for df in all_current_dfs[1:]:
         common_sensors &= (set(df.columns) - {'TS'})
     return sorted(common_sensors)
+
+def adjust_simulated_current_with_temperature(data: pd.DataFrame, params) -> pd.DataFrame:
+    if CURRENT_TEMP_MODE == 'none':
+        return data
+    # Najpierw ustaw temperaturę tam gdzie fluencja == 0
+    data = set_temperature_where_fluence_zero(data)
+    T = data['temperature'].values
+    T_ref = params.T_ref
+    E_eff = getattr(params, 'E_eff', 1.24)
+    kB = params.kb
+    R_Tref = (T_ref / T) ** 2 * np.exp(-(E_eff / (2 * kB)) * (1/T - 1/T_ref))
+    out = data.copy()
+    out['current'] = out['current'].values * R_Tref
+    return out

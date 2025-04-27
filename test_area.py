@@ -64,6 +64,14 @@ def run_all_sensors(selected_years):
     )
     if len(sensors) < len(available_sensors):
         print(f"Warning: Only {len(sensors)} out of {len(available_sensors)} sensors have complete data")
+    # --- DODANE: prosty overlay wszystkich simulated current na jednym wykresie ---
+    import plot_utils
+    plot_utils.plot_simulated_simple(simulated_df, sensors)
+    # --- DODANE: pandas plot wszystkich simulated current na jednym wykresie ---
+    plot_utils.plot_simulated_pandas(simulated_df)
+    # --- DODANE: zapis simulated_df jako pickle do niezależnego sprawdzenia ---
+    if 'simulated_df' in locals():
+        simulated_df.to_pickle("out_data/simulated_df.pkl")
     return simulated_df, real_df, sensors
 
 def run_single_sensor(selected_years, sensor_name):
@@ -73,6 +81,9 @@ def run_single_sensor(selected_years, sensor_name):
     )
     if sensor_name not in sensors:
         raise ValueError(f"Sensor {sensor_name} not found in the available sensors: {sensors}")
+    # --- DODANE: zapis simulated_df jako pickle do niezależnego sprawdzenia ---
+    if 'simulated_df' in locals():
+        simulated_df.to_pickle("out_data/simulated_df.pkl")
     return simulated_df, real_df[sensor_name], sensor_name
 
 if __name__ == "__main__":
@@ -81,6 +92,7 @@ if __name__ == "__main__":
         sim_df = sim[['current']]
         real_df = real.to_frame(name=name)
         plot_utils.plot_simulated_vs_real(sim_df, real_df, name, output_path=f"out_data/sim_vs_real_{name}.png")
+        plot_utils.plot_simulated_vs_real(sim_df, real_df, name, output_path=f"out_data/sim_vs_real_{name}_7dmean.png", weekly_average=True)
         plot_utils.plot_leakage_current(sim, real_df, name, output_path=f"out_data/leakage_current_{name}.png")
         plot_utils.plot_temperature_only(sim, output_path=f"out_data/temperature_{name}.png")
     else:
