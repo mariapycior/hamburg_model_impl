@@ -82,15 +82,16 @@ def plot_simulated_vs_real(simulated_df: pd.Series, real_series: pd.Series, sens
     if end_date is None:
         end_date = max(simulated_df.index.max(), real_series.index.max())
     plt.figure(figsize=(12, 8))
-    plt.ylim(0, 0.3)
+    plt.ylim(0, 0.4)
     plt.scatter(real_series.index, real_series.values, color='red', s=1, label='Real Current')
     plt.scatter(simulated_df.index, simulated_df.values, color='blue', s=1, label='Simulated Current')
     plt.xlim(start_date, end_date)
     plt.ylabel('Current (mA)')
-    if weekly_average:
-        plt.title(f'Comparison of Real vs Simulated Current for Sensor {sensor_name} (7-day mean)')
+    if 0: #weekly_average:
+        plt.title(f'Comparison of Real vs Simulated Current for Sensor {sensor_name}')
     else:
-        plt.title(f'Comparison of Real vs Simulated Current for Sensor {sensor_name} 1min step')
+        plt.title(f'Comparison of Real vs Simulated Current for Sensor {sensor_name}')
+
     plt.grid(True)
     plt.legend()
     if output_path:
@@ -113,18 +114,23 @@ def plot_all_sensors(simulated_df, real_df, sensors, output_dir="out_data", star
         if y_clean.empty or len(x_clean) != len(y_clean):
             continue
         plt.scatter(x_clean, y_clean.values, s=1, label=sensor)
+    # Średnia simulated z warunkiem na liczbę nie-NaN
+    valid_count_sim = simulated_df.notna().sum(axis=1)
+    mean_sim = simulated_df.mean(axis=1)
+    mean_sim[valid_count_sim <= (simulated_df.shape[1] // 2)] = float('nan')
+    plt.plot(mean_sim.index, mean_sim.values, color='black', linewidth=3, label='Mean (simulated)')
     plt.xlim(start_date, end_date)
-    #plt.ylim(0, 10)
     plt.ylabel('Current (mA)')
     plt.title('Simulated Current for All Sensors')
     plt.grid(True)
     plt.tight_layout()
-    plt.savefig(os.path.join(output_dir, "all_simulated.png"))
+    plt.legend(loc='center left', bbox_to_anchor=(1.01, 0.5), title='Sensors', fontsize='small')
+    plt.savefig(os.path.join(output_dir, "all_simulated.png"), bbox_inches='tight')
     plt.show()
     plt.close()
-    # Plot of real current for all sensors
+    # Wykres realnych prądów
     plt.figure(figsize=(12, 12))
-    real_df_daily = real_df.resample('1d').mean()
+    real_df_daily = real_df.resample('1D').mean()
     for sensor in sensors:
         if sensor not in real_df_daily.columns:
             continue
@@ -136,12 +142,18 @@ def plot_all_sensors(simulated_df, real_df, sensors, output_dir="out_data", star
         if y_clean.empty or len(x_clean) != len(y_clean):
             continue
         plt.scatter(x_clean, y_clean.values, s=1, label=sensor)
+    # Średnia real z warunkiem na liczbę nie-NaN
+    valid_count_real = real_df_daily.notna().sum(axis=1)
+    mean_real = real_df_daily.mean(axis=1)
+    mean_real[valid_count_real <= (real_df_daily.shape[1] // 2)] = float('nan')
+    plt.plot(mean_real.index, mean_real.values, color='black', linewidth=3, label='Mean (real)')
     plt.xlim(start_date, end_date)
     plt.ylabel('Current (mA)')
     plt.title('Real Current for All Sensors')
     plt.grid(True)
     plt.tight_layout()
-    plt.savefig(os.path.join(output_dir, "all_real.png"))
+    plt.legend(loc='center left', bbox_to_anchor=(1.01, 0.5), title='Sensors', fontsize='small')
+    plt.savefig(os.path.join(output_dir, "all_real.png"), bbox_inches='tight')
     plt.show()
     plt.close()
 

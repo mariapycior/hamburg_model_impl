@@ -9,7 +9,7 @@ KB = 8.617333262145e-5
 T_REF = 294.15
 E_I_STAR = 1.30
 ALPHA_I = 1.23e-17
-ALPHA_0_STAR = 7.07e-17
+ALPHA_0_STAR = 6.74e-17
 BETA = 3.29e-18
 E_I = 1.11
 K_0I = 1.2e13
@@ -71,7 +71,7 @@ def run_all_sensors(selected_years):
     plot_utils.plot_simulated_pandas(simulated_df)
     # --- DODANE: zapis simulated_df jako pickle do niezależnego sprawdzenia ---
     if 'simulated_df' in locals():
-        simulated_df.to_pickle("out_data/simulated_df.pkl")
+        simulated_df.to_csv("out_data/simulated_df.csv")
     return simulated_df, real_df, sensors
 
 def run_single_sensor(selected_years, sensor_name):
@@ -83,18 +83,22 @@ def run_single_sensor(selected_years, sensor_name):
         raise ValueError(f"Sensor {sensor_name} not found in the available sensors: {sensors}")
     # --- DODANE: zapis simulated_df jako pickle do niezależnego sprawdzenia ---
     if 'simulated_df' in locals():
-        simulated_df.to_pickle("out_data/simulated_df.pkl")
+        simulated_df.to_csv("out_data/simulated_df.csv")
     return simulated_df, real_df[sensor_name], sensor_name
 
 if __name__ == "__main__":
     if RUN_MODE == "single":
         sim, real, name = run_single_sensor(SELECTED_YEARS, SENSOR_NAME)
-        sim_df = sim[['current']]
+        import pandas as pd
+        if isinstance(sim, pd.Series):
+            sim_df = sim.to_frame()
+        else:
+            sim_df = sim
         real_df = real.to_frame(name=name)
         plot_utils.plot_simulated_vs_real(sim_df, real_df, name, output_path=f"out_data/sim_vs_real_{name}.png")
         plot_utils.plot_simulated_vs_real(sim_df, real_df, name, output_path=f"out_data/sim_vs_real_{name}_7dmean.png", weekly_average=True)
-        plot_utils.plot_leakage_current(sim, real_df, name, output_path=f"out_data/leakage_current_{name}.png")
-        plot_utils.plot_temperature_only(sim, output_path=f"out_data/temperature_{name}.png")
+        #plot_utils.plot_leakage_current(sim, real_df, name, output_path=f"out_data/leakage_current_{name}.png")
+        #plot_utils.plot_temperature_only(sim, output_path=f"out_data/temperature_{name}.png")
     else:
         simulated_df, real_df, sensors = run_all_sensors(SELECTED_YEARS)
         plot_utils.plot_all_sensors(simulated_df, real_df, sensors, output_dir="out_data")

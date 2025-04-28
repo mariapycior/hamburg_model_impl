@@ -145,6 +145,7 @@ def simulate_current_sensor(fluence_df: pd.Series, temp_df: pd.Series, params) -
     times = combined['time'].values
     tau_j = calculate_intrinsic_lifetime_tau_vectorized(params.k_0I, params.E_I, temperatures, params.kb)
     theta_j = calculate_temperature_factor_theta_vectorized(temperatures, params.E_I_star, params.T_ref, params.kb)
+    print('T_REF',params.T_ref)
     time_tau = times / tau_j
     time_theta = theta_j * times / params.t_0
     N = len(combined)
@@ -181,9 +182,8 @@ def process_all_sensors(fluence_df, temp_df, current_df, params, sensor_name=Non
     all_real = {}
     for sensor in tqdm.tqdm(common_sensors):
         sim_df, real_current = process_single_sensor(fluence_df, temp_df, current_df, params, sensor)
-        # ZAWSZE dostosuj simulated current do temperatury (niezależnie od CURRENT_TEMP_MODE)
-        sim_df = adjust_simulated_current_with_temperature(sim_df, params)
-        all_simulated[sensor] = sim_df  
+        # Dodaj tylko kolumnę 'current', z nazwą sensora
+        all_simulated[sensor] = sim_df['current'].rename(sensor)
         all_real[sensor] = real_current
     if len(common_sensors) == 1:
         return all_simulated[common_sensors[0]], pd.DataFrame({common_sensors[0]: all_real[common_sensors[0]]}), common_sensors
@@ -268,6 +268,7 @@ def adjust_simulated_current_with_temperature(data: pd.DataFrame, params) -> pd.
     E_eff = getattr(params, 'E_eff', 1.24)
     kB = params.kb
     R_Tref = (T_ref / T) ** 2 * np.exp(-(E_eff / (2 * kB)) * (1/T - 1/T_ref))
+    print('T_REF',T_ref)
     out = data.copy()
     out['current'] = out['current'].values * R_Tref
     return out
