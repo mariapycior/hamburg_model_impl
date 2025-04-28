@@ -58,3 +58,6 @@ coverage.xml
 # Logs
 *.log
 logs/
+
+# Ignore output data
+out_data/

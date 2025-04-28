@@ -242,7 +242,7 @@ def set_temperature_where_fluence_zero(data: pd.DataFrame, value: float = 261.15
         else:
             out.loc[idx, 'temperature'] = float('nan')
     # Usuń wszystkie temperatury poniżej 260 i powyżej 264 (ustaw na NaN)
-    out.loc[(out['temperature'] < 260) | (out['temperature'] > 264), 'temperature'] = float('nan')
+    out.loc[(out['temperature'] < 260) | (out['temperature'] > 290), 'temperature'] = float('nan')
     return out
 
 def get_current_files(paths, selected_years):
