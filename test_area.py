@@ -2,7 +2,7 @@ import os
 import pandas as pd
 from datetime import datetime
 from config import Paths, RUN_MODE, SENSOR_NAME, SELECTED_YEARS, CURRENT_YEAR_RANGES, CURRENT_YEAR_LIST
-import fluence_lib
+import fluence_simulation_lib
 import plot_utils
 
 KB = 8.617333262145e-5
@@ -61,7 +61,7 @@ def run_all_sensors(selected_years):
     params, paths, fluence_file, temp_files, current_files = prepare_inputs(selected_years)
     available_sensors = get_available_sensors(paths, selected_years)
     print(f"Found {len(available_sensors)} sensors available across all runs")
-    simulated_df, real_df, sensors = fluence_lib.run_leakage_current_pipeline(
+    simulated_df, real_df, sensors = fluence_simulation_lib.run_leakage_current_pipeline(
         fluence_file, temp_files, current_files, params, paths
     )
     if len(sensors) < len(available_sensors):
@@ -78,7 +78,7 @@ def run_all_sensors(selected_years):
 
 def run_single_sensor(selected_years, sensor_name):
     params, paths, fluence_file, temp_files, current_files = prepare_inputs(selected_years)
-    simulated_df, real_df, sensors = fluence_lib.run_leakage_current_pipeline(
+    simulated_df, real_df, sensors = fluence_simulation_lib.run_leakage_current_pipeline(
         fluence_file, temp_files, current_files, params, paths, sensor_name=sensor_name
     )
     if sensor_name not in sensors:
