@@ -2,7 +2,7 @@ import os
 import pandas as pd
 import numpy as np
 from datetime import datetime
-from config import Paths, RUN_MODE, SENSOR_NAME, SELECTED_YEARS, CURRENT_YEAR_RANGES, CURRENT_YEAR_LIST
+from config import Paths, RUN_MODE, SENSOR_NAME, SELECTED_YEARS, CURRENT_YEAR_RANGES, CURRENT_YEAR_LIST, OUTPUT_SIMULATED_DF_PATH
 import fluence_simulation_lib
 import plot_utils
 
@@ -67,15 +67,41 @@ def run_all_sensors(selected_years):
     )
     if len(sensors) < len(available_sensors):
         print(f"Warning: Only {len(sensors)} out of {len(available_sensors)} sensors have complete data")
+    # --- Nowe: budowanie dataframe z current, temperature, fluence dla każdego sensora ---
+    # simulated_df: DataFrame z kolumnami = sensorami, wartości = current
+    # Odtwórz temperature i fluence dla każdego sensora i zapisz jako osobne kolumny
+    temp_df = pd.concat([pd.read_csv(f, index_col="TS", parse_dates=["TS"]) for f in temp_files], axis=0, join='outer')
+    temp_df = temp_df.groupby(temp_df.index).max().sort_index()
+    fluence_df = pd.read_csv(fluence_file, skiprows=4)
+    fluence_df['bin_centre_date'] = pd.to_datetime(fluence_df['bin_centre_date'], format='%d-%m-%Y %H:%M:%S')
+    fluence_df.set_index('bin_centre_date', inplace=True)
+    fluence_df.index = fluence_df.index - pd.Timedelta(minutes=5)
+    fluence_df.index.name = "TS"
+    # Budujemy nowy DataFrame
+    out_df = pd.DataFrame(index=simulated_df.index)
+    for sensor in sensors:
+        # current
+        out_df[f"current_{sensor}"] = simulated_df[sensor]
+        # temperature
+        if sensor in temp_df.columns:
+            out_df[f"temperature_{sensor}"] = temp_df[sensor].reindex(simulated_df.index, method='nearest')
+        else:
+            out_df[f"temperature_{sensor}"] = np.nan
+        # fluence
+        if sensor in fluence_df.columns:
+            out_df[f"fluence_{sensor}"] = fluence_df[sensor].reindex(simulated_df.index, method='nearest')
+        else:
+            out_df[f"fluence_{sensor}"] = np.nan
+    out_df.to_csv("out_data/simulated_df.csv")
+    out_df.to_csv("out_data/data/simulated_df.csv")
+    # --- wykres jak dotychczas ---
     simulated_df.plot(title="Simulated Current (all sensors)")
     import matplotlib.pyplot as plt
+    plt.gcf().set_size_inches(12, 8)  # Increase figure size
     plt.xlabel("Time")
     plt.ylabel("Simulated Current")
     plt.tight_layout()
     plt.show()
-    simulated_df.to_csv("out_data/simulated_df.csv")
-    # Save also to out_data/data
-    simulated_df.to_csv("out_data/data/simulated_df.csv")
     return simulated_df, sensors
 
 def run_single_sensor(selected_years, sensor_name):
@@ -119,25 +145,45 @@ def run_single_sensor(selected_years, sensor_name):
 
 if __name__ == "__main__":
     if RUN_MODE == "single":
-        #sim, name = run_single_sensor(SELECTED_YEARS, SENSOR_NAME)
+        sim, name = run_single_sensor(SELECTED_YEARS, SENSOR_NAME)
         name = SENSOR_NAME
         import current_preparation_lib
-        simulated_df = pd.read_csv("out_data/simulated_df.csv", index_col=0, parse_dates=True)
         params = Parameters()
-        current_col = f"current_{name}"
-        temp_col = f"temperature_{name}"
-        fluence_col = f"fluence_{name}"
-        df_for_adjust = simulated_df[[current_col, temp_col, fluence_col]].copy()
-        df_for_adjust = df_for_adjust.rename(columns={
-            current_col: "current",
-            temp_col: "temperature",
-            fluence_col: "fluence"
-        })
+        df_for_adjust = current_preparation_lib.load_and_prepare_simulated_df(name)
         adjusted_df = current_preparation_lib.adjust_simulated_current_with_temperature(df_for_adjust, params)
         import matplotlib.pyplot as plt
-        # Instead of passing None, pass an empty pd.Series with the same index as simulated
         empty_real = pd.Series(index=adjusted_df.index, dtype=float)
         plot_utils.plot_simulated_vs_real(adjusted_df, empty_real, name, output_path=f"out_data/sim_vs_real_{name}_adjusted.png")
         plt.show()
     else:
-        sim, sensors = run_all_sensors(SELECTED_YEARS)
+        # --- Najpierw uruchom symulację i wygeneruj poprawny simulated_df.csv ---
+        #sim, sensors = run_all_sensors(SELECTED_YEARS)
+        import current_preparation_lib
+        params = Parameters()
+        simulated_df = pd.read_csv(OUTPUT_SIMULATED_DF_PATH, index_col=0, parse_dates=True)
+        sensors = [col.replace("current_", "") for col in simulated_df.columns if col.startswith("current_")]
+        adjusted_dfs = []
+        for sensor in sensors:
+            col_map = {
+                f"current_{sensor}": "current",
+                f"temperature_{sensor}": "temperature",
+                f"fluence_{sensor}": "fluence"
+            }
+            available = [k for k in col_map.keys() if k in simulated_df.columns]
+            if len(available) < 3:
+                print(f"Warning: Not all columns found for sensor {sensor}, skipping.")
+                continue
+            df_for_adjust = simulated_df[available].rename(columns={k: v for k, v in col_map.items() if k in simulated_df.columns})
+            adjusted_df = current_preparation_lib.adjust_simulated_current_with_temperature(df_for_adjust, params)
+            adjusted_df = adjusted_df.rename(columns={"current": f"current_{sensor}"})
+            adjusted_dfs.append(adjusted_df[[f"current_{sensor}"]])
+        # Połącz wszystkie prądy w jeden DataFrame
+        if adjusted_dfs:
+            all_currents = pd.concat(adjusted_dfs, axis=1)
+            import matplotlib.pyplot as plt
+            all_currents.plot(title="Simulated Current (all sensors, adjusted)")
+            plt.gcf().set_size_inches(12, 8)
+            plt.xlabel("Time")
+            plt.ylabel("Simulated Current (adjusted)")
+            plt.tight_layout()
+            plt.show()

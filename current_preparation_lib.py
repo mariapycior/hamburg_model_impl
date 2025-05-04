@@ -1,6 +1,6 @@
 import numpy as np
 import pandas as pd
-from config import CURRENT_TEMP_MODE, SIMULATION_PERIOD
+from config import CURRENT_TEMP_MODE, SIMULATION_PERIOD, OUTPUT_SIMULATED_DF_PATH
 
 def adjust_real_current_with_temperature(current_data: pd.DataFrame, temperature_data: pd.DataFrame, params, column: str) -> pd.DataFrame:
     if CURRENT_TEMP_MODE == 'none':
@@ -54,6 +54,33 @@ def prepare_sensor_current(current_df: pd.DataFrame, temp_df: pd.DataFrame, para
         return adjust_real_current_with_temperature(current_df, temp_df, params, sensor_name)
     else:
         return current_df
+
+def load_and_prepare_simulated_df(sensor_names, path=OUTPUT_SIMULATED_DF_PATH):
+    """
+    Load simulated_df and map columns for the given sensor(s) to standard names.
+    sensor_names: str or list of str
+    Returns DataFrame with columns: current_{sensor}, temperature_{sensor}, fluence_{sensor} for each sensor,
+    and also a version with columns current, temperature, fluence if only one sensor is given.
+    """
+    df = pd.read_csv(path, index_col=0, parse_dates=True)
+    if isinstance(sensor_names, str):
+        sensor_names = [sensor_names]
+    result = {}
+    for sensor in sensor_names:
+        col_map = {
+            f"current_{sensor}": "current",
+            f"temperature_{sensor}": "temperature",
+            f"fluence_{sensor}": "fluence"
+        }
+        available = {k: v for k, v in col_map.items() if k in df.columns}
+        if available:
+            result[sensor] = df[list(available.keys())].rename(columns=available)
+    if len(result) == 1:
+        # Return single DataFrame for one sensor
+        return list(result.values())[0]
+    else:
+        # Return dict of DataFrames for each sensor
+        return result
 
 # --- GŁÓWNY PROGRAM ---
 if __name__ == "__main__":
