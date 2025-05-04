@@ -41,9 +41,6 @@ def align_temperature_to_fluence(fluence_df: pd.DataFrame, temp_df: pd.DataFrame
     fluence_series = fluence_df[sensor_name]
     fluence_series = fluence_series.resample(SIMULATION_PERIOD.lower()).sum()
     temp_series_raw = temp_df[sensor_name].resample(SIMULATION_PERIOD.lower()).mean()
-    is_nan = temp_series_raw.isna()
-    nan_periods = []
-    start = None
     temp_series = temp_series_raw.ffill()
     temp_series = temp_series.bfill()
     freq_seconds = pd.to_timedelta(SIMULATION_PERIOD.lower()).total_seconds()
