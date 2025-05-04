@@ -1,9 +1,7 @@
 import numpy as np
 import pandas as pd
-import matplotlib.pyplot as plt
 from datetime import datetime, timedelta
 import tqdm
-import os
 from config import CURRENT_YEAR_LIST, CURRENT_YEAR_RANGES, CURRENT_TEMP_MODE, SIMULATION_PERIOD
 
 def load_avg_fluence(file_path: str) -> pd.DataFrame:
@@ -32,12 +30,6 @@ def load_data(fluence_file: str, temp_files: list) -> tuple:
     temp_df = temp_df.groupby(temp_df.index).max().sort_index()
     print("Loaded all fluence and temperature data")
     return fluence_df, temp_df
-
-def calculate_temperature_factor_theta(T_a: float, E_I_star: float, T_ref: float, kB: float) -> float:
-    return np.exp(-E_I_star / kB * (1/T_a - 1/T_ref))
-
-def calculate_intrinsic_lifetime_tau(k_0I: float, E_I: float, T_a: float, kB: float) -> float:
-    return (k_0I * np.exp(-E_I / (kB * T_a)))/60
 
 def calculate_temperature_factor_theta_vectorized(T_a: np.ndarray, E_I_star: float, T_ref: float, kB: float) -> np.ndarray:
     return np.exp(-E_I_star / kB * (1/T_a - 1/T_ref))
@@ -141,16 +133,10 @@ def simulate_current_sensor(fluence_df: pd.Series, temp_df: pd.Series, params) -
     print("Simulation completed!")
     return combined
 
-def prepare_sensor_current(current_df: pd.DataFrame, temp_df: pd.DataFrame, params, sensor_name: str) -> pd.DataFrame:
-    if CURRENT_TEMP_MODE == 'adjust_real':
-        return adjust_real_current_with_temperature(current_df, temp_df, params, sensor_name)
-    else:
-        return current_df
-
 def process_single_sensor(fluence_df, temp_df, current_df, params, sensor_name):
     fdf, tdf = prepare_sensor_data(fluence_df, temp_df, sensor_name)
     sim_df = simulate_current_sensor(fdf[sensor_name], tdf[sensor_name], params)
-    real_current = prepare_sensor_current(current_df, temp_df, params, sensor_name)[sensor_name]
+    real_current = current_df[sensor_name]  # Directly use current_df
     return sim_df, real_current
 
 def process_all_sensors(fluence_df, temp_df, current_df, params, sensor_name=None):
@@ -187,18 +173,6 @@ def run_leakage_current_pipeline(fluence_file, temp_files, current_files, params
         temp_df = temp_df[common_sensors]
         current_df = current_df[common_sensors]
     return process_all_sensors(fluence_df, temp_df, current_df, params, sensor_name=sensor_name)
-
-def adjust_real_current_with_temperature(current_data: pd.DataFrame, temperature_data: pd.DataFrame, params, column: str) -> pd.DataFrame:
-    if CURRENT_TEMP_MODE == 'none':
-        return current_data
-    T = temperature_data[column].reindex(current_data.index, method='nearest').values
-    T_ref = params.T_ref
-    E_eff = params.E_eff
-    kB = params.kb
-    R_Tref = (T_ref / T) ** 2 * np.exp(-(E_eff / (2 * kB)) * (1 / T_ref - 1 / T))
-    out = current_data.copy()
-    out[column] = out[column].values * R_Tref
-    return out
 
 def get_current_files(paths, selected_years):
     return [paths.get_current_file(f) for f, years in CURRENT_YEAR_LIST
