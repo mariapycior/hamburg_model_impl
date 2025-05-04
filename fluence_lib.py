@@ -96,14 +96,14 @@ from numba import njit
 @njit
 def calculate_leakage_current(fluence, time_tau, time_theta, alpha_I, alpha_0_star, beta, V):
     I_leak = 0.0
-    N = len(fluence)
+    n = len(fluence)
     sum_1 = 0.0
     sum_2 = 0.0
-    for i in range(N - 1, -1, -1):
-        sum_1 += time_tau[i]
-        sum_2 += time_theta[i]
+    for j in range(n - 1, -1, -1):
+        sum_1 += time_tau[j]
+        sum_2 += time_theta[j]
         alpha = alpha_I * np.exp(-sum_1) + alpha_0_star - beta * np.log(sum_2)
-        I_leak += fluence[i] * V * alpha
+        I_leak += fluence[j] * V * alpha
     return I_leak
 
 def combine_periods(df: pd.DataFrame, temp_tolerance: float = 1, fluence_tolerance: float = 0.01) -> pd.DataFrame:
@@ -214,7 +214,7 @@ def adjust_real_current_with_temperature(current_data: pd.DataFrame, temperature
         return current_data
     T = temperature_data[column].reindex(current_data.index, method='nearest').values
     T_ref = params.T_ref
-    E_eff = getattr(params, 'E_eff', 1.24)
+    E_eff = params.E_eff  # Changed from getattr
     kB = params.kb
     R_Tref = (T_ref / T) ** 2 * np.exp(-(E_eff / (2 * kB)) * (1 / T_ref - 1 / T))
     out = current_data.copy()
@@ -265,7 +265,7 @@ def adjust_simulated_current_with_temperature(data: pd.DataFrame, params) -> pd.
     data = set_temperature_where_fluence_zero(data)
     T = data['temperature'].values
     T_ref = params.T_ref
-    E_eff = getattr(params, 'E_eff', 1.24)
+    E_eff = params.E_eff  # Changed from getattr
     kB = params.kb
     R_Tref = (T_ref / T) ** 2 * np.exp(-(E_eff / (2 * kB)) * (1/T - 1/T_ref))
     print('T_REF',T_ref)

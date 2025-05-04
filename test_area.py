@@ -15,6 +15,7 @@ E_I = 1.11
 K_0I = 1.2e13
 T_0 = 1.0
 V = 0.805
+E_EFF = 1.21
 
 class Parameters:
     def __init__(self):
@@ -28,6 +29,7 @@ class Parameters:
         self.beta = BETA
         self.t_0 = T_0
         self.V = V
+        self.E_eff = E_EFF
 
 def get_available_sensors(paths, selected_years):
     relevant_files = [

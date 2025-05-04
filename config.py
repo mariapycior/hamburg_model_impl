@@ -47,6 +47,6 @@ CURRENT_YEAR_LIST = [
 SIMULATION_PERIOD = '10H'  # <- Zmień tutaj na: '1min', '1H', '10H', '24H', '1W' wg potrzeb
 
 # --- Ustawienia uruchamiania ---
-RUN_MODE = "all"  # "single" albo "all"
+RUN_MODE = "single"  # "single" albo "all"
 SENSOR_NAME = "VL07_CB"
 SELECTED_YEARS = range(2011, 2019)
