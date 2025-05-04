@@ -1,8 +1,8 @@
 import numpy as np
 import pandas as pd
-from datetime import datetime, timedelta
+from datetime import timedelta
 import tqdm
-from config import CURRENT_YEAR_LIST, CURRENT_YEAR_RANGES, CURRENT_TEMP_MODE, SIMULATION_PERIOD
+from config import CURRENT_YEAR_LIST, CURRENT_YEAR_RANGES, SIMULATION_PERIOD
 
 def load_avg_fluence(file_path: str) -> pd.DataFrame:
     df = pd.read_csv(file_path, skiprows=4)
@@ -17,11 +17,6 @@ def load_temperature_data(file_path: str) -> pd.DataFrame:
     df = pd.read_csv(file_path, index_col="TS", parse_dates=["TS"])
     df = df.dropna(how='all')
     print(f"Loaded temperature data from {file_path}")
-    return df
-
-def load_sensor_current(file_path: str) -> pd.DataFrame:
-    df = pd.read_csv(file_path, index_col="TS", parse_dates=["TS"])
-    print(f"Loaded sensor current from {file_path}")
     return df
 
 def load_data(fluence_file: str, temp_files: list) -> tuple:
@@ -130,46 +125,36 @@ def simulate_current_sensor(fluence_df: pd.Series, temp_df: pd.Series, params) -
     print("Simulation completed!")
     return combined
 
-def process_single_sensor(fluence_df, temp_df, current_df, params, sensor_name):
+def process_single_sensor(fluence_df, temp_df, params, sensor_name):
     fdf, tdf = prepare_sensor_data(fluence_df, temp_df, sensor_name)
     sim_df = simulate_current_sensor(fdf[sensor_name], tdf[sensor_name], params)
-    real_current = current_df[sensor_name]  # Directly use current_df
-    return sim_df, real_current
+    return sim_df
 
-def process_all_sensors(fluence_df, temp_df, current_df, params, sensor_name=None):
+def process_all_sensors(fluence_df, temp_df, params, sensor_name=None):
     if sensor_name is not None:
         common_sensors = [sensor_name]
     else:
-        common_sensors = find_common_sensors(fluence_df, temp_df, current_df)
+        common_sensors = find_common_sensors(fluence_df, temp_df)
     all_simulated = {}
-    all_real = {}
     for sensor in tqdm.tqdm(common_sensors):
-        sim_df, real_current = process_single_sensor(fluence_df, temp_df, current_df, params, sensor)
+        sim_df = process_single_sensor(fluence_df, temp_df, params, sensor)
         all_simulated[sensor] = sim_df['current'].rename(sensor)
-        all_real[sensor] = real_current
     if len(common_sensors) == 1:
-        return all_simulated[common_sensors[0]], pd.DataFrame({common_sensors[0]: all_real[common_sensors[0]]}), common_sensors
-    return pd.concat(all_simulated, axis=1), pd.DataFrame(all_real), common_sensors
-
-def load_and_combine_currents(current_files):
-    dfs = [load_sensor_current(f) for f in current_files]
-    return dfs[0] if len(dfs) == 1 else pd.concat(dfs, axis=0).groupby(level=0).last().sort_index()
+        return all_simulated[common_sensors[0]], common_sensors
+    return pd.concat(all_simulated, axis=1), common_sensors
 
 def run_leakage_current_pipeline(fluence_file, temp_files, current_files, params, paths, sensor_name=None):
-    current_df = load_and_combine_currents(current_files)
     fluence_df, temp_df = load_data(fluence_file, temp_files)
     if sensor_name is not None:
         common_sensors = [sensor_name]
         fluence_df = fluence_df[[sensor_name]]
         temp_df = temp_df[[sensor_name]]
-        current_df = current_df[[sensor_name]]
     else:
-        common_sensors = find_common_sensors(fluence_df, temp_df, current_df)
+        common_sensors = find_common_sensors(fluence_df, temp_df)
         print(f"Found {len(common_sensors)} common sensors across all datasets")
         fluence_df = fluence_df[common_sensors]
         temp_df = temp_df[common_sensors]
-        current_df = current_df[common_sensors]
-    return process_all_sensors(fluence_df, temp_df, current_df, params, sensor_name=sensor_name)
+    return process_all_sensors(fluence_df, temp_df, params, sensor_name=sensor_name)
 
 def get_current_files(paths, selected_years):
     return [paths.get_current_file(f) for f, years in CURRENT_YEAR_LIST

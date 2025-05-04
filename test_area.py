@@ -61,46 +61,44 @@ def run_all_sensors(selected_years):
     params, paths, fluence_file, temp_files, current_files = prepare_inputs(selected_years)
     available_sensors = get_available_sensors(paths, selected_years)
     print(f"Found {len(available_sensors)} sensors available across all runs")
-    simulated_df, real_df, sensors = fluence_simulation_lib.run_leakage_current_pipeline(
+    simulated_df, sensors = fluence_simulation_lib.run_leakage_current_pipeline(
         fluence_file, temp_files, current_files, params, paths
     )
     if len(sensors) < len(available_sensors):
         print(f"Warning: Only {len(sensors)} out of {len(available_sensors)} sensors have complete data")
-    # --- DODANE: prosty overlay wszystkich simulated current na jednym wykresie ---
-    import plot_utils
-    plot_utils.plot_simulated_simple(simulated_df, sensors)
-    # --- DODANE: pandas plot wszystkich simulated current na jednym wykresie ---
-    plot_utils.plot_simulated_pandas(simulated_df)
-    # --- DODANE: zapis simulated_df jako pickle do niezależnego sprawdzenia ---
-    if 'simulated_df' in locals():
-        simulated_df.to_csv("out_data/simulated_df.csv")
-    return simulated_df, real_df, sensors
+    simulated_df.plot(title="Simulated Current (all sensors)")
+    import matplotlib.pyplot as plt
+    plt.xlabel("Time")
+    plt.ylabel("Simulated Current")
+    plt.tight_layout()
+    plt.show()
+    simulated_df.to_csv("out_data/simulated_df.csv")
+    # Save also to out_data/data
+    simulated_df.to_csv("out_data/data/simulated_df.csv")
+    return simulated_df, sensors
 
 def run_single_sensor(selected_years, sensor_name):
     params, paths, fluence_file, temp_files, current_files = prepare_inputs(selected_years)
-    simulated_df, real_df, sensors = fluence_simulation_lib.run_leakage_current_pipeline(
+    simulated_df, sensors = fluence_simulation_lib.run_leakage_current_pipeline(
         fluence_file, temp_files, current_files, params, paths, sensor_name=sensor_name
     )
     if sensor_name not in sensors:
         raise ValueError(f"Sensor {sensor_name} not found in the available sensors: {sensors}")
-    # --- DODANE: zapis simulated_df jako pickle do niezależnego sprawdzenia ---
-    if 'simulated_df' in locals():
-        simulated_df.to_csv("out_data/simulated_df.csv")
-    return simulated_df, real_df[sensor_name], sensor_name
+    simulated_df.to_csv("out_data/simulated_df.csv")
+    # Save also to out_data/data
+    simulated_df.to_csv("out_data/data/simulated_df.csv")
+    if isinstance(simulated_df, pd.Series):
+        simulated_df = simulated_df.to_frame()
+    simulated_df.plot(title=f"Simulated Current ({sensor_name})")
+    import matplotlib.pyplot as plt
+    plt.xlabel("Time")
+    plt.ylabel("Simulated Current")
+    plt.tight_layout()
+    plt.show()
+    return simulated_df, sensor_name
 
 if __name__ == "__main__":
     if RUN_MODE == "single":
-        sim, real, name = run_single_sensor(SELECTED_YEARS, SENSOR_NAME)
-        import pandas as pd
-        if isinstance(sim, pd.Series):
-            sim_df = sim.to_frame()
-        else:
-            sim_df = sim
-        real_df = real.to_frame(name=name)
-        plot_utils.plot_simulated_vs_real(sim_df, real_df, name, output_path=f"out_data/sim_vs_real_{name}.png")
-        plot_utils.plot_simulated_vs_real(sim_df, real_df, name, output_path=f"out_data/sim_vs_real_{name}_7dmean.png", weekly_average=True)
-        #plot_utils.plot_leakage_current(sim, real_df, name, output_path=f"out_data/leakage_current_{name}.png")
-        #plot_utils.plot_temperature_only(sim, output_path=f"out_data/temperature_{name}.png")
+        sim, name = run_single_sensor(SELECTED_YEARS, SENSOR_NAME)
     else:
-        simulated_df, real_df, sensors = run_all_sensors(SELECTED_YEARS)
-        plot_utils.plot_all_sensors(simulated_df, real_df, sensors, output_dir="out_data")
+        sim, sensors = run_all_sensors(SELECTED_YEARS)
