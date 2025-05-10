@@ -47,7 +47,7 @@ CURRENT_YEAR_LIST = [
 SIMULATION_PERIOD = '10H'  # <- Zmień tutaj na: '1min', '1H', '10H', '24H', '1W' wg potrzeb
 
 # --- Ścieżki do plików wyjściowych ---
-OUTPUT_SIMULATED_DF_PATH = "out_data/data/simulated_df_new.csv"
+OUTPUT_SIMULATED_DF_PATH = "out_data/data/simulated_df.csv"
 
 # --- Ustawienia uruchamiania ---
 RUN_MODE = "single"  # "single" albo "all"

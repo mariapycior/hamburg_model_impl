@@ -1,7 +1,7 @@
 import os
 import pandas as pd
 import numpy as np
-from config import Paths, RUN_MODE, SENSOR_NAME, SELECTED_YEARS, CURRENT_YEAR_RANGES, CURRENT_YEAR_LIST, OUTPUT_SIMULATED_DF_PATH
+from config import Paths, RUN_MODE, SENSOR_NAME, SELECTED_YEARS, OUTPUT_SIMULATED_DF_PATH
 import fluence_simulation_lib
 
 KB = 8.617333262145e-5
@@ -30,38 +30,25 @@ class Parameters:
         self.V = V
         self.E_eff = E_EFF
 
-def get_available_sensors(paths, selected_years):
-    relevant_files = [
-        file for file, years in CURRENT_YEAR_RANGES.items()
-        if any(year in selected_years for year in years)
-    ]
-    all_current_dfs = [
-        pd.read_csv(paths.get_current_file(file))
-        for file in relevant_files
-    ]
-    common_sensors = set(all_current_dfs[0].columns) - {'TS'}
-    for df in all_current_dfs[1:]:
-        common_sensors &= (set(df.columns) - {'TS'})
-    return sorted(list(common_sensors))
-
-def get_current_files(paths, selected_years):
-    return [paths.get_current_file(f) for f, years in CURRENT_YEAR_LIST 
-            if any(year in selected_years for year in years)]
+def get_available_sensors(paths):
+    fluence_file = paths.get_fluence_file('avgFluenceBinned_1h.csv')
+    fluence_df = pd.read_csv(fluence_file, skiprows=4)
+    sensor_columns = [col for col in fluence_df.columns if col not in ('bin_centre_date',)]
+    return sorted(sensor_columns)
 
 def prepare_inputs(selected_years):
     paths = Paths()
     params = Parameters()
     fluence_file = paths.get_fluence_file('avgFluenceBinned_1h.csv')
     temp_files = paths.get_temperature_files_for_years(selected_years)
-    current_files = get_current_files(paths, selected_years)
-    return params, paths, fluence_file, temp_files, current_files
+    return params, paths, fluence_file, temp_files
 
 def run_all_sensors(selected_years):
-    params, paths, fluence_file, temp_files, current_files = prepare_inputs(selected_years)
-    available_sensors = get_available_sensors(paths, selected_years)
-    print(f"Found {len(available_sensors)} sensors available across all runs")
+    params, paths, fluence_file, temp_files = prepare_inputs(selected_years)
+    available_sensors = get_available_sensors(paths)
+    print(f"Found {len(available_sensors)} sensors available")
     simulated_df, sensors = fluence_simulation_lib.run_leakage_current_pipeline(
-        fluence_file, temp_files, current_files, params, paths
+        fluence_file, temp_files, None, params, paths
     )
     if len(sensors) < len(available_sensors):
         print(f"Warning: Only {len(sensors)} out of {len(available_sensors)} sensors have complete data")
@@ -72,17 +59,13 @@ def run_all_sensors(selected_years):
     fluence_df.set_index('bin_centre_date', inplace=True)
     fluence_df.index = fluence_df.index - pd.Timedelta(minutes=5)
     fluence_df.index.name = "TS"
-    # Budujemy nowy DataFrame
     out_df = pd.DataFrame(index=simulated_df.index)
     for sensor in sensors:
-        # current
         out_df[f"current_{sensor}"] = simulated_df[sensor]
-        # temperature
         if sensor in temp_df.columns:
             out_df[f"temperature_{sensor}"] = temp_df[sensor].reindex(simulated_df.index, method='nearest')
         else:
             out_df[f"temperature_{sensor}"] = np.nan
-        # fluence
         if sensor in fluence_df.columns:
             out_df[f"fluence_{sensor}"] = fluence_df[sensor].reindex(simulated_df.index, method='nearest')
         else:
@@ -91,34 +74,26 @@ def run_all_sensors(selected_years):
     return simulated_df, sensors
 
 def run_single_sensor(selected_years, sensor_name):
-    params, paths, fluence_file, temp_files, current_files = prepare_inputs(selected_years)
-    simulated_df, sensors = fluence_simulation_lib.run_leakage_current_pipeline(
-        fluence_file, temp_files, current_files, params, paths, sensor_name=sensor_name
+    params, paths, fluence_file, temp_files = prepare_inputs(selected_years)
+    simulated_df = fluence_simulation_lib.run_leakage_current_pipeline(
+        fluence_file, temp_files, None, params, paths, sensor_name=sensor_name
     )
-    if sensor_name not in sensors:
-        raise ValueError(f"Sensor {sensor_name} not found in the available sensors: {sensors}")
-    if isinstance(simulated_df, pd.Series):
-        simulated_df = simulated_df.to_frame(name=f"current_{sensor_name}")
-    else:
-        # Rename 'current' column if present
+    print(f"Simulated DataFrame for sensor {sensor_name}:\n{simulated_df.head()}")
+    if 1==1:
+        # Zmień nazwy kolumn na current_{sensor}, temperature_{sensor}, fluence_{sensor} jeśli istnieją
+        rename_map = {}
         if "current" in simulated_df.columns:
-            simulated_df = simulated_df.rename(columns={"current": f"current_{sensor_name}"})
-    # Dodaj kolumny temperature i fluence z nazwą sensora
-    temp_df = pd.concat([pd.read_csv(f, index_col="TS", parse_dates=["TS"]) for f in temp_files], axis=0, join='outer')
-    temp_df = temp_df.groupby(temp_df.index).max().sort_index()
-    if sensor_name in temp_df.columns:
-        simulated_df[f"temperature_{sensor_name}"] = temp_df[sensor_name].reindex(simulated_df.index, method='nearest')
-    else:
-        simulated_df[f"temperature_{sensor_name}"] = np.nan
-    fluence_df = pd.read_csv(fluence_file, skiprows=4)
-    fluence_df['bin_centre_date'] = pd.to_datetime(fluence_df['bin_centre_date'], format='%d-%m-%Y %H:%M:%S')
-    fluence_df.set_index('bin_centre_date', inplace=True)
-    fluence_df.index = fluence_df.index - pd.Timedelta(minutes=5)
-    fluence_df.index.name = "TS"
-    if sensor_name in fluence_df.columns:
-        simulated_df[f"fluence_{sensor_name}"] = fluence_df[sensor_name].reindex(simulated_df.index, method='nearest')
-    else:
-        simulated_df[f"fluence_{sensor_name}"] = np.nan
+            rename_map["current"] = f"current_{sensor_name}"
+        if "temperature" in simulated_df.columns:
+            rename_map["temperature"] = f"temperature_{sensor_name}"
+        if "fluence" in simulated_df.columns:
+            rename_map["fluence"] = f"fluence_{sensor_name}"
+        simulated_df = simulated_df.rename(columns=rename_map)
+
+    # Ustaw indeks jako kolumnę start_time jeśli nie jest
+    #if simulated_df.index.name not in ("start_time", "TS"):
+     #   simulated_df = simulated_df.copy()
+      #  simulated_df.index.name = "start_time"
     simulated_df.to_csv(OUTPUT_SIMULATED_DF_PATH)
     return simulated_df, sensor_name
 

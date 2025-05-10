@@ -130,7 +130,7 @@ def process_single_sensor(fluence_df, temp_df, params, sensor_name):
     sim_df = simulate_current_sensor(fdf[sensor_name], tdf[sensor_name], params)
     return sim_df
 
-def process_all_sensors(fluence_df, temp_df, params, sensor_name=None):
+'''def process_all_sensors(fluence_df, temp_df, params, sensor_name=None):
     if sensor_name is not None:
         common_sensors = [sensor_name]
     else:
@@ -141,7 +141,7 @@ def process_all_sensors(fluence_df, temp_df, params, sensor_name=None):
         all_simulated[sensor] = sim_df['current'].rename(sensor)
     if len(common_sensors) == 1:
         return all_simulated[common_sensors[0]], common_sensors
-    return pd.concat(all_simulated, axis=1), common_sensors
+    return pd.concat(all_simulated, axis=1), common_sensors'''
 
 def run_leakage_current_pipeline(fluence_file, temp_files, current_files, params, paths, sensor_name=None):
     fluence_df, temp_df = load_data(fluence_file, temp_files)
@@ -154,7 +154,7 @@ def run_leakage_current_pipeline(fluence_file, temp_files, current_files, params
         print(f"Found {len(common_sensors)} common sensors across all datasets")
         fluence_df = fluence_df[common_sensors]
         temp_df = temp_df[common_sensors]
-    return process_all_sensors(fluence_df, temp_df, params, sensor_name=sensor_name)
+    return process_single_sensor(fluence_df, temp_df, params, sensor_name=sensor_name)
 
 def get_current_files(paths, selected_years):
     return [paths.get_current_file(f) for f, years in CURRENT_YEAR_LIST
