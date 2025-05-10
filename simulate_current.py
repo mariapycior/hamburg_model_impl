@@ -48,7 +48,7 @@ def run_all_sensors(selected_years):
     available_sensors = get_available_sensors(paths)
     print(f"Found {len(available_sensors)} sensors available")
     simulated_df, sensors = fluence_simulation_lib.run_leakage_current_pipeline(
-        fluence_file, temp_files, None, params, paths
+        fluence_file, temp_files, params
     )
     if len(sensors) < len(available_sensors):
         print(f"Warning: Only {len(sensors)} out of {len(available_sensors)} sensors have complete data")
@@ -76,24 +76,9 @@ def run_all_sensors(selected_years):
 def run_single_sensor(selected_years, sensor_name):
     params, paths, fluence_file, temp_files = prepare_inputs(selected_years)
     simulated_df = fluence_simulation_lib.run_leakage_current_pipeline(
-        fluence_file, temp_files, None, params, paths, sensor_name=sensor_name
+        fluence_file, temp_files, params, sensor_name=sensor_name
     )
     print(f"Simulated DataFrame for sensor {sensor_name}:\n{simulated_df.head()}")
-    if 1==1:
-        # Zmień nazwy kolumn na current_{sensor}, temperature_{sensor}, fluence_{sensor} jeśli istnieją
-        rename_map = {}
-        if "current" in simulated_df.columns:
-            rename_map["current"] = f"current_{sensor_name}"
-        if "temperature" in simulated_df.columns:
-            rename_map["temperature"] = f"temperature_{sensor_name}"
-        if "fluence" in simulated_df.columns:
-            rename_map["fluence"] = f"fluence_{sensor_name}"
-        simulated_df = simulated_df.rename(columns=rename_map)
-
-    # Ustaw indeks jako kolumnę start_time jeśli nie jest
-    #if simulated_df.index.name not in ("start_time", "TS"):
-     #   simulated_df = simulated_df.copy()
-      #  simulated_df.index.name = "start_time"
     simulated_df.to_csv(OUTPUT_SIMULATED_DF_PATH)
     return simulated_df, sensor_name
 

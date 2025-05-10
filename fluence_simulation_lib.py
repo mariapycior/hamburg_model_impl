@@ -2,7 +2,7 @@ import numpy as np
 import pandas as pd
 from datetime import timedelta
 import tqdm
-from config import CURRENT_YEAR_LIST, CURRENT_YEAR_RANGES, SIMULATION_PERIOD
+from config import CURRENT_YEAR_LIST, CURRENT_YEAR_RANGES, SIMULATION_PERIOD, RUN_MODE
 
 def load_avg_fluence(file_path: str) -> pd.DataFrame:
     df = pd.read_csv(file_path, skiprows=4)
@@ -102,11 +102,11 @@ def combine_periods(df: pd.DataFrame, temp_tolerance: float = 1, fluence_toleran
     result = pd.DataFrame(combined).set_index('start_time')
     return result
 
-def simulate_current_sensor(fluence_df: pd.Series, temp_df: pd.Series, params) -> pd.DataFrame:
+def simulate_current_sensor(fluence_df: pd.Series, temp_df: pd.Series, params, sensor_name: str = None) -> pd.DataFrame:
     result = pd.DataFrame(index=fluence_df.index)
     result['fluence'] = fluence_df.values
     result['temperature'] = temp_df.values
-    combined = result.copy() 
+    combined = result.copy()
     combined = combine_periods(result, temp_tolerance=0.0, fluence_tolerance=0.0)
     combined['current'] = 0.0
     temperatures = combined['temperature'].values
@@ -114,36 +114,30 @@ def simulate_current_sensor(fluence_df: pd.Series, temp_df: pd.Series, params) -
     times = combined['time'].values
     tau_j = calculate_intrinsic_lifetime_tau_vectorized(params.k_0I, params.E_I, temperatures, params.kb)
     theta_j = calculate_temperature_factor_theta_vectorized(temperatures, params.E_I_star, params.T_ref, params.kb)
-    print('T_REF',params.T_ref)
+    print('T_REF', params.T_ref)
     time_tau = times / tau_j
     time_theta = theta_j * times / params.t_0
     N = len(combined)
     for n in tqdm.tqdm(range(N), desc='Simulating current', total=N):
-        I_leak = calculate_leakage_current(fluences[:n], time_tau[:n], time_theta[:n], 
+        I_leak = calculate_leakage_current(fluences[:n], time_tau[:n], time_theta[:n],
                                            params.alpha_I, params.alpha_0_star, params.beta, params.V)
-        combined.loc[combined.index[n], 'current'] = I_leak*1000
+        combined.loc[combined.index[n], 'current'] = I_leak * 1000
     print("Simulation completed!")
+    if sensor_name is not None:
+        combined = combined.rename(columns={
+            "current": f"current_{sensor_name}",
+            "temperature": f"temperature_{sensor_name}",
+            "fluence": f"fluence_{sensor_name}",
+            "time": f"time_{sensor_name}"
+        })
     return combined
 
 def process_single_sensor(fluence_df, temp_df, params, sensor_name):
     fdf, tdf = prepare_sensor_data(fluence_df, temp_df, sensor_name)
-    sim_df = simulate_current_sensor(fdf[sensor_name], tdf[sensor_name], params)
+    sim_df = simulate_current_sensor(fdf[sensor_name], tdf[sensor_name], params, sensor_name=sensor_name)
     return sim_df
 
-'''def process_all_sensors(fluence_df, temp_df, params, sensor_name=None):
-    if sensor_name is not None:
-        common_sensors = [sensor_name]
-    else:
-        common_sensors = find_common_sensors(fluence_df, temp_df)
-    all_simulated = {}
-    for sensor in tqdm.tqdm(common_sensors):
-        sim_df = process_single_sensor(fluence_df, temp_df, params, sensor)
-        all_simulated[sensor] = sim_df['current'].rename(sensor)
-    if len(common_sensors) == 1:
-        return all_simulated[common_sensors[0]], common_sensors
-    return pd.concat(all_simulated, axis=1), common_sensors'''
-
-def run_leakage_current_pipeline(fluence_file, temp_files, current_files, params, paths, sensor_name=None):
+def run_leakage_current_pipeline(fluence_file, temp_files, params, sensor_name=None):
     fluence_df, temp_df = load_data(fluence_file, temp_files)
     if sensor_name is not None:
         common_sensors = [sensor_name]
