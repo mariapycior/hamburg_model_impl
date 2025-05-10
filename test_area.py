@@ -67,9 +67,6 @@ def run_all_sensors(selected_years):
     )
     if len(sensors) < len(available_sensors):
         print(f"Warning: Only {len(sensors)} out of {len(available_sensors)} sensors have complete data")
-    # --- Nowe: budowanie dataframe z current, temperature, fluence dla każdego sensora ---
-    # simulated_df: DataFrame z kolumnami = sensorami, wartości = current
-    # Odtwórz temperature i fluence dla każdego sensora i zapisz jako osobne kolumny
     temp_df = pd.concat([pd.read_csv(f, index_col="TS", parse_dates=["TS"]) for f in temp_files], axis=0, join='outer')
     temp_df = temp_df.groupby(temp_df.index).max().sort_index()
     fluence_df = pd.read_csv(fluence_file, skiprows=4)
@@ -93,14 +90,6 @@ def run_all_sensors(selected_years):
         else:
             out_df[f"fluence_{sensor}"] = np.nan
     out_df.to_csv(OUTPUT_SIMULATED_DF_PATH)
-    # --- wykres jak dotychczas ---
-    simulated_df.plot(title="Simulated Current (all sensors)")
-    import matplotlib.pyplot as plt
-    plt.gcf().set_size_inches(12, 8)  # Increase figure size
-    plt.xlabel("Time")
-    plt.ylabel("Simulated Current")
-    plt.tight_layout()
-    plt.show()
     return simulated_df, sensors
 
 def run_single_sensor(selected_years, sensor_name):
@@ -133,12 +122,6 @@ def run_single_sensor(selected_years, sensor_name):
     else:
         simulated_df[f"fluence_{sensor_name}"] = np.nan
     simulated_df.to_csv(OUTPUT_SIMULATED_DF_PATH)
-    simulated_df.plot(title=f"Simulated Current ({sensor_name})")
-    import matplotlib.pyplot as plt
-    plt.xlabel("Time")
-    plt.ylabel("Simulated Current")
-    plt.tight_layout()
-    plt.show()
     return simulated_df, sensor_name
 
 if __name__ == "__main__":
@@ -155,7 +138,7 @@ if __name__ == "__main__":
         plt.show()
     else:
         # --- Najpierw uruchom symulację i wygeneruj poprawny simulated_df.csv ---
-        #sim, sensors = run_all_sensors(SELECTED_YEARS)
+        sim, sensors = run_all_sensors(SELECTED_YEARS)
         import current_preparation_lib
         params = Parameters()
         simulated_df = pd.read_csv(OUTPUT_SIMULATED_DF_PATH, index_col=0, parse_dates=True)
