@@ -44,12 +44,12 @@ CURRENT_YEAR_LIST = [
 
 # --- Ustawienia okresów czasowych (resampling/interwały) ---
 # Dostępne wartości: '1min', '1H', '10H', '24H', '1W'
-SIMULATION_PERIOD = '24H'  # <- Zmień tutaj na: '1min', '1H', '10H', '24H', '1W' wg potrzeb
+SIMULATION_PERIOD = '10H'  # <- Zmień tutaj na: '1min', '1H', '10H', '24H', '1W' wg potrzeb
 
 # --- Ścieżki do plików wyjściowych ---
-OUTPUT_SIMULATED_DF_PATH = "out_data/simulated_df.csv"
+OUTPUT_SIMULATED_DF_PATH = "out_data/data/simulated_df.csv"
 
 # --- Ustawienia uruchamiania ---
-RUN_MODE = "all"  # "single" albo "all"
-SENSOR_NAME = "VL07_CB"
+RUN_MODE = "single"  # "single" albo "all"
+SENSOR_NAME = "VL02_CT"
 SELECTED_YEARS = range(2011, 2019)

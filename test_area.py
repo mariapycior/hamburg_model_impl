@@ -92,8 +92,7 @@ def run_all_sensors(selected_years):
             out_df[f"fluence_{sensor}"] = fluence_df[sensor].reindex(simulated_df.index, method='nearest')
         else:
             out_df[f"fluence_{sensor}"] = np.nan
-    out_df.to_csv("out_data/simulated_df.csv")
-    out_df.to_csv("out_data/data/simulated_df.csv")
+    out_df.to_csv(OUTPUT_SIMULATED_DF_PATH)
     # --- wykres jak dotychczas ---
     simulated_df.plot(title="Simulated Current (all sensors)")
     import matplotlib.pyplot as plt
@@ -133,8 +132,7 @@ def run_single_sensor(selected_years, sensor_name):
         simulated_df[f"fluence_{sensor_name}"] = fluence_df[sensor_name].reindex(simulated_df.index, method='nearest')
     else:
         simulated_df[f"fluence_{sensor_name}"] = np.nan
-    simulated_df.to_csv("out_data/simulated_df.csv")
-    simulated_df.to_csv("out_data/data/simulated_df.csv")
+    simulated_df.to_csv(OUTPUT_SIMULATED_DF_PATH)
     simulated_df.plot(title=f"Simulated Current ({sensor_name})")
     import matplotlib.pyplot as plt
     plt.xlabel("Time")
@@ -153,7 +151,7 @@ if __name__ == "__main__":
         adjusted_df = current_preparation_lib.adjust_simulated_current_with_temperature(df_for_adjust, params)
         import matplotlib.pyplot as plt
         empty_real = pd.Series(index=adjusted_df.index, dtype=float)
-        plot_utils.plot_simulated_vs_real(adjusted_df, empty_real, name, output_path=f"out_data/sim_vs_real_{name}_adjusted.png")
+        plot_utils.plot_simulated_vs_real(adjusted_df, empty_real, name, output_path=None)
         plt.show()
     else:
         # --- Najpierw uruchom symulację i wygeneruj poprawny simulated_df.csv ---

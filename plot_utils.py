@@ -100,7 +100,7 @@ def plot_simulated_vs_real(simulated_df: pd.Series, real_series: pd.Series, sens
     plt.close()
 
 
-def plot_all_sensors(simulated_df, real_df, sensors, output_dir="out_data", start_date=None, end_date=None):
+def plot_all_sensors(simulated_df, real_df, sensors, output_dir=None, start_date=None, end_date=None):
     # Plot of simulated current for all sensors
     plt.figure(figsize=(12, 12))
     for sensor in sensors:
@@ -125,7 +125,8 @@ def plot_all_sensors(simulated_df, real_df, sensors, output_dir="out_data", star
     plt.grid(True)
     plt.tight_layout()
     plt.legend(loc='center left', bbox_to_anchor=(1.01, 0.5), title='Sensors', fontsize='small')
-    plt.savefig(os.path.join(output_dir, "all_simulated.png"), bbox_inches='tight')
+    if output_dir is not None:
+        plt.savefig(os.path.join(output_dir, "all_simulated.png"), bbox_inches='tight')
     plt.show()
     plt.close()
     # Wykres realnych prądów
@@ -153,7 +154,8 @@ def plot_all_sensors(simulated_df, real_df, sensors, output_dir="out_data", star
     plt.grid(True)
     plt.tight_layout()
     plt.legend(loc='center left', bbox_to_anchor=(1.01, 0.5), title='Sensors', fontsize='small')
-    plt.savefig(os.path.join(output_dir, "all_real.png"), bbox_inches='tight')
+    if output_dir is not None:
+        plt.savefig(os.path.join(output_dir, "all_real.png"), bbox_inches='tight')
     plt.show()
     plt.close()
 
@@ -176,7 +178,7 @@ def plot_temperature_only(result_df: pd.DataFrame, output_path: str = None, star
     plt.show()
 
 
-def plot_simulated_simple(simulated_df, sensors, output_path="out_data/all_simulated_simple.png", start_date=None, end_date=None):
+def plot_simulated_simple(simulated_df, sensors, output_path=None, start_date=None, end_date=None):
     plt.figure(figsize=(12, 8))
     for sensor in sensors:
         if sensor not in simulated_df.columns:
@@ -194,16 +196,18 @@ def plot_simulated_simple(simulated_df, sensors, output_path="out_data/all_simul
     plt.title('Simulated current for all sensors (simple overlay)')
     plt.grid(True)
     plt.tight_layout()
-    plt.savefig(output_path)
+    if output_path:
+        plt.savefig(output_path)
     plt.close()
 
 
-def plot_simulated_pandas(simulated_df, output_path="out_data/all_simulated_pandas.png"):
+def plot_simulated_pandas(simulated_df, output_path=None):
     import matplotlib.pyplot as plt
     plt.figure(figsize=(12, 8))
     simulated_df.plot(ax=plt.gca(), legend=False, alpha=0.7)
     plt.ylabel("Simulated current (mA)")
     plt.title("Simulated current for all sensors (pandas plot)")
     plt.tight_layout()
-    plt.savefig(output_path)
+    if output_path:
+        plt.savefig(output_path)
     plt.close()
