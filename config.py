@@ -49,6 +49,9 @@ SIMULATION_PERIOD = '10H'  # <- Zmień tutaj na: '1min', '1H', '10H', '24H', '1W
 # --- Ścieżki do plików wyjściowych ---
 OUTPUT_SIMULATED_DF_PATH = "out_data/data/simulated_df.csv"
 
+# --- Plik z danymi fluencji ---
+FLUENCE_FILENAME = "avgFluenceBinned_1h.csv"
+
 # --- Ustawienia uruchamiania ---
 RUN_MODE = "single"  # "single" albo "all"
 SENSOR_NAME = "VL02_CT"

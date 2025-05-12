@@ -2,7 +2,7 @@ import numpy as np
 import pandas as pd
 from datetime import timedelta
 import tqdm
-from config import CURRENT_YEAR_LIST, CURRENT_YEAR_RANGES, SIMULATION_PERIOD, RUN_MODE
+from config import CURRENT_YEAR_LIST, CURRENT_YEAR_RANGES, SIMULATION_PERIOD, RUN_MODE,SENSOR_NAME
 
 def load_avg_fluence(file_path: str) -> pd.DataFrame:
     df = pd.read_csv(file_path, skiprows=4)
@@ -137,22 +137,61 @@ def process_single_sensor(fluence_df, temp_df, params, sensor_name):
     sim_df = simulate_current_sensor(fdf[sensor_name], tdf[sensor_name], params, sensor_name=sensor_name)
     return sim_df
 
-def run_leakage_current_pipeline(fluence_file, temp_files, params, sensor_name=None):
-    fluence_df, temp_df = load_data(fluence_file, temp_files)
+def process_all_sensors(fluence_df, temp_df, params, sensor_name=None, common_sensors=None):
     if sensor_name is not None:
         common_sensors = [sensor_name]
-        fluence_df = fluence_df[[sensor_name]]
-        temp_df = temp_df[[sensor_name]]
-    else:
-        common_sensors = find_common_sensors(fluence_df, temp_df)
-        print(f"Found {len(common_sensors)} common sensors across all datasets")
-        fluence_df = fluence_df[common_sensors]
-        temp_df = temp_df[common_sensors]
-    return process_single_sensor(fluence_df, temp_df, params, sensor_name=sensor_name)
+    if common_sensors is None:
+        raise ValueError("common_sensors must be provided!")
+    
+    all_simulated = {}
+
+    for sensor in tqdm.tqdm(common_sensors):
+        # Extract fluence and temperature for this sensor
+        sensor_fluence_df = fluence_df[[sensor]] if sensor in fluence_df.columns else None
+        sensor_temp_df = temp_df[[sensor]] if sensor in temp_df.columns else None
+        
+        if sensor_fluence_df is not None and sensor_temp_df is not None:
+            sim_df = process_single_sensor(sensor_fluence_df, sensor_temp_df, params, sensor)
+            all_simulated[sensor] = sim_df
+    
+    if len(all_simulated) == 0:
+        return None
+    
+    if len(all_simulated) == 1:
+        return list(all_simulated.values())[0]
+    
+    # Concatenate all dataframes by time, filling missing values with NaN
+    return pd.concat(all_simulated.values(), axis=1, join='outer')
+
+
+def run_leakage_current_pipeline(fluence_file, temp_files, params, sensor_name=None, available_sensors=None):
+
+    fluence_df, temp_df = load_data(fluence_file, temp_files)
+
+    if RUN_MODE == "single":
+        sensor_to_use = sensor_name if sensor_name is not None else SENSOR_NAME
+        sensors = [sensor_to_use]
+        if sensor_to_use in fluence_df.columns and sensor_to_use in temp_df.columns:
+            fluence_df = fluence_df[[sensor_to_use]]
+            temp_df = temp_df[[sensor_to_use]]
+            result_df = process_single_sensor(fluence_df, temp_df, params, sensor_name=sensor_to_use)
+            return result_df, sensors
+        else:
+            print(f"Sensor {sensor_to_use} not found in all datasets")
+            return None, []
+    else:  # RUN_MODE == "all"
+        if available_sensors is None:
+            print("No sensors provided to process.")
+            return None, []
+        print(f"Processing {len(available_sensors)} sensors (provided externally)")
+        result_df = process_all_sensors(fluence_df, temp_df, params, common_sensors=available_sensors)
+        return result_df, available_sensors
+
 
 def get_current_files(paths, selected_years):
     return [paths.get_current_file(f) for f, years in CURRENT_YEAR_LIST
             if any(year in selected_years for year in years)]
+
 
 def get_available_sensors(paths, selected_years):
     relevant_files = [f for f, years in CURRENT_YEAR_RANGES.items()
