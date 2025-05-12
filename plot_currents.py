@@ -25,7 +25,7 @@ import numpy as np
 from datetime import datetime
 import matplotlib.pyplot as plt
 
-from config import Paths, CURRENT_YEAR_RANGES, CURRENT_YEAR_LIST, SIMULATION_PERIOD
+from config import Paths, CURRENT_YEAR_RANGES, CURRENT_YEAR_LIST, SIMULATION_PERIOD, CURRENT_TEMP_MODE
 from params import Parameters
 import current_preparation_lib as cpl
 import plot_utils
@@ -55,9 +55,16 @@ def parse_arguments():
                         help='Do not display plots (only save to files)')
     return parser.parse_args()
 
-def load_real_current_data(paths, sensor_name):
-    """Load real current data for the specified sensor without temperature adjustment.
-    We'll use the simulated_df for temperature and fluence data.
+def load_real_current_data(paths, sensor_name, simulated_df=None):
+    """Load real current data for the specified sensor with temperature adjustment if needed.
+    
+    Args:
+        paths: Paths object for file paths
+        sensor_name: Name of the sensor to load data for
+        simulated_df: Optional simulated DataFrame with temperature data
+        
+    Returns:
+        DataFrame with real current data, adjusted if CURRENT_TEMP_MODE is 'adjust_real'
     """
     # Determine which current files contain data for the sensor
     current_files = []
@@ -85,6 +92,22 @@ def load_real_current_data(paths, sensor_name):
     
     # Concatenate all current data
     combined_df = pd.concat(all_current_dfs)
+    
+    # Check if we need to adjust real current with temperature
+    if CURRENT_TEMP_MODE == 'adjust_real' and simulated_df is not None:
+        print(f"Adjusting real current with temperature for {sensor_name}...")
+        # Get temperature data from simulated_df
+        temp_df = pd.DataFrame(index=simulated_df.index)
+        # The temperature column in simulated_df is just 'temperature' because of how
+        # load_and_prepare_simulated_df standardizes the column names
+        temp_df[sensor_name] = simulated_df['temperature']
+        
+        # Adjust real current with temperature
+        params = Parameters()
+        adjusted_df = cpl.adjust_real_current_with_temperature(combined_df, temp_df, params, sensor_name)
+        print(f"Adjusted real current with temperature")
+        return adjusted_df
+    
     return combined_df
 
 def list_available_sensors(simulated_path):
@@ -137,13 +160,20 @@ def main():
         try:
             simulated_df = cpl.load_and_prepare_simulated_df(sensor_name, simulated_path)
             print(f"Loaded simulated data with {len(simulated_df)} points")
+            
+            # Step 1.1: Adjust simulated current with temperature if needed
+            params = Parameters()
+            if CURRENT_TEMP_MODE == 'adjust_sim':
+                print(f"Adjusting simulated current with temperature for {sensor_name}...")
+                simulated_df = cpl.adjust_simulated_current_with_temperature(simulated_df, params)
+                print(f"Adjusted simulated current with temperature")
         except Exception as e:
             print(f"Error loading simulated data for {sensor_name}: {e}")
             continue
         
         # Step 2: Load real current data for comparison
         print(f"Loading real current data for sensor {sensor_name}...")
-        real_df = load_real_current_data(paths, sensor_name)
+        real_df = load_real_current_data(paths, sensor_name, simulated_df)
         
         # Step 3: Generate plots based on available data and options
         if real_df is None:
