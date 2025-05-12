@@ -1,23 +1,19 @@
 import os
 import pandas as pd
 import numpy as np
-from config import Paths, FLUENCE_FILENAME, RUN_MODE, SENSOR_NAME, SELECTED_YEARS, OUTPUT_SIMULATED_DF_PATH
+from config import (
+    Paths, FLUENCE_FILENAME, RUN_MODE, SENSOR_NAME, SELECTED_YEARS, OUTPUT_SIMULATED_DF_PATH,
+    KB, T_REF, E_I_STAR, ALPHA_I, ALPHA_0_STAR, BETA, E_I, K_0I, T_0, V, E_EFF
+)
 import fluence_simulation_lib
-
-KB = 8.617333262145e-5
-T_REF = 294.15
-E_I_STAR = 1.30
-ALPHA_I = 1.23e-17
-ALPHA_0_STAR = 6.74e-17
-BETA = 3.29e-18
-E_I = 1.11
-K_0I = 1.2e13
-T_0 = 1.0
-V = 0.805
-E_EFF = 1.21
 
 
 class Parameters:
+    """Container for simulation parameters.
+    
+    This class holds all the physical constants and parameters needed for the
+    Hamburg model simulation of leakage current.
+    """
     def __init__(self):
         self.E_I_star = E_I_STAR
         self.kb = KB
@@ -32,12 +28,29 @@ class Parameters:
         self.E_eff = E_EFF
 
 def get_available_sensors(paths):
+    """Get a list of all available sensors from the fluence file.
+    
+    Args:
+        paths: Paths object with methods to get file paths
+        
+    Returns:
+        list: Sorted list of sensor names
+    """
     fluence_file = paths.get_fluence_file(FLUENCE_FILENAME)
     fluence_df = pd.read_csv(fluence_file, skiprows=4)
     sensor_columns = [col for col in fluence_df.columns if col not in ('bin_centre_date',)]
     return sorted(sensor_columns)
 
+
 def prepare_inputs(selected_years):
+    """Prepare all required inputs for simulation.
+    
+    Args:
+        selected_years: List or range of years to include in the simulation
+        
+    Returns:
+        tuple: (params, paths, fluence_file, temp_files)
+    """
     paths = Paths()
     params = Parameters()
     fluence_file = paths.get_fluence_file(FLUENCE_FILENAME)
@@ -45,9 +58,19 @@ def prepare_inputs(selected_years):
     return params, paths, fluence_file, temp_files
 
 def run_all_sensors(selected_years):
+    """Run simulation for all available sensors.
+    
+    Args:
+        selected_years: List or range of years to include in the simulation
+        
+    Returns:
+        tuple: (simulated_df, sensors) - DataFrame with simulation results and list of processed sensors
+    """
     params, paths, fluence_file, temp_files = prepare_inputs(selected_years)
     available_sensors = get_available_sensors(paths)
     print(f"Found {len(available_sensors)} sensors available")
+    
+    # Run the pipeline for all available sensors
     simulated_df, sensors = fluence_simulation_lib.run_leakage_current_pipeline(
         fluence_file, temp_files, params, available_sensors=available_sensors
     )
@@ -56,19 +79,34 @@ def run_all_sensors(selected_years):
         if len(sensors) < len(available_sensors):
             print(f"Warning: Only {len(sensors)} out of {len(available_sensors)} sensors have complete data")
         
+        # Save results to CSV
         simulated_df.to_csv(OUTPUT_SIMULATED_DF_PATH)
         return simulated_df, sensors
     else:
         print("No data was processed. Check if sensors exist in both fluence and temperature datasets.")
         return pd.DataFrame(), []
 
+
 def run_single_sensor(selected_years, sensor_name):
+    """Run simulation for a single specified sensor.
+    
+    Args:
+        selected_years: List or range of years to include in the simulation
+        sensor_name: Name of the sensor to simulate
+        
+    Returns:
+        tuple: (simulated_df, sensor_name) - DataFrame with simulation results and sensor name
+    """
     params, _, fluence_file, temp_files = prepare_inputs(selected_years)
+    
+    # Run the pipeline for a single sensor
     simulated_df, _ = fluence_simulation_lib.run_leakage_current_pipeline(
         fluence_file, temp_files, params, sensor_name=sensor_name
     )
+    
     if simulated_df is not None:
         print(f"Simulated DataFrame for sensor {sensor_name}:\n{simulated_df.head()}")
+        # Save results to CSV
         simulated_df.to_csv(OUTPUT_SIMULATED_DF_PATH)
         return simulated_df, sensor_name
     else:
@@ -76,7 +114,19 @@ def run_single_sensor(selected_years, sensor_name):
         return pd.DataFrame(), sensor_name
 
 if __name__ == "__main__":
-    if RUN_MODE == "single":
-        sim, name = run_single_sensor(SELECTED_YEARS, SENSOR_NAME)
-    else:
-        sim, sensors = run_all_sensors(SELECTED_YEARS)
+    try:
+        if RUN_MODE == "single":
+            print(f"Running simulation for single sensor: {SENSOR_NAME}")
+            sim, name = run_single_sensor(SELECTED_YEARS, SENSOR_NAME)
+            print(f"Simulation completed for {name}. Results saved to {OUTPUT_SIMULATED_DF_PATH}")
+        else:
+            print(f"Running simulation for all available sensors")
+            sim, sensors = run_all_sensors(SELECTED_YEARS)
+            if sensors:
+                print(f"Simulation completed for {len(sensors)} sensors. Results saved to {OUTPUT_SIMULATED_DF_PATH}")
+            else:
+                print("No sensors were processed successfully.")
+    except Exception as e:
+        print(f"Error during simulation: {str(e)}")
+        import traceback
+        traceback.print_exc()

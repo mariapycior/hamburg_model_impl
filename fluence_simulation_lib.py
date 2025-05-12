@@ -138,6 +138,23 @@ def process_single_sensor(fluence_df, temp_df, params, sensor_name):
     return sim_df
 
 def process_all_sensors(fluence_df, temp_df, params, sensor_name=None, common_sensors=None):
+    """Process multiple sensors and combine their results.
+    
+    Args:
+        fluence_df (pd.DataFrame): DataFrame containing fluence data for all sensors
+        temp_df (pd.DataFrame): DataFrame containing temperature data for all sensors
+        params: Parameters object with simulation parameters
+        sensor_name (str, optional): Single sensor name to process. Defaults to None.
+        common_sensors (list, optional): List of sensors to process. Defaults to None.
+        
+    Returns:
+        pd.DataFrame: Combined DataFrame with simulation results for all processed sensors,
+                     or None if no sensors could be processed
+        
+    Raises:
+        ValueError: If neither sensor_name nor common_sensors is provided
+    """
+    # Determine which sensors to process
     if sensor_name is not None:
         common_sensors = [sensor_name]
     if common_sensors is None:
@@ -145,6 +162,7 @@ def process_all_sensors(fluence_df, temp_df, params, sensor_name=None, common_se
     
     all_simulated = {}
 
+    # Process each sensor individually
     for sensor in tqdm.tqdm(common_sensors):
         # Extract fluence and temperature for this sensor
         sensor_fluence_df = fluence_df[[sensor]] if sensor in fluence_df.columns else None
@@ -154,23 +172,45 @@ def process_all_sensors(fluence_df, temp_df, params, sensor_name=None, common_se
             sim_df = process_single_sensor(sensor_fluence_df, sensor_temp_df, params, sensor)
             all_simulated[sensor] = sim_df
     
+    # Handle results
     if len(all_simulated) == 0:
         return None
     
     if len(all_simulated) == 1:
         return list(all_simulated.values())[0]
-    
+
     # Concatenate all dataframes by time, filling missing values with NaN
     return pd.concat(all_simulated.values(), axis=1, join='outer')
 
 
 def run_leakage_current_pipeline(fluence_file, temp_files, params, sensor_name=None, available_sensors=None):
-
+    """Run the complete leakage current simulation pipeline.
+    
+    This function orchestrates the entire simulation process, loading data, determining
+    which sensors to process based on RUN_MODE, and calling the appropriate processing
+    functions.
+    
+    Args:
+        fluence_file (str): Path to the fluence data file
+        temp_files (list): List of paths to temperature data files
+        params: Parameters object with simulation parameters
+        sensor_name (str, optional): Name of a specific sensor to process. Defaults to None.
+        available_sensors (list, optional): List of available sensors to process. Defaults to None.
+        
+    Returns:
+        tuple: (result_df, sensors)
+            - result_df: DataFrame with simulation results or None if processing failed
+            - sensors: List of sensors that were processed
+    """
+    # Load data from files
     fluence_df, temp_df = load_data(fluence_file, temp_files)
 
+    # Process based on run mode
     if RUN_MODE == "single":
         sensor_to_use = sensor_name if sensor_name is not None else SENSOR_NAME
         sensors = [sensor_to_use]
+        
+        # Check if sensor exists in both datasets
         if sensor_to_use in fluence_df.columns and sensor_to_use in temp_df.columns:
             fluence_df = fluence_df[[sensor_to_use]]
             temp_df = temp_df[[sensor_to_use]]
@@ -180,24 +220,11 @@ def run_leakage_current_pipeline(fluence_file, temp_files, params, sensor_name=N
             print(f"Sensor {sensor_to_use} not found in all datasets")
             return None, []
     else:  # RUN_MODE == "all"
+        # Process all available sensors
         if available_sensors is None:
             print("No sensors provided to process.")
             return None, []
+            
         print(f"Processing {len(available_sensors)} sensors (provided externally)")
         result_df = process_all_sensors(fluence_df, temp_df, params, common_sensors=available_sensors)
         return result_df, available_sensors
-
-
-def get_current_files(paths, selected_years):
-    return [paths.get_current_file(f) for f, years in CURRENT_YEAR_LIST
-            if any(year in selected_years for year in years)]
-
-
-def get_available_sensors(paths, selected_years):
-    relevant_files = [f for f, years in CURRENT_YEAR_RANGES.items()
-                      if any(year in selected_years for year in years)]
-    all_current_dfs = [pd.read_csv(paths.get_current_file(f)) for f in relevant_files]
-    common_sensors = set(all_current_dfs[0].columns) - {'TS'}
-    for df in all_current_dfs[1:]:
-        common_sensors &= (set(df.columns) - {'TS'})
-    return sorted(common_sensors)

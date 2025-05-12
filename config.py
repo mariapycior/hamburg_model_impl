@@ -49,10 +49,24 @@ SIMULATION_PERIOD = '10H'  # <- Zmień tutaj na: '1min', '1H', '10H', '24H', '1W
 # --- Ścieżki do plików wyjściowych ---
 OUTPUT_SIMULATED_DF_PATH = "out_data/data/simulated_df.csv"
 
-# --- Plik z danymi fluencji ---
-FLUENCE_FILENAME = "avgFluenceBinned_1h.csv"
+# --- Physical constants ---
+KB = 8.617333262145e-5  # Boltzmann constant in eV/K
+T_REF = 294.15  # Reference temperature in K
+E_I_STAR = 1.30  # Energy in eV
+ALPHA_I = 1.23e-17  # Current-related damage rate in A/cm
+ALPHA_0_STAR = 6.74e-17  # Current-related damage coefficient in A/cm
+BETA = 3.29e-18  # Second order damage coefficient in A/cm
+E_I = 1.11  # Activation energy in eV
+K_0I = 1.2e13  # Frequency factor in s^-1
+T_0 = 1.0  # Reference time in days
+V = 0.805  # Bias voltage in V
+E_EFF = 1.21  # Effective activation energy in eV
 
-# --- Ustawienia uruchamiania ---
-RUN_MODE = "single"  # "single" albo "all"
+# --- File paths ---
+FLUENCE_FILENAME = "avgFluenceBinned_1h.csv"
+OUTPUT_SIMULATED_DF_PATH = "out_data/data/simulated_df.csv"
+
+# --- Runtime settings ---
+RUN_MODE = "single"  # "single" or "all"
 SENSOR_NAME = "VL02_CT"
 SELECTED_YEARS = range(2011, 2013)
