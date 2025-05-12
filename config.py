@@ -64,9 +64,9 @@ E_EFF = 1.21  # Effective activation energy in eV
 
 # --- File paths ---
 FLUENCE_FILENAME = "avgFluenceBinned_1h.csv"
-OUTPUT_SIMULATED_DF_PATH = "out_data/data/simulated_df.csv"
+OUTPUT_SIMULATED_DF_PATH = "out_data/data/simulated_df_new.csv"
 
 # --- Runtime settings ---
-RUN_MODE = "single"  # "single" or "all"
+RUN_MODE = "all"  # "single" or "all"
 SENSOR_NAME = "VL02_CT"
 SELECTED_YEARS = range(2011, 2013)

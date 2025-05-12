@@ -27,16 +27,8 @@ class Parameters:
         self.V = V
         self.E_eff = E_EFF
 
-def get_available_sensors(paths):
-    """Get a list of all available sensors from the fluence file.
-    
-    Args:
-        paths: Paths object with methods to get file paths
-        
-    Returns:
-        list: Sorted list of sensor names
-    """
-    fluence_file = paths.get_fluence_file(FLUENCE_FILENAME)
+def get_available_sensors(fluence_file):
+    """Get a list of all available sensors from the fluence file"""
     fluence_df = pd.read_csv(fluence_file, skiprows=4)
     sensor_columns = [col for col in fluence_df.columns if col not in ('bin_centre_date',)]
     return sorted(sensor_columns)
@@ -58,16 +50,9 @@ def prepare_inputs(selected_years):
     return params, paths, fluence_file, temp_files
 
 def run_all_sensors(selected_years):
-    """Run simulation for all available sensors.
-    
-    Args:
-        selected_years: List or range of years to include in the simulation
-        
-    Returns:
-        tuple: (simulated_df, sensors) - DataFrame with simulation results and list of processed sensors
-    """
-    params, paths, fluence_file, temp_files = prepare_inputs(selected_years)
-    available_sensors = get_available_sensors(paths)
+    """Run simulation for all available sensors"""
+    params, _, fluence_file, temp_files = prepare_inputs(selected_years)
+    available_sensors = get_available_sensors(fluence_file)
     print(f"Found {len(available_sensors)} sensors available")
     
     # Run the pipeline for all available sensors
@@ -88,19 +73,11 @@ def run_all_sensors(selected_years):
 
 
 def run_single_sensor(selected_years, sensor_name):
-    """Run simulation for a single specified sensor.
-    
-    Args:
-        selected_years: List or range of years to include in the simulation
-        sensor_name: Name of the sensor to simulate
-        
-    Returns:
-        tuple: (simulated_df, sensor_name) - DataFrame with simulation results and sensor name
-    """
+    """Run simulation for a single specified sensor"""
     params, _, fluence_file, temp_files = prepare_inputs(selected_years)
     
     # Run the pipeline for a single sensor
-    simulated_df, _ = fluence_simulation_lib.run_leakage_current_pipeline(
+    simulated_df, sensors = fluence_simulation_lib.run_leakage_current_pipeline(
         fluence_file, temp_files, params, sensor_name=sensor_name
     )
     
