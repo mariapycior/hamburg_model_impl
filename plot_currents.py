@@ -1,111 +1,28 @@
 #!/usr/bin/env python3
-"""Plot Currents - A program to plot and compare simulated and real current data.
-
-This program loads simulated current data from the output directory and compares
-it with real current data. It uses plot_utils for visualization.
-
-Usage examples:
-    # List all available sensors
-    python plot_currents.py --list-sensors
-    
-    # Plot a single sensor with weekly averaging
-    python plot_currents.py --sensor VL02_CT --weekly-average
-    
-    # Plot multiple sensors
-    python plot_currents.py --sensor VL02_CT VL03_CT
-    
-    # Plot only temperature data
-    python plot_currents.py --sensor VL02_CT --temperature-only
-"""
 
 import os
 import argparse
 import pandas as pd
-import numpy as np
 from datetime import datetime
-import matplotlib.pyplot as plt
 
-from config import Paths, CURRENT_YEAR_RANGES, CURRENT_YEAR_LIST, SIMULATION_PERIOD, CURRENT_TEMP_MODE
-from params import Parameters
+from config import Paths, CURRENT_YEAR_LIST
 import current_preparation_lib as cpl
-import plot_utils
 
 def parse_arguments():
-    """Parse command line arguments."""
-    parser = argparse.ArgumentParser(description='Plot and compare simulated and real current data.')
-    parser.add_argument('--sensor', type=str, default='VL02_CT', nargs='+',
-                        help='Sensor name(s) to plot (default: VL02_CT). Can specify multiple sensors.')
+    parser = argparse.ArgumentParser(description='Load and process simulated and real current data')
+    parser.add_argument('--sensor', type=str, default='VL02_CT', 
+                        help='Sensor name to process (default: VL02_CT)')
     parser.add_argument('--simulated-file', type=str, default='simulated_df.csv',
-                        help='Filename of the simulated data in the output directory')
-    parser.add_argument('--output-dir', type=str, default='out_data/plots',
-                        help='Directory to save plots (default: out_data/plots)')
+                        help='Filename of the simulated data')
     parser.add_argument('--start-date', type=str, default=None,
-                        help='Start date for plotting (format: YYYY-MM-DD)')
-    parser.add_argument('--end-date', type=str, default=None,
-                        help='End date for plotting (format: YYYY-MM-DD)')
+                        help='Start date for data (format: YYYY-MM-DD)')
     parser.add_argument('--all-sensors', action='store_true',
-                        help='Plot all sensors on a single plot')
+                        help='Process all sensors')
     parser.add_argument('--list-sensors', action='store_true',
-                        help='List all available sensors in the simulated data')
+                        help='List all available sensors')
     return parser.parse_args()
 
-def load_real_current_data(paths, sensor_name, simulated_df=None):
-    """Load real current data for the specified sensor with temperature adjustment if needed.
-    
-    Args:
-        paths: Paths object for file paths
-        sensor_name: Name of the sensor to load data for
-        simulated_df: Optional simulated DataFrame with temperature data
-        
-    Returns:
-        DataFrame with real current data, adjusted if CURRENT_TEMP_MODE is 'adjust_real'
-    """
-    # Determine which current files contain data for the sensor
-    current_files = []
-    for file_name, _ in CURRENT_YEAR_LIST:
-        current_files.append(file_name)
-    
-    # Load and concatenate current data
-    all_current_dfs = []
-    for file_name in current_files:
-        file_path = paths.get_current_file(file_name)
-        if os.path.exists(file_path):
-            try:
-                df = pd.read_csv(file_path, index_col=0, parse_dates=True)
-                if sensor_name in df.columns:
-                    # Extract only the sensor column we need
-                    sensor_df = df[[sensor_name]]
-                    all_current_dfs.append(sensor_df)
-                    print(f"Loaded real current data for {sensor_name} from {file_name}")
-            except Exception as e:
-                print(f"Error loading {file_path}: {e}")
-    
-    if not all_current_dfs:
-        print(f"No real current data found for sensor {sensor_name}")
-        return None
-    
-    # Concatenate all current data
-    combined_df = pd.concat(all_current_dfs)
-    
-    # Check if we need to adjust real current with temperature
-    if CURRENT_TEMP_MODE == 'adjust_real' and simulated_df is not None:
-        print(f"Adjusting real current with temperature for {sensor_name}...")
-        # Get temperature data from simulated_df
-        temp_df = pd.DataFrame(index=simulated_df.index)
-        # The temperature column in simulated_df is just 'temperature' because of how
-        # load_and_prepare_simulated_df standardizes the column names
-        temp_df[sensor_name] = simulated_df['temperature']
-        
-        # Adjust real current with temperature
-        params = Parameters()
-        adjusted_df = cpl.adjust_real_current_with_temperature(combined_df, temp_df, params, sensor_name)
-        print(f"Adjusted real current with temperature")
-        return adjusted_df
-    
-    return combined_df
-
 def list_available_sensors(simulated_path):
-    """List all available sensors in the simulated data file."""
     try:
         df = pd.read_csv(simulated_path, index_col=0, parse_dates=True, nrows=1)
         sensors = set()
@@ -115,118 +32,135 @@ def list_available_sensors(simulated_path):
                 sensors.add(sensor)
         return sorted(list(sensors))
     except Exception as e:
-        print(f"Error reading simulated data file: {e}")
+        print(f"Error reading data file: {e}")
         return []
 
-def main():
+def load_simulated_data(simulated_path):
+    try:
+        # Najpierw pobierz listę wszystkich dostępnych sensorów
+        sensors = list_available_sensors(simulated_path)
+        if not sensors:
+            return None
+            
+        # Wczytaj dane dla wszystkich sensorów
+        all_data = cpl.load_and_prepare_simulated_df(sensors, simulated_path)
+        return all_data
+    except Exception as e:
+        print(f"Error loading simulated data: {e}")
+        return None
 
-    args = parse_arguments()
-    simulated_file = args.simulated_file
-    paths = Paths()
-    simulated_path = paths.get_output_file(simulated_file)
+def load_real_current_data(paths):
+    # Załaduj wszystkie pliki z danymi rzeczywistymi
+    real_all_df = pd.DataFrame()
+    current_files = [file_name for file_name, _ in CURRENT_YEAR_LIST]
     
+    for file_name in current_files:
+        file_path = paths.get_current_file(file_name)
+        if os.path.exists(file_path):
+            try:
+                df = pd.read_csv(file_path, index_col=0, parse_dates=True)
+                # Jeśli to pierwszy plik lub dataframe jest pusty, użyj go jako bazowy
+                if real_all_df.empty:
+                    real_all_df = df
+                else:
+                    # Połącz z istniejącym dataframe, ignorując powtórzenia indeksów
+                    real_all_df = pd.concat([real_all_df, df], axis=0)
+            except Exception as e:
+                print(f"Error loading {file_path}: {e}")
+    
+    # Jeśli nie załadowano żadnych danych, zwróć None
+    if real_all_df.empty:
+        return None
+    
+    # Zmień nazwy kolumn na 'real_current_nazwa-sensora'
+    new_names = {}
+    for col in real_all_df.columns:
+        new_names[col] = f"real_current_{col}"
+    
+    real_all_df = real_all_df.rename(columns=new_names)
+    
+    # Usuń duplikaty po indeksie (datach)
+    real_all_df = real_all_df[~real_all_df.index.duplicated(keep='first')]
+    
+    return real_all_df
 
+def main():
+    args = parse_arguments()
+    paths = Paths()
+    simulated_path = paths.get_output_file(args.simulated_file)
+    
     if args.list_sensors:
         sensors = list_available_sensors(simulated_path)
         if sensors:
-            print("Dostępne sensory:")
             for sensor in sensors:
-                print(f"  - {sensor}")
-        else:
-            print("Nie znaleziono sensorów w pliku danych.")
+                print(f"- {sensor}")
         return
     
-
-    start_date = pd.to_datetime(args.start_date) if args.start_date else None
-    end_date = pd.to_datetime(args.end_date) if args.end_date else None
+    # 1. Wczytaj WSZYSTKIE dane symulowane dla WSZYSTKICH sensorów
+    all_sensors = list_available_sensors(simulated_path)
+    simulated_data = load_simulated_data(simulated_path)
+    if simulated_data is None:
+        print("Nie udało się wczytać danych symulowanych")
+        return
     
-
+    # 2. Wczytaj WSZYSTKIE dane rzeczywiste
+    real_data = load_real_current_data(paths)
+    if real_data is None:
+        print("Nie udało się wczytać danych rzeczywistych")
+    
+    # 3. Określ, które sensory są potrzebne
     if args.all_sensors:
-        print("\nWykreślanie wszystkich sensorów na jednym wykresie...")
-        
-
-        all_sensors = list_available_sensors(simulated_path)
-        print(f"Znaleziono {len(all_sensors)} sensorów")
-        
-
-        all_simulated_data = {}
-        for sensor_name in all_sensors:
-            try:
-                sim_df = cpl.load_and_prepare_simulated_df(sensor_name, simulated_path)
-                params = Parameters()
-                if CURRENT_TEMP_MODE == 'adjust_sim':
-                    sim_df = cpl.adjust_simulated_current_with_temperature(sim_df, params)
-                all_simulated_data[sensor_name] = sim_df['current']
-            except Exception as e:
-                print(f"Błąd wczytywania danych dla {sensor_name}: {e}")
-        
-
-        simulated_combined = pd.DataFrame(all_simulated_data)
-        simulated_combined.to_csv("simulated_current.csv")
-
-        
-
-        all_real_data = {}
-        for sensor_name in all_sensors:
-            sim_df = None
-            if sensor_name in all_simulated_data:
-                sim_df = pd.DataFrame({
-                    'current': all_simulated_data[sensor_name],
-                    'temperature': cpl.load_and_prepare_simulated_df(sensor_name, simulated_path)['temperature']
-                }, index=all_simulated_data[sensor_name].index)
-            
-            real_df = load_real_current_data(paths, sensor_name, sim_df)
-            if real_df is not None:
-                all_real_data[sensor_name] = real_df[sensor_name]
-        
-
-        real_combined = pd.DataFrame(all_real_data)
-        real_combined.to_csv("real_current.csv")
-        
-
-        plot_utils.plot_all_sensors(simulated_combined, real_combined, all_sensors, args.output_dir, start_date, end_date)
-        print("Wyświetlono wykresy dla wszystkich sensorów")
+        sensors_to_use = all_sensors
+    else:
+        sensors_to_use = [args.sensor]
+    
+    # 4. Filtruj tylko potrzebne kolumny z danych symulowanych
+    filtered_sim_columns = []
+    for sensor in sensors_to_use:
+        # Wybierz wszystkie kolumny związane z danym sensorem
+        sim_sensor_columns = [col for col in simulated_data.columns if col.endswith(f"_{sensor}")]
+        filtered_sim_columns.extend(sim_sensor_columns)
+    
+    # Filtruj tylko potrzebne kolumny z danych rzeczywistych
+    if real_data is not None:
+        filtered_real_columns = []
+        for sensor in sensors_to_use:
+            real_sensor_column = f"real_current_{sensor}"
+            if real_sensor_column in real_data.columns:
+                filtered_real_columns.append(real_sensor_column)
+    
+    # 5. Utwórz końcowy dataframe
+    result_dfs = []
+    
+    # Dodaj przefiltrowane dane symulowane
+    if filtered_sim_columns:
+        result_dfs.append(simulated_data[filtered_sim_columns])
+    
+    # Dodaj przefiltrowane dane rzeczywiste jeśli istnieją
+    if real_data is not None and filtered_real_columns:
+        result_dfs.append(real_data[filtered_real_columns])
+    
+    # Połącz wszystkie dane w jeden dataframe
+    if result_dfs:
+        result_df = pd.concat(result_dfs, axis=1)
+    else:
+        print("Brak danych do połączenia")
         return
     
-
-    for sensor_name in args.sensor:
-        print(f"\n{'='*50}\nPrzetwarzanie sensora: {sensor_name}\n{'='*50}")
-        
-
-        print(f"Wczytywanie danych symulowanych dla {sensor_name}...")
-        try:
-            simulated_df = cpl.load_and_prepare_simulated_df(sensor_name, simulated_path)
-            print(f"Wczytano dane symulowane: {len(simulated_df)} punktów")
-            
-            params = Parameters()
-            if CURRENT_TEMP_MODE == 'adjust_sim':
-                print(f"Dostosowywanie prądu symulowanego z temperaturą...")
-                simulated_df = cpl.adjust_simulated_current_with_temperature(simulated_df, params)
-                print(f"Dostosowano prąd symulowany z temperaturą")
-        except Exception as e:
-            print(f"Błąd wczytywania danych dla {sensor_name}: {e}")
-            continue
-        
-
-        print(f"Wczytywanie danych rzeczywistych dla {sensor_name}...")
-        real_df = load_real_current_data(paths, sensor_name, simulated_df)
-        
-        # Generuj wykresy
-        if real_df is None:
-            print(f"Brak danych rzeczywistych dla {sensor_name}. Wykreślanie tylko danych symulowanych.")
-            plot_utils.plot_simulated_simple(simulated_df, sensor_name, None, start_date, end_date)
-        else:
-
-            plot_utils.plot_leakage_current(simulated_df, real_df, sensor_name, None, start_date, end_date)
-            print(f"Wyświetlono szczegółowy wykres porównawczy dla {sensor_name}")
-
-            plot_utils.plot_simulated_vs_real(
-                simulated_df['current'], real_df[sensor_name], sensor_name, 
-                None, start_date, end_date, False
-            )
-            print(f"Wyświetlono wykres nakładający dla {sensor_name}")
+    # 6. Zastosuj filtr daty początkowej jeśli podano
+    if args.start_date:
+        start_date = pd.to_datetime(args.start_date)
+        result_df = result_df[result_df.index >= start_date]
     
-    print("\nWszystkie wykresy wygenerowane pomyślnie!")
+    # 7. Zapisz wynikowy dataframe
+    if args.all_sensors:
+        output_filename = 'combined_data.csv'
+    else:
+        output_filename = f'{args.sensor}_data.csv'
+    
+    result_df.to_csv(output_filename)
+    print(f"Dane zapisane do {output_filename}")
+
 
 if __name__ == "__main__":
     main()

@@ -58,14 +58,12 @@ def prepare_sensor_current(current_df: pd.DataFrame, temp_df: pd.DataFrame, para
 
 def load_and_prepare_simulated_df(sensor_names, path=OUTPUT_SIMULATED_DF_PATH):
     """
-    Load simulated_df and map columns for the given sensor(s) to standard names.
+    Load simulated_df and map columns for the given sensor(s).
     sensor_names: str or list of str
-    Returns DataFrame with columns: current_{sensor}, temperature_{sensor}, fluence_{sensor} for each sensor,
-    and also a version with columns current, temperature, fluence if only one sensor is given.
+    Returns original DataFrame with all columns for all requested sensors
     """
     df = pd.read_csv(path, index_col=0, parse_dates=True)
     
-
     from config import SELECTED_YEARS
     if SELECTED_YEARS:
         years_mask = df.index.year.isin(SELECTED_YEARS)
@@ -73,20 +71,17 @@ def load_and_prepare_simulated_df(sensor_names, path=OUTPUT_SIMULATED_DF_PATH):
     
     if isinstance(sensor_names, str):
         sensor_names = [sensor_names]
-    result = {}
+        
+    # Zbierz wszystkie kolumny powiązane z żądanymi sensorami
+    columns_to_keep = []
     for sensor in sensor_names:
-        col_map = {
-            f"current_{sensor}": "current",
-            f"temperature_{sensor}": "temperature",
-            f"fluence_{sensor}": "fluence"
-        }
-        available = {k: v for k, v in col_map.items() if k in df.columns}
-        if available:
-            result[sensor] = df[list(available.keys())].rename(columns=available)
-    if len(result) == 1:
-        # Return single DataFrame for one sensor
-        return list(result.values())[0]
+        # Dodaj kolumny dla danego sensora (current, temperature, fluence, time)
+        sensor_columns = [col for col in df.columns if col.endswith(f"_{sensor}")]
+        columns_to_keep.extend(sensor_columns)
+    
+    # Jeśli znaleziono jakiekolwiek kolumny, zwróć DataFrame tylko z tymi kolumnami
+    if columns_to_keep:
+        return df[columns_to_keep]
     else:
-        # Return dict of DataFrames for each sensor
-        return result
+        return None
 
