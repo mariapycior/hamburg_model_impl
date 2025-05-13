@@ -62,7 +62,7 @@ def load_real_current_data(paths, sensor_name, simulated_df=None):
     """
     # Determine which current files contain data for the sensor
     current_files = []
-    for file_name, years in CURRENT_YEAR_LIST:
+    for file_name, _ in CURRENT_YEAR_LIST:
         current_files.append(file_name)
     
     # Load and concatenate current data
@@ -119,13 +119,13 @@ def list_available_sensors(simulated_path):
         return []
 
 def main():
-    # Wczytaj argumenty
+
     args = parse_arguments()
     simulated_file = args.simulated_file
     paths = Paths()
     simulated_path = paths.get_output_file(simulated_file)
     
-    # Wyświetl dostępne sensory
+
     if args.list_sensors:
         sensors = list_available_sensors(simulated_path)
         if sensors:
@@ -136,19 +136,19 @@ def main():
             print("Nie znaleziono sensorów w pliku danych.")
         return
     
-    # Zakres dat
+
     start_date = pd.to_datetime(args.start_date) if args.start_date else None
     end_date = pd.to_datetime(args.end_date) if args.end_date else None
     
-    # OPCJA 1: Wszystkie sensory na jednym wykresie
+
     if args.all_sensors:
         print("\nWykreślanie wszystkich sensorów na jednym wykresie...")
         
-        # Pobierz listę sensorów
+
         all_sensors = list_available_sensors(simulated_path)
         print(f"Znaleziono {len(all_sensors)} sensorów")
         
-        # Wczytaj dane symulowane
+
         all_simulated_data = {}
         for sensor_name in all_sensors:
             try:
@@ -160,12 +160,12 @@ def main():
             except Exception as e:
                 print(f"Błąd wczytywania danych dla {sensor_name}: {e}")
         
-        # Utwórz DataFrame z danymi symulowanymi
+
         simulated_combined = pd.DataFrame(all_simulated_data)
         simulated_combined.to_csv("simulated_current.csv")
 
         
-        # Wczytaj dane rzeczywiste
+
         all_real_data = {}
         for sensor_name in all_sensors:
             sim_df = None
@@ -179,20 +179,20 @@ def main():
             if real_df is not None:
                 all_real_data[sensor_name] = real_df[sensor_name]
         
-        # Utwórz DataFrame z danymi rzeczywistymi
+
         real_combined = pd.DataFrame(all_real_data)
         real_combined.to_csv("real_current.csv")
         
-        # Wyświetl wykresy
+
         plot_utils.plot_all_sensors(simulated_combined, real_combined, all_sensors, args.output_dir, start_date, end_date)
         print("Wyświetlono wykresy dla wszystkich sensorów")
         return
     
-    # OPCJA 2: Pojedynczy sensor
+
     for sensor_name in args.sensor:
         print(f"\n{'='*50}\nPrzetwarzanie sensora: {sensor_name}\n{'='*50}")
         
-        # Wczytaj dane symulowane
+
         print(f"Wczytywanie danych symulowanych dla {sensor_name}...")
         try:
             simulated_df = cpl.load_and_prepare_simulated_df(sensor_name, simulated_path)
@@ -207,7 +207,7 @@ def main():
             print(f"Błąd wczytywania danych dla {sensor_name}: {e}")
             continue
         
-        # Wczytaj dane rzeczywiste
+
         print(f"Wczytywanie danych rzeczywistych dla {sensor_name}...")
         real_df = load_real_current_data(paths, sensor_name, simulated_df)
         
@@ -216,11 +216,10 @@ def main():
             print(f"Brak danych rzeczywistych dla {sensor_name}. Wykreślanie tylko danych symulowanych.")
             plot_utils.plot_simulated_simple(simulated_df, sensor_name, None, start_date, end_date)
         else:
-            # Szczegółowy wykres porównawczy
+
             plot_utils.plot_leakage_current(simulated_df, real_df, sensor_name, None, start_date, end_date)
             print(f"Wyświetlono szczegółowy wykres porównawczy dla {sensor_name}")
-            
-            # Wykres nakładający dane symulowane i rzeczywiste
+
             plot_utils.plot_simulated_vs_real(
                 simulated_df['current'], real_df[sensor_name], sensor_name, 
                 None, start_date, end_date, False

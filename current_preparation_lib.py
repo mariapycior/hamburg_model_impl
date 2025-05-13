@@ -65,7 +65,7 @@ def load_and_prepare_simulated_df(sensor_names, path=OUTPUT_SIMULATED_DF_PATH):
     """
     df = pd.read_csv(path, index_col=0, parse_dates=True)
     
-    # Filtruj dane według wybranych lat
+
     from config import SELECTED_YEARS
     if SELECTED_YEARS:
         years_mask = df.index.year.isin(SELECTED_YEARS)
