@@ -5,7 +5,7 @@ from config import (
     Paths, FLUENCE_FILENAME, RUN_MODE, SENSOR_NAME, SELECTED_YEARS, OUTPUT_SIMULATED_DF_PATH
 )
 from params import Parameters
-import fluence_simulation_lib
+import current_simulation_lib
 
 def get_available_sensors(fluence_file):
     """Get a list of all available sensors from the fluence file"""
@@ -36,7 +36,7 @@ def run_all_sensors(selected_years):
     print(f"Found {len(available_sensors)} sensors available")
     
     # Run the pipeline for all available sensors
-    simulated_df, sensors = fluence_simulation_lib.run_leakage_current_pipeline(
+    simulated_df, sensors = current_simulation_lib.run_leakage_current_pipeline(
         fluence_file, temp_files, params, available_sensors=available_sensors
     )
     
@@ -59,7 +59,7 @@ def run_single_sensor(selected_years, sensor_name):
     params, paths, fluence_file, temp_files = prepare_inputs(selected_years)
     
     # Run the pipeline for a single sensor
-    simulated_df, sensors = fluence_simulation_lib.run_leakage_current_pipeline(
+    simulated_df, sensors = current_simulation_lib.run_leakage_current_pipeline(
         fluence_file, temp_files, params, sensor_name=sensor_name
     )
     

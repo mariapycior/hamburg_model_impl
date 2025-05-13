@@ -70,4 +70,4 @@ OUTPUT_SIMULATED_DF_PATH = "simulated_df.csv"
 # --- Runtime settings ---
 RUN_MODE = "all"  # "single" or "all"
 SENSOR_NAME = "VL02_CT"
-SELECTED_YEARS = range(2011, 2013)
+SELECTED_YEARS = range(2011, 2019)

@@ -14,6 +14,7 @@ def adjust_real_current_with_temperature(current_data: pd.DataFrame, temperature
     out[column] = out[column].values * R_Tref
     return out
 
+
 def set_temperature_where_fluence_zero(data: pd.DataFrame, value: float = 261.15, min_duration_days: int = 30) -> pd.DataFrame:
     out = data.copy()
     if 'fluence' not in out.columns or 'temperature' not in out.columns:
@@ -63,6 +64,13 @@ def load_and_prepare_simulated_df(sensor_names, path=OUTPUT_SIMULATED_DF_PATH):
     and also a version with columns current, temperature, fluence if only one sensor is given.
     """
     df = pd.read_csv(path, index_col=0, parse_dates=True)
+    
+    # Filtruj dane według wybranych lat
+    from config import SELECTED_YEARS
+    if SELECTED_YEARS:
+        years_mask = df.index.year.isin(SELECTED_YEARS)
+        df = df[years_mask]
+    
     if isinstance(sensor_names, str):
         sensor_names = [sensor_names]
     result = {}
@@ -82,16 +90,3 @@ def load_and_prepare_simulated_df(sensor_names, path=OUTPUT_SIMULATED_DF_PATH):
         # Return dict of DataFrames for each sensor
         return result
 
-# --- GŁÓWNY PROGRAM ---
-if __name__ == "__main__":
-    # Załaduj simulated_df z pliku
-    simulated_df = pd.read_csv("out_data/simulated_df.csv", index_col=0, parse_dates=True)
-    print("Loaded simulated_df:")
-    print(simulated_df.head())
-
-    # Przykład użycia: przelicz temperaturę/prąd jeśli potrzebujesz
-    # (zakładając, że masz obiekt params i ew. temp_df)
-    # from test_area import Parameters
-    # params = Parameters()
-    # adjusted_df = adjust_simulated_current_with_temperature(simulated_df, params)
-    # print(adjusted_df.head())

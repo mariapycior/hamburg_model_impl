@@ -131,7 +131,7 @@ def plot_all_sensors(simulated_df, real_df, sensors, output_dir=None, start_date
     plt.close()
     # Wykres realnych prądów
     plt.figure(figsize=(12, 12))
-    real_df_daily = real_df.resample('1H').mean()
+    real_df_daily = real_df.resample('1h').mean()
     for sensor in sensors:
         if sensor not in real_df_daily.columns:
             continue
