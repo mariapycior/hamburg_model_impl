@@ -204,16 +204,139 @@ def process_all_sensors(fluence_df, temp_df, params, sensor_name=None, common_se
         return list(all_simulated.values())[0]
     return pd.concat(all_simulated.values(), axis=1, join='outer')
 
+# ----- Funkcje do przetwarzania danych rzeczywistych -----
+
+def load_real_current_data(paths):
+    """Wczytaj dane rzeczywiste dla wszystkich sensorów z plików zdefiniowanych w konfiguracji."""
+    real_all_df = pd.DataFrame()
+    current_files = [file_name for file_name, _ in CURRENT_YEAR_LIST]
+    
+    for file_name in current_files:
+        file_path = paths.get_current_file(file_name)
+        if os.path.exists(file_path):
+            try:
+                df = pd.read_csv(file_path, index_col=0, parse_dates=True)
+                # Jeśli to pierwszy plik lub dataframe jest pusty, użyj go jako bazowy
+                if real_all_df.empty:
+                    real_all_df = df
+                else:
+                    # Połącz z istniejącym dataframe, ignorując powtórzenia indeksów
+                    real_all_df = pd.concat([real_all_df, df], axis=0)
+            except Exception as e:
+                print(f"Error loading {file_path}: {e}")
+    
+    if real_all_df.empty:
+        return None
+
+    # Dodaj prefiks 'real_current_' do nazw kolumn
+    new_names = {}
+    for col in real_all_df.columns:
+        new_names[col] = f"real_current_{col}"
+    
+    real_all_df = real_all_df.rename(columns=new_names)
+    real_all_df = real_all_df[~real_all_df.index.duplicated(keep='first')]
+    
+    return real_all_df
+
+@njit
+def _aggregate_window_means(sim_timestamps, real_timestamps, real_values, time_windows):
+    """
+    Optymalizowana przez numba funkcja do obliczania średnich wartości dla okien czasowych.
+    
+    Args:
+        sim_timestamps: numpy array z timestampami symulacji (w nanosekundach)
+        real_timestamps: numpy array z timestampami rzeczywistych danych (w nanosekundach)
+        real_values: numpy array z wartościami rzeczywistych prądów
+        time_windows: numpy array z szerokościami okien czasowych (w nanosekundach)
+    
+    Returns:
+        numpy array z zagregowanymi średnimi (NaN dla pustych okien)
+    """
+    result = np.full(len(sim_timestamps), np.nan)
+    
+    for i in range(len(sim_timestamps)):
+        # Jeśli szerokość okna jest NaN lub <= 0, pomijamy
+        if np.isnan(time_windows[i]) or time_windows[i] <= 0:
+            continue
+        
+        # Oblicz koniec przedziału czasowego
+        start_time = sim_timestamps[i]
+        end_time = start_time + time_windows[i]
+        
+        # Wyszukaj wartości w tym przedziale
+        sum_values = 0.0
+        count = 0
+        for j in range(len(real_timestamps)):
+            if real_timestamps[j] >= start_time and real_timestamps[j] < end_time:
+                if not np.isnan(real_values[j]):
+                    sum_values += real_values[j]
+                    count += 1
+        
+        # Oblicz średnią jeśli znaleziono wartości
+        if count > 0:
+            result[i] = sum_values / count
+    
+    return result
+
+def aggregate_real_current_data(simulated_df, real_df, sensors):
+    """
+    Agreguje dane rzeczywiste na podstawie przedziałów czasowych z danych symulowanych.
+    Zoptymalizowana wersja używająca numba JIT do przyspieszenia obliczeń.
+    
+    Args:
+        simulated_df (pd.DataFrame): DataFrame z danymi symulowanymi dla wszystkich sensorów
+        real_df (pd.DataFrame): DataFrame z danymi rzeczywistymi dla wszystkich sensorów (kolumny: real_current_sensor)
+        sensors (list): Lista sensorów, dla których chcemy zagregować dane
+    
+    Returns:
+        pd.DataFrame: DataFrame z zagregowanymi danymi rzeczywistymi dla wybranych sensorów
+    """
+    if real_df is None or simulated_df is None:
+        return None
+    
+    result_data = {}
+    
+    # Dla każdego sensora
+    for sensor in sensors:
+        time_col = f"time_{sensor}"
+        real_col = f"real_current_{sensor}"
+        
+        # Sprawdź czy dane rzeczywiste i symulowane zawierają potrzebne kolumny
+        if time_col not in simulated_df.columns or real_col not in real_df.columns:
+            continue
+        
+        # Konwersja indeksów czasu na nanosekundy (inty) dla numby
+        sim_timestamps = np.array(simulated_df.index.astype(np.int64).values)
+        real_timestamps = np.array(real_df.index.astype(np.int64).values)
+        real_values = np.array(real_df[real_col].values, dtype=np.float64)
+        
+        # Konwersja okien czasowych z sekund na nanosekundy
+        time_windows = np.array(simulated_df[time_col].values * 1e9, dtype=np.float64)
+        
+        # Wywołaj zoptymalizowaną funkcję numba
+        aggregated_values = _aggregate_window_means(sim_timestamps, real_timestamps, real_values, time_windows)
+        
+        # Konwersja wyników z powrotem na pandas Series z właściwym indeksem
+        result_data[real_col] = pd.Series(aggregated_values, index=simulated_df.index)
+    
+    # Utwórz DataFrame z zagregowanymi danymi
+    return pd.DataFrame(result_data)
+
+# ----- Zmodyfikowany main pipeline -----
+
 def run_leakage_current_pipeline(fluence_file, temp_files, params, sensor_name=None, available_sensors=None):
+    """Główny pipeline do symulacji i łączenia danych rzeczywistych."""
+    # 1. Wczytaj dane fluencji i temperatury
     fluence_df, temp_df = load_data(fluence_file, temp_files)
     
+    # 2. Przeprowadź symulację
     if RUN_MODE == "single":
         sensor_to_use = SENSOR_NAME if sensor_name is None else sensor_name
         if sensor_to_use in fluence_df.columns and sensor_to_use in temp_df.columns:
             fluence_df_filtered = fluence_df[[sensor_to_use]]
             temp_df_filtered = temp_df[[sensor_to_use]]
-            result_df = process_single_sensor(fluence_df_filtered, temp_df_filtered, params, sensor_name=sensor_to_use)
-            return result_df, [sensor_to_use]
+            simulated_df = process_single_sensor(fluence_df_filtered, temp_df_filtered, params, sensor_name=sensor_to_use)
+            processed_sensors = [sensor_to_use]
         else:
             missing_in = []
             if sensor_to_use not in fluence_df.columns:
@@ -228,14 +351,32 @@ def run_leakage_current_pipeline(fluence_file, temp_files, params, sensor_name=N
             if not available_sensors:
                 print("No common sensors found between fluence and temperature data")
                 return None, []
-                
-        result_df = process_all_sensors(fluence_df, temp_df, params, common_sensors=available_sensors)
-        processed_sensors = []
         
-        if result_df is not None:
-            processed_sensors = [col.replace('current_', '') for col in result_df.columns if col.startswith('current_')]
+        simulated_df = process_all_sensors(fluence_df, temp_df, params, common_sensors=available_sensors)
+        if simulated_df is not None:
+            processed_sensors = [col.replace('current_', '') for col in simulated_df.columns if col.startswith('current_')]
             if not processed_sensors:
                 processed_sensors = available_sensors
                 print("Warning: Could not determine which sensors were actually processed")
-                
-        return result_df, processed_sensors
+        else:
+            return None, []
+    
+    # 3. Wczytaj dane rzeczywiste
+    from config import Paths
+    paths = Paths()
+    real_df = load_real_current_data(paths)
+    
+    # 4. Połącz dane symulowane z rzeczywistymi
+    if real_df is not None:
+        # Agreguj dane rzeczywiste na podstawie przedziałów czasowych z symulacji
+        aggregated_real_df = aggregate_real_current_data(simulated_df, real_df, processed_sensors)
+        
+        # Połącz dane symulowane i rzeczywiste
+        if aggregated_real_df is not None and not aggregated_real_df.empty:
+            final_df = pd.concat([simulated_df, aggregated_real_df], axis=1)
+            print(f"Simulation completed with real current data for {len(processed_sensors)} sensors.")
+            return final_df, processed_sensors
+    
+    # Jeśli nie ma danych rzeczywistych, zwróć tylko dane symulowane
+    print(f"Simulation completed for {len(processed_sensors)} sensors. No real current data added.")
+    return simulated_df, processed_sensors

@@ -56,6 +56,94 @@ def prepare_sensor_current(current_df: pd.DataFrame, temp_df: pd.DataFrame, para
     else:
         return current_df
 
+from numba import njit
+import numpy as np
+
+@njit
+def _aggregate_window_means(sim_timestamps, real_timestamps, real_values, time_windows):
+    """
+    Optymalizowana przez numba funkcja do obliczania średnich wartości dla okien czasowych.
+    
+    Args:
+        sim_timestamps: numpy array z timestampami symulacji (w nanosekundach)
+        real_timestamps: numpy array z timestampami rzeczywistych danych (w nanosekundach)
+        real_values: numpy array z wartościami rzeczywistych prądów
+        time_windows: numpy array z szerokościami okien czasowych (w nanosekundach)
+    
+    Returns:
+        numpy array z zagregowanymi średnimi (NaN dla pustych okien)
+    """
+    result = np.full(len(sim_timestamps), np.nan)
+    
+    for i in range(len(sim_timestamps)):
+        # Jeśli szerokość okna jest NaN lub <= 0, pomijamy
+        if np.isnan(time_windows[i]) or time_windows[i] <= 0:
+            continue
+        
+        # Oblicz koniec przedziału czasowego
+        start_time = sim_timestamps[i]
+        end_time = start_time + time_windows[i]
+        
+        # Wyszukaj wartości w tym przedziale
+        sum_values = 0.0
+        count = 0
+        for j in range(len(real_timestamps)):
+            if real_timestamps[j] >= start_time and real_timestamps[j] < end_time:
+                if not np.isnan(real_values[j]):
+                    sum_values += real_values[j]
+                    count += 1
+        
+        # Oblicz średnią jeśli znaleziono wartości
+        if count > 0:
+            result[i] = sum_values / count
+    
+    return result
+
+def aggregate_real_current_data(simulated_df, real_df, sensors):
+    """
+    Agreguje dane rzeczywiste na podstawie przedziałów czasowych z danych symulowanych.
+    Zoptymalizowana wersja używająca numba JIT do przyspieszenia obliczeń.
+    
+    Args:
+        simulated_df (pd.DataFrame): DataFrame z danymi symulowanymi dla wszystkich sensorów
+        real_df (pd.DataFrame): DataFrame z danymi rzeczywistymi dla wszystkich sensorów (kolumny: real_current_sensor)
+        sensors (list): Lista sensorów, dla których chcemy zagregować dane
+    
+    Returns:
+        pd.DataFrame: DataFrame z zagregowanymi danymi rzeczywistymi dla wybranych sensorów
+    """
+    if real_df is None or simulated_df is None:
+        return None
+    
+    result_data = {}
+    
+    # Dla każdego sensora
+    for sensor in sensors:
+        time_col = f"time_{sensor}"
+        real_col = f"real_current_{sensor}"
+        
+        # Sprawdź czy dane rzeczywiste i symulowane zawierają potrzebne kolumny
+        if time_col not in simulated_df.columns or real_col not in real_df.columns:
+            continue
+        
+        # Konwersja indeksów czasu na nanosekundy (inty) dla numby
+        sim_timestamps = np.array(simulated_df.index.astype(np.int64).values)
+        real_timestamps = np.array(real_df.index.astype(np.int64).values)
+        real_values = np.array(real_df[real_col].values, dtype=np.float64)
+        
+        # Konwersja okien czasowych z sekund na nanosekundy
+        time_windows = np.array(simulated_df[time_col].values * 1e9, dtype=np.float64)
+        
+        # Wywołaj zoptymalizowaną funkcję numba
+        aggregated_values = _aggregate_window_means(sim_timestamps, real_timestamps, real_values, time_windows)
+        
+        # Konwersja wyników z powrotem na pandas Series z właściwym indeksem
+        result_data[real_col] = pd.Series(aggregated_values, index=simulated_df.index)
+    
+    # Utwórz DataFrame z zagregowanymi danymi
+    return pd.DataFrame(result_data)
+
+
 def load_and_prepare_simulated_df(sensor_names, path=OUTPUT_SIMULATED_DF_PATH):
     """
     Load simulated_df and map columns for the given sensor(s).
