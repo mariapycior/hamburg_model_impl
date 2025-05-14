@@ -2,51 +2,79 @@ import os
 import pandas as pd
 import numpy as np
 from config import (
-    Paths, FLUENCE_FILENAME, RUN_MODE, SENSOR_NAME, SELECTED_YEARS, OUTPUT_SIMULATED_DF_PATH
+    Paths, FLUENCE_FILENAME, RUN_MODE, SENSOR_NAME, SELECTED_YEARS, OUTPUT_SIMULATED_DF_PATH,
+    CURRENT_YEAR_LIST
 )
 from params import Parameters
 import current_simulation_lib
 
 def get_available_sensors(fluence_file):
-    """Get a list of all available sensors from the fluence file"""
     fluence_df = pd.read_csv(fluence_file, skiprows=4)
     sensor_columns = [col for col in fluence_df.columns if col not in ('bin_centre_date',)]
     return sorted(sensor_columns)
 
 
 def prepare_inputs(selected_years):
-    """Prepare all required inputs for simulation.
-    
-    Args:
-        selected_years: List or range of years to include in the simulation
-        
-    Returns:
-        tuple: (params, paths, fluence_file, temp_files)
-    """
     paths = Paths()
     params = Parameters()
     fluence_file = paths.get_fluence_file(FLUENCE_FILENAME)
     temp_files = paths.get_temperature_files_for_years(selected_years)
     return params, paths, fluence_file, temp_files
 
+def load_real_current_data(paths):
+    real_all_df = pd.DataFrame()
+    current_files = [file_name for file_name, _ in CURRENT_YEAR_LIST]
+    
+    for file_name in current_files:
+        file_path = paths.get_current_file(file_name)
+        if os.path.exists(file_path):
+            try:
+                df = pd.read_csv(file_path, index_col=0, parse_dates=True)
+                if real_all_df.empty:
+                    real_all_df = df
+                else:
+                    real_all_df = pd.concat([real_all_df, df], axis=0)
+            except Exception as e:
+                print(f"Error loading {file_path}: {e}")
+    
+    if real_all_df.empty:
+        return None
+
+    new_names = {}
+    for col in real_all_df.columns:
+        new_names[col] = f"real_current_{col}"
+    
+    real_all_df = real_all_df.rename(columns=new_names)
+    real_all_df = real_all_df[~real_all_df.index.duplicated(keep='first')]
+    
+    return real_all_df
+
 def run_all_sensors(selected_years):
-    """Run simulation for all available sensors"""
     params, paths, fluence_file, temp_files = prepare_inputs(selected_years)
     available_sensors = get_available_sensors(fluence_file)
     print(f"Found {len(available_sensors)} sensors available")
     
-    # Run the pipeline for all available sensors
+    real_df = load_real_current_data(paths)
+    
     simulated_df, sensors = current_simulation_lib.run_leakage_current_pipeline(
-        fluence_file, temp_files, params, available_sensors=available_sensors
+        fluence_file, temp_files, params, available_sensors=available_sensors,
+        real_df=real_df
     )
     
     if simulated_df is not None:
         if len(sensors) < len(available_sensors):
             print(f"Warning: Only {len(sensors)} out of {len(available_sensors)} sensors have complete data")
         
-        # Save results to CSV
         output_path = paths.get_output_file(OUTPUT_SIMULATED_DF_PATH)
         simulated_df.to_csv(output_path)
+        
+        real_current_cols = [col for col in simulated_df.columns if col.startswith('real_current_')]
+        if real_current_cols:
+            real_data_sensors = len(real_current_cols)
+            print(f"Real current data added for {real_data_sensors} out of {len(sensors)} sensors.")
+        else:
+            print("No real current data was found or added.")
+            
         print(f"Simulation completed for {len(sensors)} sensors. Results saved to {output_path}")
         return simulated_df, sensors
     else:
@@ -55,17 +83,28 @@ def run_all_sensors(selected_years):
 
 
 def run_single_sensor(selected_years, sensor_name):
-    """Run simulation for a single specified sensor"""
     params, paths, fluence_file, temp_files = prepare_inputs(selected_years)
     
-    # Run the pipeline for a single sensor
+    real_df = load_real_current_data(paths)
+    
     simulated_df, sensors = current_simulation_lib.run_leakage_current_pipeline(
-        fluence_file, temp_files, params, sensor_name=sensor_name
+        fluence_file, temp_files, params, sensor_name=sensor_name,
+        real_df=real_df
     )
     
     if simulated_df is not None:
         print(f"Simulated DataFrame for sensor {sensor_name}:\n{simulated_df.head()}")
-        # Save results to CSV
+        
+        real_current_col = f"real_current_{sensor_name}"
+        if real_current_col in simulated_df.columns:
+            not_null_values = simulated_df[real_current_col].count()
+            if not_null_values > 0:
+                print(f"Real current data added for {sensor_name} with {not_null_values} non-null values.")
+            else:
+                print(f"Real current column exists for {sensor_name} but contains only null values.")
+        else:
+            print(f"No real current data was found for sensor {sensor_name}.")
+        
         output_path = paths.get_output_file(OUTPUT_SIMULATED_DF_PATH)
         simulated_df.to_csv(output_path)
         print(f"Simulation completed for sensor {sensor_name}. Results saved to {output_path}")

@@ -3,7 +3,7 @@ import pandas as pd
 from datetime import timedelta
 import tqdm
 import os
-from config import CURRENT_YEAR_LIST, CURRENT_YEAR_RANGES, SIMULATION_PERIOD, RUN_MODE, SENSOR_NAME
+from config import CURRENT_YEAR_LIST, CURRENT_YEAR_RANGES, SIMULATION_PERIOD, RUN_MODE, SENSOR_NAME, CURRENT_TEMP_MODE, OUTPUT_SIMULATED_DF_PATH
 from numba import njit
 
 def load_avg_fluence(file_path: str) -> pd.DataFrame:
@@ -206,37 +206,91 @@ def process_all_sensors(fluence_df, temp_df, params, sensor_name=None, common_se
 
 # ----- Funkcje do przetwarzania danych rzeczywistych -----
 
-def load_real_current_data(paths):
-    """Wczytaj dane rzeczywiste dla wszystkich sensorów z plików zdefiniowanych w konfiguracji."""
-    real_all_df = pd.DataFrame()
-    current_files = [file_name for file_name, _ in CURRENT_YEAR_LIST]
-    
-    for file_name in current_files:
-        file_path = paths.get_current_file(file_name)
-        if os.path.exists(file_path):
-            try:
-                df = pd.read_csv(file_path, index_col=0, parse_dates=True)
-                # Jeśli to pierwszy plik lub dataframe jest pusty, użyj go jako bazowy
-                if real_all_df.empty:
-                    real_all_df = df
-                else:
-                    # Połącz z istniejącym dataframe, ignorując powtórzenia indeksów
-                    real_all_df = pd.concat([real_all_df, df], axis=0)
-            except Exception as e:
-                print(f"Error loading {file_path}: {e}")
-    
-    if real_all_df.empty:
-        return None
+def adjust_real_current_with_temperature(current_data: pd.DataFrame, temperature_data: pd.DataFrame, params, column: str) -> pd.DataFrame:
+    """Adjust real current with temperature compensation."""
+    if CURRENT_TEMP_MODE == 'none':
+        return current_data
+    T = temperature_data[column].reindex(current_data.index, method='nearest').values
+    T_ref = params.T_ref
+    E_eff = params.E_eff
+    kB = params.kb
+    R_Tref = (T_ref / T) ** 2 * np.exp(-(E_eff / (2 * kB)) * (1 / T_ref - 1 / T))
+    out = current_data.copy()
+    out[column] = out[column].values * R_Tref
+    return out
 
-    # Dodaj prefiks 'real_current_' do nazw kolumn
-    new_names = {}
-    for col in real_all_df.columns:
-        new_names[col] = f"real_current_{col}"
+def set_temperature_where_fluence_zero(data: pd.DataFrame, value: float = 261.15, min_duration_days: int = 30) -> pd.DataFrame:
+    """Set temperature value where fluence is zero."""
+    out = data.copy()
+    if 'fluence' not in out.columns or 'temperature' not in out.columns:
+        return out
+    zero_mask = (out['fluence'] == 0)
+    if zero_mask.sum() == 0:
+        out.loc[(out['temperature'] < 260) | (out['temperature'] > 264), 'temperature'] = float('nan')
+        return out
+    zero_groups = (zero_mask != zero_mask.shift()).cumsum()
+    group_ids = zero_groups[zero_mask].unique()
+    freq_minutes = int(pd.to_timedelta(SIMULATION_PERIOD.lower()).total_seconds() // 60)
+    min_points = (min_duration_days * 24 * 60) // freq_minutes
+    for gid in group_ids:
+        idx = zero_groups[zero_groups == gid].index
+        if len(idx) >= min_points:
+            out.loc[idx, 'temperature'] = value
+        else:
+            out.loc[idx, 'temperature'] = float('nan')
+    out.loc[(out['temperature'] < 260) | (out['temperature'] > 290), 'temperature'] = float('nan')
+    return out
+
+def adjust_simulated_current_with_temperature(data: pd.DataFrame, params) -> pd.DataFrame:
+    """Adjust simulated current with temperature compensation."""
+    if CURRENT_TEMP_MODE == 'none':
+        return data
+    data = set_temperature_where_fluence_zero(data)
+    T = data['temperature'].values
+    T_ref = params.T_ref
+    E_eff = params.E_eff
+    kB = params.kb
+    R_Tref = (T_ref / T) ** 2 * np.exp(-(E_eff / (2 * kB)) * (1/T - 1/T_ref))
+    print('T_REF', T_ref)
+    out = data.copy()
+    out['current'] = out['current'].values * R_Tref
+    return out
+
+def prepare_sensor_current(current_df: pd.DataFrame, temp_df: pd.DataFrame, params, sensor_name: str) -> pd.DataFrame:
+    """Prepare sensor current data with optional temperature adjustment."""
+    if CURRENT_TEMP_MODE == 'adjust_real':
+        return adjust_real_current_with_temperature(current_df, temp_df, params, sensor_name)
+    else:
+        return current_df
+
+def load_and_prepare_simulated_df(sensor_names, path=OUTPUT_SIMULATED_DF_PATH):
+    """Load simulated_df and map columns for the given sensor(s).
+    sensor_names: str or list of str
+    Returns original DataFrame with all columns for all requested sensors
+    """
+    from config import SELECTED_YEARS
     
-    real_all_df = real_all_df.rename(columns=new_names)
-    real_all_df = real_all_df[~real_all_df.index.duplicated(keep='first')]
+    df = pd.read_csv(path, index_col=0, parse_dates=True)
     
-    return real_all_df
+    if SELECTED_YEARS:
+        years_mask = df.index.year.isin(SELECTED_YEARS)
+        df = df[years_mask]
+    
+    if isinstance(sensor_names, str):
+        sensor_names = [sensor_names]
+        
+    # Zbierz wszystkie kolumny powiązane z żądanymi sensorami
+    columns_to_keep = []
+    for sensor in sensor_names:
+        # Dodaj kolumny dla danego sensora (current, temperature, fluence, time)
+        sensor_columns = [col for col in df.columns if col.endswith(f"_{sensor}")]
+        columns_to_keep.extend(sensor_columns)
+    
+    # Jeśli znaleziono jakiekolwiek kolumny, zwróć DataFrame tylko z tymi kolumnami
+    if columns_to_keep:
+        return df[columns_to_keep]
+    else:
+        return None
 
 @njit
 def _aggregate_window_means(sim_timestamps, real_timestamps, real_values, time_windows):
@@ -324,12 +378,9 @@ def aggregate_real_current_data(simulated_df, real_df, sensors):
 
 # ----- Zmodyfikowany main pipeline -----
 
-def run_leakage_current_pipeline(fluence_file, temp_files, params, sensor_name=None, available_sensors=None):
-    """Główny pipeline do symulacji i łączenia danych rzeczywistych."""
-    # 1. Wczytaj dane fluencji i temperatury
+def run_leakage_current_pipeline(fluence_file, temp_files, params, sensor_name=None, available_sensors=None, real_df=None):
     fluence_df, temp_df = load_data(fluence_file, temp_files)
     
-    # 2. Przeprowadź symulację
     if RUN_MODE == "single":
         sensor_to_use = SENSOR_NAME if sensor_name is None else sensor_name
         if sensor_to_use in fluence_df.columns and sensor_to_use in temp_df.columns:
@@ -361,22 +412,15 @@ def run_leakage_current_pipeline(fluence_file, temp_files, params, sensor_name=N
         else:
             return None, []
     
-    # 3. Wczytaj dane rzeczywiste
-    from config import Paths
-    paths = Paths()
-    real_df = load_real_current_data(paths)
-    
-    # 4. Połącz dane symulowane z rzeczywistymi
     if real_df is not None:
-        # Agreguj dane rzeczywiste na podstawie przedziałów czasowych z symulacji
         aggregated_real_df = aggregate_real_current_data(simulated_df, real_df, processed_sensors)
         
-        # Połącz dane symulowane i rzeczywiste
         if aggregated_real_df is not None and not aggregated_real_df.empty:
             final_df = pd.concat([simulated_df, aggregated_real_df], axis=1)
             print(f"Simulation completed with real current data for {len(processed_sensors)} sensors.")
             return final_df, processed_sensors
+        else:
+            print(f"Warning: Real current data was provided but could not be aggregated.")
     
-    # Jeśli nie ma danych rzeczywistych, zwróć tylko dane symulowane
     print(f"Simulation completed for {len(processed_sensors)} sensors. No real current data added.")
     return simulated_df, processed_sensors
