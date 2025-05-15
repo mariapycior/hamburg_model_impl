@@ -7,19 +7,35 @@ from config import CURRENT_YEAR_LIST, CURRENT_YEAR_RANGES, SIMULATION_PERIOD, RU
 from numba import njit
 
 def load_avg_fluence(file_path: str) -> pd.DataFrame:
+    """Load and preprocess fluence data from CSV file.
+    Optimized to parse header info and adjust timestamps."""
     if not os.path.exists(file_path):
         raise FileNotFoundError(f"Fluence file not found: {file_path}")
+        
+    print(f"[DEBUG] Loading fluence data from: {file_path}")
+    
+    # Extract bin seconds from header
     with open(file_path, 'r') as f:
         lines = [next(f) for _ in range(3)]
     try:
         bin_seconds = float(lines[2].split(',')[0])
+        print(f"[DEBUG] Extracted bin seconds: {bin_seconds}")
     except Exception:
         bin_seconds = 300.0
+        print(f"[DEBUG] Using default bin seconds: {bin_seconds}")
+    
+    # Adjust timestamps by half bin width
     shift_seconds = bin_seconds / 2.0
+    
+    # Load data
     df = pd.read_csv(file_path, skiprows=4)
     df['bin_centre_date'] = pd.to_datetime(df['bin_centre_date'], format='%d-%m-%Y %H:%M:%S')
     df.set_index('bin_centre_date', inplace=True)
     df.index = df.index - pd.Timedelta(seconds=shift_seconds)
+    
+    print(f"[DEBUG] Loaded fluence data shape: {df.shape}")
+    print(f"[DEBUG] Fluence data time range: {df.index.min()} to {df.index.max()}")
+    
     return df
 
 def load_temperature_data(file_path: str) -> pd.DataFrame:
@@ -152,31 +168,25 @@ def simulate_current_sensor(fluence_series: pd.Series, temp_series: pd.Series, p
         })
     return combined
 
-def process_single_sensor(fluence_df, temp_df, params, sensor_name):
-    fluence_series, temp_series = prepare_sensor_data(fluence_df, temp_df, sensor_name)
-    return simulate_current_sensor(fluence_series, temp_series, params, sensor_name=sensor_name)
-
-def process_all_sensors(fluence_df, temp_df, params, sensor_name=None, common_sensors=None):
-    if sensor_name is not None:
-        common_sensors = [sensor_name]
-    if common_sensors is None:
-        raise ValueError("common_sensors must be provided!")
+def process_all_sensors(fluence_df, temp_df, params, common_sensors):
     if not common_sensors:
         print("No sensors to process. Empty list provided.")
         return None
+        
     all_simulated = {}
     failed_sensors = []
+    
     for sensor in tqdm.tqdm(common_sensors, desc="Processing sensors"):
         try:
             if sensor not in fluence_df.columns:
-                print(f"Sensor {sensor} not found in fluence data, skipping")
                 failed_sensors.append(sensor)
                 continue
             if sensor not in temp_df.columns:
-                print(f"Sensor {sensor} not found in temperature data, skipping")
                 failed_sensors.append(sensor)
                 continue
-            sim_df = process_single_sensor(fluence_df, temp_df, params, sensor)
+
+            fluence_series, temp_series = prepare_sensor_data(fluence_df, temp_df, sensor)
+            sim_df = simulate_current_sensor(fluence_series, temp_series, params, sensor_name=sensor)
             all_simulated[sensor] = sim_df
         except Exception as e:
             print(f"Error processing sensor {sensor}: {str(e)}")
@@ -189,6 +199,7 @@ def process_all_sensors(fluence_df, temp_df, params, sensor_name=None, common_se
     if len(all_simulated) == 1:
         return list(all_simulated.values())[0]
     return pd.concat(all_simulated.values(), axis=1, join='outer')
+
 
 
 @njit
@@ -299,7 +310,7 @@ def run_leakage_current_pipeline(fluence_file, temp_files, params, sensor_name=N
         return None, []
     
     # Process all sensors
-    simulated_df = process_all_sensors(fluence_df, temp_df, params, common_sensors=sensors_to_process)
+    simulated_df = process_all_sensors(fluence_df, temp_df, params, sensors_to_process)
     if simulated_df is None:
         return None, []
     
