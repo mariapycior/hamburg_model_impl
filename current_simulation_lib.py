@@ -7,35 +7,19 @@ from config import CURRENT_YEAR_LIST, CURRENT_YEAR_RANGES, SIMULATION_PERIOD, RU
 from numba import njit
 
 def load_avg_fluence(file_path: str) -> pd.DataFrame:
-    """Load and preprocess fluence data from CSV file.
-    Optimized to parse header info and adjust timestamps."""
     if not os.path.exists(file_path):
         raise FileNotFoundError(f"Fluence file not found: {file_path}")
-        
-    print(f"[DEBUG] Loading fluence data from: {file_path}")
-    
-    # Extract bin seconds from header
     with open(file_path, 'r') as f:
         lines = [next(f) for _ in range(3)]
     try:
         bin_seconds = float(lines[2].split(',')[0])
-        print(f"[DEBUG] Extracted bin seconds: {bin_seconds}")
     except Exception:
         bin_seconds = 300.0
-        print(f"[DEBUG] Using default bin seconds: {bin_seconds}")
-    
-    # Adjust timestamps by half bin width
     shift_seconds = bin_seconds / 2.0
-    
-    # Load data
     df = pd.read_csv(file_path, skiprows=4)
     df['bin_centre_date'] = pd.to_datetime(df['bin_centre_date'], format='%d-%m-%Y %H:%M:%S')
     df.set_index('bin_centre_date', inplace=True)
     df.index = df.index - pd.Timedelta(seconds=shift_seconds)
-    
-    print(f"[DEBUG] Loaded fluence data shape: {df.shape}")
-    print(f"[DEBUG] Fluence data time range: {df.index.min()} to {df.index.max()}")
-    
     return df
 
 def load_temperature_data(file_path: str) -> pd.DataFrame:
@@ -75,20 +59,96 @@ def align_temperature_to_fluence(fluence_df: pd.DataFrame, temp_df: pd.DataFrame
     if sensor_name not in temp_df.columns:
         raise KeyError(f"Sensor {sensor_name} not found in temperature data")
     fluence_series = fluence_df[sensor_name]
-    fluence_series = fluence_series.resample(SIMULATION_PERIOD.lower()).sum()
-    temp_series_raw = temp_df[sensor_name].resample(SIMULATION_PERIOD.lower()).mean()
-    temp_series = temp_series_raw.ffill().bfill()
+    temp_series = temp_df[sensor_name]
+    
     freq_seconds = pd.to_timedelta(SIMULATION_PERIOD.lower()).total_seconds()
-    time_diff_seconds = (fluence_series.index[0] - temp_series.index[0]).total_seconds() % freq_seconds
-    if time_diff_seconds > 0:
-        shift_seconds = time_diff_seconds
-        if time_diff_seconds > freq_seconds/2:
-            shift_seconds = time_diff_seconds - freq_seconds
-        shift = timedelta(seconds=shift_seconds)
-        fluence_series.index = fluence_series.index - shift
+    time_diff_seconds = (fluence_series.index[0] - temp_series.index[0]).total_seconds()
+    modulo = time_diff_seconds % freq_seconds
+    
+    print(f"SIMULATION_PERIOD: {SIMULATION_PERIOD}")
+    print(f"First fluence record: {fluence_series.index[0]}")
+    print(f"First temperature record: {temp_series.index[0]}")
+    print(f"Time difference: {time_diff_seconds} seconds")
+    print(f"Modulo with simulation period: {modulo} seconds")
+    
+    min_modulo = modulo
+    records_to_remove = 0
+    min_dataset = "none"
+    
+    max_fluence_check = min(len(fluence_series), int(freq_seconds / 60))
+    max_temp_check = min(len(temp_series), int(freq_seconds / 60))
+    
+    for i in range(1, max_fluence_check):
+        new_time_diff = (fluence_series.index[i] - temp_series.index[0]).total_seconds()
+        new_modulo = new_time_diff % freq_seconds
+        if new_modulo < min_modulo:
+            min_modulo = new_modulo
+            records_to_remove = i
+            min_dataset = "fluence"
+    
+    for i in range(1, max_temp_check):
+        new_time_diff = (fluence_series.index[0] - temp_series.index[i]).total_seconds()
+        new_modulo = new_time_diff % freq_seconds
+        if new_modulo < min_modulo:
+            min_modulo = new_modulo
+            records_to_remove = i
+            min_dataset = "temperature"
+    
+    print(f"Minimum modulo possible: {min_modulo} seconds")
+    print(f"Records to remove from {min_dataset}: {records_to_remove}")
+    
+    # Usunięcie początkowych rekordów, aby zminimalizować modulo
+    if min_dataset == "fluence" and records_to_remove > 0:
+        fluence_series = fluence_series.iloc[records_to_remove:]
+        print(f"Removed {records_to_remove} records from fluence series")
+        print(f"New first fluence record: {fluence_series.index[0]}")
+    elif min_dataset == "temperature" and records_to_remove > 0:
+        temp_series = temp_series.iloc[records_to_remove:]
+        print(f"Removed {records_to_remove} records from temperature series")
+        print(f"New first temperature record: {temp_series.index[0]}")
+    
+    # Korekta pozostałego modulo poprzez dostosowanie pierwszego rekordu temperatury
+    new_time_diff = (fluence_series.index[0] - temp_series.index[0]).total_seconds()
+    remaining_modulo = new_time_diff % freq_seconds
+    if remaining_modulo != 0:
+        adjustment = timedelta(seconds=remaining_modulo)
+        temp_series.index = temp_series.index + adjustment
+        print(f"Adjusted temperature time by {remaining_modulo} seconds")
+        print(f"New first temperature record: {temp_series.index[0]}")
+    
+    # Zapamiętaj dokładny czas pierwszego rekordu fluencji przed resamplingiem
+    first_fluence_time = fluence_series.index[0]
+    
+    # Wykonaj resample
+    fluence_series = fluence_series.resample(SIMULATION_PERIOD.lower()).sum()
+    temp_series = temp_series.resample(SIMULATION_PERIOD.lower()).mean()
+    temp_series = temp_series.ffill().bfill()
+    
+    # Sprawdź modulo po resamplingu
+    resampled_modulo = (fluence_series.index[0] - temp_series.index[0]).total_seconds() % freq_seconds
+    print(f"Modulo after resampling: {resampled_modulo} seconds")
+    
+    # Jeśli modulo nie jest zerowe, dostosuj indeksy czasowe po resamplingu
+    if resampled_modulo != 0:
+        # Dostosuj oba szeregi do dokładnej daty pierwszego rekordu fluencji
+        target_start_time = pd.Timestamp(first_fluence_time).floor(SIMULATION_PERIOD.lower())
+        shift_fluence = target_start_time - fluence_series.index[0]
+        shift_temp = target_start_time - temp_series.index[0]
+        
+        fluence_series.index = fluence_series.index + shift_fluence
+        temp_series.index = temp_series.index + shift_temp
+        print(f"Adjusted resampled series to align with: {target_start_time}")
+    
+    # Sprawdź, czy modulo teraz jest zerowe
+    final_modulo = (fluence_series.index[0] - temp_series.index[0]).total_seconds() % freq_seconds
+    print(f"Final modulo: {final_modulo} seconds")
+    
+    # Utwórz pełny indeks i uzupełnij brakujące wartości
     full_index = pd.date_range(start=temp_series.index[0], end=temp_series.index[-1], freq=SIMULATION_PERIOD.lower())
     fluence_series = fluence_series.reindex(full_index, fill_value=0)
     return fluence_series, temp_series
+
+
 
 def prepare_sensor_data(fluence_df: pd.DataFrame, temp_df: pd.DataFrame, sensor_name: str) -> tuple:
     fluence_series, temp_series = align_temperature_to_fluence(fluence_df, temp_df, sensor_name)
