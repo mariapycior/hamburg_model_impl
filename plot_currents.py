@@ -47,40 +47,11 @@ def load_simulated_data(simulated_path):
         print(f"Error loading simulated data: {e}")
         return None
 
-def load_real_current_data(paths):
-    real_all_df = pd.DataFrame()
-    current_files = [file_name for file_name, _ in CURRENT_YEAR_LIST]
-    
-    for file_name in current_files:
-        file_path = paths.get_current_file(file_name)
-        if os.path.exists(file_path):
-            try:
-                df = pd.read_csv(file_path, index_col=0, parse_dates=True)
-                # Jeśli to pierwszy plik lub dataframe jest pusty, użyj go jako bazowy
-                if real_all_df.empty:
-                    real_all_df = df
-                else:
-                    # Połącz z istniejącym dataframe, ignorując powtórzenia indeksów
-                    real_all_df = pd.concat([real_all_df, df], axis=0)
-            except Exception as e:
-                print(f"Error loading {file_path}: {e}")
-    
-    if real_all_df.empty:
-        return None
-
-    new_names = {}
-    for col in real_all_df.columns:
-        new_names[col] = f"real_current_{col}"
-    
-    real_all_df = real_all_df.rename(columns=new_names)
-    real_all_df = real_all_df[~real_all_df.index.duplicated(keep='first')]
-    
-    return real_all_df
 
 def main():
     args = parse_arguments()
     paths = Paths()
-    simulated_path = paths.get_output_file(args.simulated_file)
+    simulated_path = os.path.join('/home/maria/magisterka/hamburg_new/out_data/data', args.simulated_file)
     
     if args.list_sensors:
         sensors = list_available_sensors(simulated_path)
@@ -89,80 +60,60 @@ def main():
                 print(f"- {sensor}")
         return
     
-    # 1. Wczytaj WSZYSTKIE dane symulowane dla WSZYSTKICH sensorów
-    all_sensors = list_available_sensors(simulated_path)
-    simulated_data = load_simulated_data(simulated_path)
-    if simulated_data is None:
-        print("Nie udało się wczytać danych symulowanych")
+    try:
+        df = pd.read_csv(simulated_path, index_col=0, parse_dates=True)
+        print(f"Data loaded from {simulated_path}")
+    except Exception as e:
+        print(f"Failed to load simulation data: {e}")
         return
-    
-    # 2. Wczytaj WSZYSTKIE dane rzeczywiste
-    real_data = load_real_current_data(paths)
-    if real_data is None:
-        print("Nie udało się wczytać danych rzeczywistych")
-    
-    # 3. Określ, które sensory są potrzebne
+        
+    all_sensors = list_available_sensors(simulated_path)    
+    if not all_sensors:
+        print("No sensors found in data")
+        return
+        
     if args.all_sensors:
         sensors_to_use = all_sensors
     else:
         sensors_to_use = [args.sensor]
-    
-    # 4. Filtruj tylko potrzebne kolumny z danych symulowanych
-    filtered_sim_columns = []
+
+    all_filtered_columns = []
     for sensor in sensors_to_use:
-        # Wybierz wszystkie kolumny związane z danym sensorem
-        sim_sensor_columns = [col for col in simulated_data.columns if col.endswith(f"_{sensor}")]
-        filtered_sim_columns.extend(sim_sensor_columns)
+        sensor_columns = [col for col in df.columns if col.endswith(f"_{sensor}")]
+        all_filtered_columns.extend(sensor_columns)
     
-    # Filtruj tylko potrzebne kolumny z danych rzeczywistych
-    if real_data is not None:
-        filtered_real_columns = []
-        for sensor in sensors_to_use:
-            real_sensor_column = f"real_current_{sensor}"
-            if real_sensor_column in real_data.columns:
-                filtered_real_columns.append(real_sensor_column)
-    
-    # 5. Agreguj dane rzeczywiste na podstawie przedziałów czasowych z danych symulowanych
-    if filtered_sim_columns and real_data is not None and filtered_real_columns:
-        # Wyodrębnij wybrane sensory z nazw kolumn
-        selected_sensors = sensors_to_use
-        
-        # Filtrowane dane symulowane
-        filtered_sim_data = simulated_data[filtered_sim_columns]
-        
-        # Agreguj dane rzeczywiste na podstawie przedziałów czasowych
-        aggregated_real_data = cpl.aggregate_real_current_data(filtered_sim_data, real_data, selected_sensors)
-        
-        # Połącz dane symulowane i zagregowane dane rzeczywiste
-        if aggregated_real_data is not None:
-            result_df = pd.concat([filtered_sim_data, aggregated_real_data], axis=1)
-        else:
-            # Jeśli nie ma zagregowanych danych rzeczywistych, użyj tylko danych symulowanych
-            result_df = filtered_sim_data
-    elif filtered_sim_columns:
-        # Jeśli nie ma danych rzeczywistych, użyj tylko danych symulowanych
-        result_df = simulated_data[filtered_sim_columns]
-    else:
-        print("Brak danych do połączenia")
+    if not all_filtered_columns:
+        print(f"No data found for sensors: {', '.join(sensors_to_use)}")
         return
     
-    # 6. Zastosuj filtr daty początkowej jeśli podano
+    result_df = df[all_filtered_columns]
+    
+    # Zastosuj filtr daty początkowej jeśli podano
     if args.start_date:
         start_date = pd.to_datetime(args.start_date)
         result_df = result_df[result_df.index >= start_date]
     
-    # 7. Zamiast zapisywać do pliku, wyplotuj dane dla jednego sensora
+    # Wyświetl wykresy lub zapisz do pliku
     if not args.all_sensors:
         import plot_utils
         sensor = args.sensor
         sim_col = f"current_{sensor}"
         real_col = f"real_current_{sensor}"
+        
+        # Pobierz dane tylko jeśli kolumny istnieją
         sim_series = result_df[sim_col] if sim_col in result_df.columns else None
         real_series = result_df[real_col] if real_col in result_df.columns else None
+        
+        if sim_series is None and real_series is None:
+            print(f"No data for sensor {sensor}")
+            return
+            
+        print(f"Creating plot for sensor {sensor}")
         plot_utils.plot_simulated_vs_real(sim_series, real_series, sensor)
     else:
-        result_df.to_csv('combined_data.csv')
-        print("Dane zapisane do combined_data.csv")
+        import plot_utils
+        print(f"Creating plots for all {len(sensors_to_use)} sensors")
+        plot_utils.plot_all_sensors(result_df, sensors_to_use)
 
 
 if __name__ == "__main__":

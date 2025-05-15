@@ -73,6 +73,12 @@ def plot_simulated_vs_real(simulated_series, real_series, sensor_name, output_pa
     import pandas as pd
     import matplotlib.pyplot as plt
 
+    # Obsługa przypadków, gdy któryś z serii jest None
+    if simulated_series is None:
+        simulated_series = pd.Series()
+    if real_series is None:
+        real_series = pd.Series()
+        
     # Extract series if DataFrame
     if isinstance(simulated_series, pd.DataFrame):
         if simulated_series.shape[1] == 1:
@@ -101,7 +107,7 @@ def plot_simulated_vs_real(simulated_series, real_series, sensor_name, output_pa
         df = df.rolling('7d', min_periods=1).mean()
 
     plt.figure(figsize=(12, 8))
-    plt.ylim(0, 0.4)
+    plt.ylim(0,6)
     # Zakres osi X
     if start_date is not None and end_date is not None and not df.empty:
         plt.xlim(pd.to_datetime(start_date), pd.to_datetime(end_date))
@@ -123,25 +129,31 @@ def plot_simulated_vs_real(simulated_series, real_series, sensor_name, output_pa
     plt.close()
 
 
-def plot_all_sensors(simulated_df, real_df, sensors, output_dir=None, start_date=None, end_date=None):
+def plot_all_sensors(df, sensors, output_dir=None, start_date=None, end_date=None):
+    import os
+    
     # Plot of simulated current for all sensors
     plt.figure(figsize=(12, 12))
+    sim_columns = []
+    
     for sensor in sensors:
-        if sensor not in simulated_df.columns:
-            continue
-        y = simulated_df[sensor]
-        if hasattr(y, 'columns'):
-            y = y.iloc[:, 0]
-        y_clean = y.dropna()
-        x_clean = y_clean.index
-        if y_clean.empty or len(x_clean) != len(y_clean):
-            continue
-        plt.scatter(x_clean, y_clean.values, s=1, label=sensor)
-    # Średnia simulated z warunkiem na liczbę nie-NaN
-    valid_count_sim = simulated_df.notna().sum(axis=1)
-    mean_sim = simulated_df.mean(axis=1)
-    mean_sim[valid_count_sim <= (simulated_df.shape[1] // 2)] = float('nan')
-    plt.plot(mean_sim.index, mean_sim.values, color='black', linewidth=3, label='Mean (simulated)')
+        sim_col = f"current_{sensor}"
+        if sim_col in df.columns:
+            sim_columns.append(sim_col)
+            y = df[sim_col]
+            y_clean = y.dropna()
+            x_clean = y_clean.index
+            if not y_clean.empty and len(x_clean) == len(y_clean):
+                plt.scatter(x_clean, y_clean.values, s=1, label=sensor)
+    
+    # Calculate mean with condition on number of non-NaN values
+    if sim_columns:
+        sim_df = df[sim_columns]
+        valid_count_sim = sim_df.notna().sum(axis=1)
+        mean_sim = sim_df.mean(axis=1)
+        mean_sim[valid_count_sim <= (len(sim_columns) // 2)] = float('nan')
+        plt.plot(mean_sim.index, mean_sim.values, color='black', linewidth=3, label='Mean (simulated)')
+        
     plt.xlim(start_date, end_date)
     plt.ylabel('Current (mA)')
     plt.title('Simulated Current for All Sensors')
@@ -152,25 +164,28 @@ def plot_all_sensors(simulated_df, real_df, sensors, output_dir=None, start_date
         plt.savefig(os.path.join(output_dir, "all_simulated.png"), bbox_inches='tight')
     plt.show()
     plt.close()
-    # Wykres realnych prądów
+    
+    # Plot of real currents
     plt.figure(figsize=(12, 12))
-    real_df_daily = real_df.resample('1h').mean()
+    real_columns = []
+    
     for sensor in sensors:
-        if sensor not in real_df_daily.columns:
-            continue
-        y = real_df_daily[sensor]
-        if hasattr(y, 'columns'):
-            y = y.iloc[:, 0]
-        y_clean = y.dropna()
-        x_clean = y_clean.index
-        if y_clean.empty or len(x_clean) != len(y_clean):
-            continue
-        plt.scatter(x_clean, y_clean.values, s=1, label=sensor)
-    # Średnia real z warunkiem na liczbę nie-NaN
-    valid_count_real = real_df_daily.notna().sum(axis=1)
-    mean_real = real_df_daily.mean(axis=1)
-    mean_real[valid_count_real <= (real_df_daily.shape[1] // 2)] = float('nan')
-    plt.plot(mean_real.index, mean_real.values, color='black', linewidth=3, label='Mean (real)')
+        real_col = f"real_current_{sensor}"
+        if real_col in df.columns:
+            real_columns.append(real_col)
+            y = df[real_col]
+            y_clean = y.dropna()
+            x_clean = y_clean.index
+            if not y_clean.empty and len(x_clean) == len(y_clean):
+                plt.scatter(x_clean, y_clean.values, s=1, label=sensor)
+    
+    # Calculate mean with condition on number of non-NaN values
+    if real_columns:
+        real_df = df[real_columns]
+        valid_count_real = real_df.notna().sum(axis=1)
+        mean_real = real_df.mean(axis=1)
+        mean_real[valid_count_real <= (len(real_columns) // 2)] = float('nan')
+        plt.plot(mean_real.index, mean_real.values, color='black', linewidth=3, label='Mean (real)')
     plt.xlim(start_date, end_date)
     plt.ylabel('Current (mA)')
     plt.title('Real Current for All Sensors')

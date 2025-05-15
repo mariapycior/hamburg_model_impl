@@ -20,7 +20,6 @@ def load_avg_fluence(file_path: str) -> pd.DataFrame:
     df['bin_centre_date'] = pd.to_datetime(df['bin_centre_date'], format='%d-%m-%Y %H:%M:%S')
     df.set_index('bin_centre_date', inplace=True)
     df.index = df.index - pd.Timedelta(seconds=shift_seconds)
-    df.index.name = "TS"
     return df
 
 def load_temperature_data(file_path: str) -> pd.DataFrame:
@@ -35,18 +34,18 @@ def load_data(fluence_file: str, temp_files: list) -> tuple:
         raise ValueError("No temperature files provided")
     fluence_df = load_avg_fluence(fluence_file)
     sorted_temp_files = sorted(temp_files, key=lambda x: int(x.split('_')[-1].split('.')[0]))
+    
     temp_dfs = []
     for temp_file in sorted_temp_files:
         try:
-            temp_df = load_temperature_data(temp_file)
-            temp_dfs.append(temp_df)
+            temp_dfs.append(load_temperature_data(temp_file))
         except Exception as e:
             print(f"Skipping temperature file {temp_file} due to error: {str(e)}")
+            
     if not temp_dfs:
         raise ValueError("No valid temperature data could be loaded")
-    temp_df = pd.concat(temp_dfs, axis=0, join='outer')
-    temp_df = temp_df.groupby(temp_df.index).max().sort_index()
-    return fluence_df, temp_df
+        
+    return fluence_df, pd.concat(temp_dfs).groupby(level=0).max().sort_index()
 
 def calculate_temperature_factor_theta_vectorized(T_a: np.ndarray, E_I_star: float, T_ref: float, kB: float) -> np.ndarray:
     return np.exp(-E_I_star / kB * (1/T_a - 1/T_ref))
@@ -78,20 +77,7 @@ def align_temperature_to_fluence(fluence_df: pd.DataFrame, temp_df: pd.DataFrame
 def prepare_sensor_data(fluence_df: pd.DataFrame, temp_df: pd.DataFrame, sensor_name: str) -> tuple:
     fluence_series, temp_series = align_temperature_to_fluence(fluence_df, temp_df, sensor_name)
     common_index = fluence_series.index.intersection(temp_series.index)
-    fluence_df_result = pd.DataFrame({sensor_name: fluence_series[common_index]})
-    temp_df_result = pd.DataFrame({sensor_name: temp_series[common_index]})
-    fluence_df_result.index.name = 'ts'
-    temp_df_result.index.name = 'ts'
-    return fluence_df_result, temp_df_result
-
-def find_common_sensors(*dfs) -> list:
-    if not dfs:
-        raise ValueError("No DataFrames provided to find common sensors")
-    cols = [set(df.columns) for df in dfs]
-    common_cols = set.intersection(*cols)
-    if not common_cols:
-        print("Warning: No common sensors found across all DataFrames")
-    return sorted(common_cols)
+    return fluence_series[common_index], temp_series[common_index]
 
 @njit
 def calculate_leakage_current(fluence, time_tau, time_theta, alpha_I, alpha_0_star, beta, V):
@@ -137,23 +123,26 @@ def combine_periods(df: pd.DataFrame, temp_tolerance: float = 1, fluence_toleran
     result = pd.DataFrame(combined).set_index('start_time')
     return result
 
-def simulate_current_sensor(fluence_df: pd.Series, temp_df: pd.Series, params, sensor_name: str = None) -> pd.DataFrame:
-    result = pd.DataFrame(index=fluence_df.index)
-    result['fluence'] = fluence_df.values
-    result['temperature'] = temp_df.values
-    combined = combine_periods(result, temp_tolerance=0.0, fluence_tolerance=0.0)
+def simulate_current_sensor(fluence_series: pd.Series, temp_series: pd.Series, params, sensor_name: str = None) -> pd.DataFrame:
+    combined = pd.DataFrame({
+        'fluence': fluence_series.values,
+        'temperature': temp_series.values
+    }, index=fluence_series.index)
+    combined = combine_periods(combined, temp_tolerance=0.0, fluence_tolerance=0.0)
     combined['current'] = 0.0
     temperatures = combined['temperature'].values
     fluences = combined['fluence'].values
     times = combined['time'].values
+    
     tau_j = calculate_intrinsic_lifetime_tau_vectorized(params.k_0I, params.E_I, temperatures, params.kb)
     theta_j = calculate_temperature_factor_theta_vectorized(temperatures, params.E_I_star, params.T_ref, params.kb)
     time_tau = times / tau_j
     time_theta = theta_j * times / params.t_0
-    N = len(combined)
-    for n in range(N):
+    
+    for n in range(len(combined)):
         I_leak = calculate_leakage_current(fluences[:n], time_tau[:n], time_theta[:n], params.alpha_I, params.alpha_0_star, params.beta, params.V)
         combined.loc[combined.index[n], 'current'] = I_leak * 1000
+    
     if sensor_name is not None:
         combined = combined.rename(columns={
             "current": f"current_{sensor_name}",
@@ -164,9 +153,8 @@ def simulate_current_sensor(fluence_df: pd.Series, temp_df: pd.Series, params, s
     return combined
 
 def process_single_sensor(fluence_df, temp_df, params, sensor_name):
-    fdf, tdf = prepare_sensor_data(fluence_df, temp_df, sensor_name)
-    sim_df = simulate_current_sensor(fdf[sensor_name], tdf[sensor_name], params, sensor_name=sensor_name)
-    return sim_df
+    fluence_series, temp_series = prepare_sensor_data(fluence_df, temp_df, sensor_name)
+    return simulate_current_sensor(fluence_series, temp_series, params, sensor_name=sensor_name)
 
 def process_all_sensors(fluence_df, temp_df, params, sensor_name=None, common_sensors=None):
     if sensor_name is not None:
@@ -188,9 +176,7 @@ def process_all_sensors(fluence_df, temp_df, params, sensor_name=None, common_se
                 print(f"Sensor {sensor} not found in temperature data, skipping")
                 failed_sensors.append(sensor)
                 continue
-            sensor_fluence_df = fluence_df[[sensor]]
-            sensor_temp_df = temp_df[[sensor]]
-            sim_df = process_single_sensor(sensor_fluence_df, sensor_temp_df, params, sensor)
+            sim_df = process_single_sensor(fluence_df, temp_df, params, sensor)
             all_simulated[sensor] = sim_df
         except Exception as e:
             print(f"Error processing sensor {sensor}: {str(e)}")
@@ -204,93 +190,6 @@ def process_all_sensors(fluence_df, temp_df, params, sensor_name=None, common_se
         return list(all_simulated.values())[0]
     return pd.concat(all_simulated.values(), axis=1, join='outer')
 
-# ----- Funkcje do przetwarzania danych rzeczywistych -----
-
-def adjust_real_current_with_temperature(current_data: pd.DataFrame, temperature_data: pd.DataFrame, params, column: str) -> pd.DataFrame:
-    """Adjust real current with temperature compensation."""
-    if CURRENT_TEMP_MODE == 'none':
-        return current_data
-    T = temperature_data[column].reindex(current_data.index, method='nearest').values
-    T_ref = params.T_ref
-    E_eff = params.E_eff
-    kB = params.kb
-    R_Tref = (T_ref / T) ** 2 * np.exp(-(E_eff / (2 * kB)) * (1 / T_ref - 1 / T))
-    out = current_data.copy()
-    out[column] = out[column].values * R_Tref
-    return out
-
-def set_temperature_where_fluence_zero(data: pd.DataFrame, value: float = 261.15, min_duration_days: int = 30) -> pd.DataFrame:
-    """Set temperature value where fluence is zero."""
-    out = data.copy()
-    if 'fluence' not in out.columns or 'temperature' not in out.columns:
-        return out
-    zero_mask = (out['fluence'] == 0)
-    if zero_mask.sum() == 0:
-        out.loc[(out['temperature'] < 260) | (out['temperature'] > 264), 'temperature'] = float('nan')
-        return out
-    zero_groups = (zero_mask != zero_mask.shift()).cumsum()
-    group_ids = zero_groups[zero_mask].unique()
-    freq_minutes = int(pd.to_timedelta(SIMULATION_PERIOD.lower()).total_seconds() // 60)
-    min_points = (min_duration_days * 24 * 60) // freq_minutes
-    for gid in group_ids:
-        idx = zero_groups[zero_groups == gid].index
-        if len(idx) >= min_points:
-            out.loc[idx, 'temperature'] = value
-        else:
-            out.loc[idx, 'temperature'] = float('nan')
-    out.loc[(out['temperature'] < 260) | (out['temperature'] > 290), 'temperature'] = float('nan')
-    return out
-
-def adjust_simulated_current_with_temperature(data: pd.DataFrame, params) -> pd.DataFrame:
-    """Adjust simulated current with temperature compensation."""
-    if CURRENT_TEMP_MODE == 'none':
-        return data
-    data = set_temperature_where_fluence_zero(data)
-    T = data['temperature'].values
-    T_ref = params.T_ref
-    E_eff = params.E_eff
-    kB = params.kb
-    R_Tref = (T_ref / T) ** 2 * np.exp(-(E_eff / (2 * kB)) * (1/T - 1/T_ref))
-    print('T_REF', T_ref)
-    out = data.copy()
-    out['current'] = out['current'].values * R_Tref
-    return out
-
-def prepare_sensor_current(current_df: pd.DataFrame, temp_df: pd.DataFrame, params, sensor_name: str) -> pd.DataFrame:
-    """Prepare sensor current data with optional temperature adjustment."""
-    if CURRENT_TEMP_MODE == 'adjust_real':
-        return adjust_real_current_with_temperature(current_df, temp_df, params, sensor_name)
-    else:
-        return current_df
-
-def load_and_prepare_simulated_df(sensor_names, path=OUTPUT_SIMULATED_DF_PATH):
-    """Load simulated_df and map columns for the given sensor(s).
-    sensor_names: str or list of str
-    Returns original DataFrame with all columns for all requested sensors
-    """
-    from config import SELECTED_YEARS
-    
-    df = pd.read_csv(path, index_col=0, parse_dates=True)
-    
-    if SELECTED_YEARS:
-        years_mask = df.index.year.isin(SELECTED_YEARS)
-        df = df[years_mask]
-    
-    if isinstance(sensor_names, str):
-        sensor_names = [sensor_names]
-        
-    # Zbierz wszystkie kolumny powiązane z żądanymi sensorami
-    columns_to_keep = []
-    for sensor in sensor_names:
-        # Dodaj kolumny dla danego sensora (current, temperature, fluence, time)
-        sensor_columns = [col for col in df.columns if col.endswith(f"_{sensor}")]
-        columns_to_keep.extend(sensor_columns)
-    
-    # Jeśli znaleziono jakiekolwiek kolumny, zwróć DataFrame tylko z tymi kolumnami
-    if columns_to_keep:
-        return df[columns_to_keep]
-    else:
-        return None
 
 @njit
 def _aggregate_window_means(sim_timestamps, real_timestamps, real_values, time_windows):
@@ -333,92 +232,85 @@ def _aggregate_window_means(sim_timestamps, real_timestamps, real_values, time_w
     return result
 
 def aggregate_real_current_data(simulated_df, real_df, sensors):
-    """
-    Agreguje dane rzeczywiste na podstawie przedziałów czasowych z danych symulowanych.
-    Zoptymalizowana wersja używająca numba JIT do przyspieszenia obliczeń.
-    
-    Args:
-        simulated_df (pd.DataFrame): DataFrame z danymi symulowanymi dla wszystkich sensorów
-        real_df (pd.DataFrame): DataFrame z danymi rzeczywistymi dla wszystkich sensorów (kolumny: real_current_sensor)
-        sensors (list): Lista sensorów, dla których chcemy zagregować dane
-    
-    Returns:
-        pd.DataFrame: DataFrame z zagregowanymi danymi rzeczywistymi dla wybranych sensorów
-    """
+
     if real_df is None or simulated_df is None:
         return None
     
     result_data = {}
     
-    # Dla każdego sensora
     for sensor in sensors:
         time_col = f"time_{sensor}"
         real_col = f"real_current_{sensor}"
         
-        # Sprawdź czy dane rzeczywiste i symulowane zawierają potrzebne kolumny
         if time_col not in simulated_df.columns or real_col not in real_df.columns:
             continue
         
-        # Konwersja indeksów czasu na nanosekundy (inty) dla numby
         sim_timestamps = np.array(simulated_df.index.astype(np.int64).values)
         real_timestamps = np.array(real_df.index.astype(np.int64).values)
         real_values = np.array(real_df[real_col].values, dtype=np.float64)
         
-        # Konwersja okien czasowych z sekund na nanosekundy
         time_windows = np.array(simulated_df[time_col].values * 1e9, dtype=np.float64)
-        
-        # Wywołaj zoptymalizowaną funkcję numba
+
         aggregated_values = _aggregate_window_means(sim_timestamps, real_timestamps, real_values, time_windows)
-        
-        # Konwersja wyników z powrotem na pandas Series z właściwym indeksem
         result_data[real_col] = pd.Series(aggregated_values, index=simulated_df.index)
-    
-    # Utwórz DataFrame z zagregowanymi danymi
+
     return pd.DataFrame(result_data)
 
-# ----- Zmodyfikowany main pipeline -----
+
+def load_real_current_data(paths):
+    real_all_df = pd.DataFrame()
+    current_files = [file_name for file_name, _ in CURRENT_YEAR_LIST]
+    
+    for file_name in current_files:
+        file_path = paths.get_current_file(file_name)
+        if os.path.exists(file_path):
+            try:
+                df = pd.read_csv(file_path, index_col=0, parse_dates=True)
+                if real_all_df.empty:
+                    real_all_df = df
+                else:
+                    real_all_df = pd.concat([real_all_df, df], axis=0)
+            except Exception as e:
+                print(f"Error loading {file_path}: {e}")
+    
+    if real_all_df.empty:
+        return None
+
+    new_names = {}
+    for col in real_all_df.columns:
+        new_names[col] = f"real_current_{col}"
+    
+    real_all_df = real_all_df.rename(columns=new_names)
+    real_all_df = real_all_df[~real_all_df.index.duplicated(keep='first')]
+    
+    return real_all_df
+
+
+### checked
 
 def run_leakage_current_pipeline(fluence_file, temp_files, params, sensor_name=None, available_sensors=None, real_df=None):
     fluence_df, temp_df = load_data(fluence_file, temp_files)
     
-    if RUN_MODE == "single":
-        sensor_to_use = SENSOR_NAME if sensor_name is None else sensor_name
-        if sensor_to_use in fluence_df.columns and sensor_to_use in temp_df.columns:
-            fluence_df_filtered = fluence_df[[sensor_to_use]]
-            temp_df_filtered = temp_df[[sensor_to_use]]
-            simulated_df = process_single_sensor(fluence_df_filtered, temp_df_filtered, params, sensor_name=sensor_to_use)
-            processed_sensors = [sensor_to_use]
-        else:
-            missing_in = []
-            if sensor_to_use not in fluence_df.columns:
-                missing_in.append("fluence data")
-            if sensor_to_use not in temp_df.columns:
-                missing_in.append("temperature data")
-            print(f"Error: Sensor {sensor_to_use} not found in {' and '.join(missing_in)}")
-            return None, []
-    else:
-        if not available_sensors:
-            available_sensors = find_common_sensors(fluence_df, temp_df)
-            if not available_sensors:
-                print("No common sensors found between fluence and temperature data")
-                return None, []
-        
-        simulated_df = process_all_sensors(fluence_df, temp_df, params, common_sensors=available_sensors)
-        if simulated_df is not None:
-            processed_sensors = [col.replace('current_', '') for col in simulated_df.columns if col.startswith('current_')]
-            if not processed_sensors:
-                processed_sensors = available_sensors
-                print("Warning: Could not determine which sensors were actually processed")
-        else:
-            return None, []
+    # Select sensors based on mode
+    sensors_to_process = [sensor_name] if sensor_name else available_sensors
+    
+    if not sensors_to_process:
+        print("No sensors available for processing")
+        return None, []
+    
+    # Process all sensors
+    simulated_df = process_all_sensors(fluence_df, temp_df, params, common_sensors=sensors_to_process)
+    if simulated_df is None:
+        return None, []
+    
+    # Get processed sensors from column names
+    processed_sensors = [col.replace('current_', '') for col in simulated_df.columns if col.startswith('current_')]
     
     if real_df is not None:
         aggregated_real_df = aggregate_real_current_data(simulated_df, real_df, processed_sensors)
-        
         if aggregated_real_df is not None and not aggregated_real_df.empty:
-            final_df = pd.concat([simulated_df, aggregated_real_df], axis=1)
             print(f"Simulation completed with real current data for {len(processed_sensors)} sensors.")
-            return final_df, processed_sensors
+            return pd.concat([simulated_df, aggregated_real_df], axis=1), processed_sensors
         else:
             print(f"Warning: Real current data was provided but could not be aggregated.")
     

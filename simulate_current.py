@@ -7,6 +7,7 @@ from config import (
 )
 from params import Parameters
 import current_simulation_lib
+from current_simulation_lib import load_real_current_data
 
 def get_available_sensors(fluence_file):
     fluence_df = pd.read_csv(fluence_file, skiprows=4)
@@ -21,33 +22,7 @@ def prepare_inputs(selected_years):
     temp_files = paths.get_temperature_files_for_years(selected_years)
     return params, paths, fluence_file, temp_files
 
-def load_real_current_data(paths):
-    real_all_df = pd.DataFrame()
-    current_files = [file_name for file_name, _ in CURRENT_YEAR_LIST]
-    
-    for file_name in current_files:
-        file_path = paths.get_current_file(file_name)
-        if os.path.exists(file_path):
-            try:
-                df = pd.read_csv(file_path, index_col=0, parse_dates=True)
-                if real_all_df.empty:
-                    real_all_df = df
-                else:
-                    real_all_df = pd.concat([real_all_df, df], axis=0)
-            except Exception as e:
-                print(f"Error loading {file_path}: {e}")
-    
-    if real_all_df.empty:
-        return None
 
-    new_names = {}
-    for col in real_all_df.columns:
-        new_names[col] = f"real_current_{col}"
-    
-    real_all_df = real_all_df.rename(columns=new_names)
-    real_all_df = real_all_df[~real_all_df.index.duplicated(keep='first')]
-    
-    return real_all_df
 
 def run_all_sensors(selected_years):
     params, paths, fluence_file, temp_files = prepare_inputs(selected_years)
