@@ -62,7 +62,7 @@ CURRENT_TEMP_MODE = 'adjust_sim'
 
 # Resampling period for simulation data
 # Available values: '1min', '1H', '10H', '24H', '1W'
-SIMULATION_PERIOD = '10H'
+SIMULATION_PERIOD = '24H'
 
 # --- Output Configuration ---
 OUTPUT_SIMULATED_DF_PATH = "simulated_df.csv"

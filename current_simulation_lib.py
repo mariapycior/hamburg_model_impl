@@ -30,7 +30,7 @@ def load_temperature_data(file_path: str) -> pd.DataFrame:
         raise FileNotFoundError(f"Temperature file not found: {file_path}")
     df = pd.read_csv(file_path, index_col="TS", parse_dates=["TS"])
     df = df.dropna(how='all')
-    #df = df + 3.2 
+    #df = df + 3.2
     return df
 
 def load_data(fluence_file: str, temp_files: list) -> tuple:
@@ -214,6 +214,8 @@ def process_all_sensors(fluence_df, temp_df, params, common_sensors):
                 continue
 
             fluence_series, temp_series = prepare_sensor_data(fluence_df, temp_df, sensor)
+            # Add 3.2 to temperature when fluence is above zero
+            #temp_series[fluence_series > 0] += 3.2
             sim_df = simulate_current_sensor(fluence_series, temp_series, params, sensor_name=sensor)
             sim_df = sim_df.resample(SIMULATION_PERIOD.lower(), origin=sim_df.index[0]).ffill()
             
