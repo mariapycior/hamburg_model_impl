@@ -3,22 +3,26 @@ import matplotlib.pyplot as plt
 import pandas as pd
 
 
-def plot_leakage_current(result_df: pd.DataFrame, current_sample_df: pd.DataFrame, sensor_name: str, 
+def plot_leakage_current(df: pd.DataFrame, sensor_name: str, 
                          output_path: str = None, start_date: pd.Timestamp = None, end_date: pd.Timestamp = None):
-    if sensor_name in current_sample_df.columns:
-        real_current = current_sample_df[sensor_name]
-    else:
-        raise ValueError(f"Sensor {sensor_name} not found in the current sample file.")
+    """Plot detailed view of currents, fluence and temperature for a sensor."""
+    sim_col = f"current_{sensor_name}"
+    real_col = f"real_current_{sensor_name}"
+    temp_col = f"temperature_{sensor_name}"
+    fluence_col = f"fluence_{sensor_name}"
+    
+    if sim_col not in df.columns:
+        raise ValueError(f"Simulated current column not found for sensor {sensor_name}")
 
     if start_date is None:
-        start_date = min(result_df.index.min(), real_current.index.min())
+        start_date = df.index.min()
     if end_date is None:
-        end_date = max(result_df.index.max(), real_current.index.max())
+        end_date = df.index.max()
 
     plt.figure(figsize=(12, 16))
     
     plt.subplot(4, 1, 1)
-    plt.scatter(result_df.index, result_df['current'], color='blue', s=1, label='Leakage Current Simulated')
+    plt.scatter(df.index, df[sim_col], color='blue', s=1, label='Leakage Current Simulated')
     plt.xlim(start_date, end_date)
     plt.ylim(0, 0.3)
     plt.ylabel('Current (mA)')
@@ -26,134 +30,162 @@ def plot_leakage_current(result_df: pd.DataFrame, current_sample_df: pd.DataFram
     plt.grid(True)
     plt.legend()
     
-    plt.subplot(4, 1, 2)
-    plt.scatter(real_current.index, real_current, color='red', s=1, label='Leakage Current (Real Data)')
-    plt.xlim(start_date, end_date)
-    plt.ylabel('Current (mA)')
-    plt.ylim(0, 0.3)
-    plt.title(f'Real Leakage Current for Sensor {sensor_name}')
-    plt.grid(True)
-    plt.legend()
+    if real_col in df.columns:
+        plt.subplot(4, 1, 2)
+        plt.scatter(df.index, df[real_col], color='red', s=1, label='Leakage Current (Real Data)')
+        plt.xlim(start_date, end_date)
+        plt.ylabel('Current (mA)')
+        plt.ylim(0, 0.3)
+        plt.title(f'Real Leakage Current for Sensor {sensor_name}')
+        plt.grid(True)
+        plt.legend()
     
-    plt.subplot(4, 1, 3)
-    plt.scatter(result_df.index, result_df['fluence'], color='green', s=1, label='Fluence')
-    plt.xlim(start_date, end_date)
-    plt.ylabel('Fluence (n/cm²)')
-    plt.title('Fluence')
-    plt.grid(True)
-    plt.legend()
+    if fluence_col in df.columns:
+        plt.subplot(4, 1, 3)
+        plt.scatter(df.index, df[fluence_col], color='green', s=1, label='Fluence')
+        plt.xlim(start_date, end_date)
+        plt.ylabel('Fluence (n/cm²)')
+        plt.title('Fluence')
+        plt.grid(True)
+        plt.legend()
     
-    plt.subplot(4, 1, 4)
-    plt.scatter(result_df.index, result_df['temperature'], color='magenta', s=1, label='Temperature')
-    plt.xlim(start_date, end_date)
-    plt.ylabel('Temperature (K)')
-    plt.title('Temperature')
-    plt.grid(True)
-    plt.legend()
+    if temp_col in df.columns:
+        plt.subplot(4, 1, 4)
+        plt.scatter(df.index, df[temp_col], color='magenta', s=1, label='Temperature')
+        plt.xlim(start_date, end_date)
+        plt.ylabel('Temperature (K)')
+        plt.title('Temperature')
+        plt.grid(True)
+        plt.legend()
 
+    plt.tight_layout()
     if output_path:
         plt.savefig(output_path)
     plt.show()
+    plt.close()
 
 
-def plot_simulated_vs_real(simulated_df: pd.Series, real_series: pd.Series, sensor_name: str, output_path=None, start_date=None, end_date=None, weekly_average=False):
+def plot_simulated_vs_real(df, sensor_name, output_path=None, start_date=None, end_date=None, weekly_average=False):
     """
     Plot simulated and real current on the same plot (time series overlay).
-    Optionally plot weekly-averaged currents.
     Args:
-        simulated_df: Series with simulated current, indexed by time (sensor name as Series.name)
-        real_series: Series with real current, indexed by time
+        df: DataFrame with both simulated and real current data
         sensor_name: Name of the sensor
         output_path: Path to save the plot
         start_date: Start date for plotting
         end_date: End date for plotting
         weekly_average: If True, plot 7-day rolling mean
     """
-    # Ensure correct index type
-    if isinstance(simulated_df, pd.DataFrame):
-        simulated_df = simulated_df.iloc[:, 0]
-    if isinstance(real_series, pd.DataFrame):
-        real_series = real_series.iloc[:, 0]
-    if weekly_average:
-        simulated_df = simulated_df.rolling('7d', min_periods=1).mean()
-        real_series = real_series.rolling('7d', min_periods=1).mean()
-    if start_date is None:
-        start_date = min(simulated_df.index.min(), real_series.index.min())
-    if end_date is None:
-        end_date = max(simulated_df.index.max(), real_series.index.max())
-    plt.figure(figsize=(12, 8))
-    plt.ylim(0, 0.4)
-    plt.scatter(real_series.index, real_series.values, color='red', s=1, label='Real Current')
-    plt.scatter(simulated_df.index, simulated_df.values, color='blue', s=1, label='Simulated Current')
-    plt.xlim(start_date, end_date)
-    plt.ylabel('Current (mA)')
-    if 0: #weekly_average:
-        plt.title(f'Comparison of Real vs Simulated Current for Sensor {sensor_name}')
-    else:
-        plt.title(f'Comparison of Real vs Simulated Current for Sensor {sensor_name}')
+    import numpy as np
+    import pandas as pd
+    import matplotlib.pyplot as plt
 
+    sim_col = f"current_{sensor_name}"
+    real_col = f"real_current_{sensor_name}"
+    
+    if sim_col not in df.columns and real_col not in df.columns:
+        print(f"No data found for sensor {sensor_name}")
+        return
+
+    if weekly_average:
+        df = df.rolling('7d', min_periods=1).mean()
+
+    plt.figure(figsize=(12, 8))
+   #plt.ylim(0,6)
+    
+    if start_date is not None and end_date is not None:
+        plt.xlim(pd.to_datetime(start_date), pd.to_datetime(end_date))
+    else:
+        plt.xlim(df.index.min(), df.index.max())
+
+    if real_col in df.columns:
+        real_data = df[real_col].dropna()
+        if not real_data.empty:
+            plt.scatter(real_data.index, real_data, color='red', s=1, label='Real Current')
+    
+    if sim_col in df.columns:
+        sim_data = df[sim_col].dropna()
+        if not sim_data.empty:
+            plt.scatter(sim_data.index, sim_data, color='blue', s=1, label='Simulated Current')
+
+    plt.ylabel('Current (mA)')
+    plt.xlabel('Time')
+    plt.title(f'Comparison of Real vs Simulated Current for Sensor {sensor_name}')
     plt.grid(True)
     plt.legend()
+    plt.tight_layout()
+    
     if output_path:
         plt.savefig(output_path)
     plt.show()
     plt.close()
 
 
-def plot_all_sensors(simulated_df, real_df, sensors, output_dir="out_data", start_date=None, end_date=None):
+def plot_all_sensors(df, sensors, output_dir=None, start_date=None, end_date=None):
+    import os
+    
     # Plot of simulated current for all sensors
     plt.figure(figsize=(12, 12))
+    sim_columns = []
+    
     for sensor in sensors:
-        if sensor not in simulated_df.columns:
-            continue
-        y = simulated_df[sensor]
-        if hasattr(y, 'columns'):
-            y = y.iloc[:, 0]
-        y_clean = y.dropna()
-        x_clean = y_clean.index
-        if y_clean.empty or len(x_clean) != len(y_clean):
-            continue
-        plt.scatter(x_clean, y_clean.values, s=1, label=sensor)
-    # Średnia simulated z warunkiem na liczbę nie-NaN
-    valid_count_sim = simulated_df.notna().sum(axis=1)
-    mean_sim = simulated_df.mean(axis=1)
-    mean_sim[valid_count_sim <= (simulated_df.shape[1] // 2)] = float('nan')
-    plt.plot(mean_sim.index, mean_sim.values, color='black', linewidth=3, label='Mean (simulated)')
+        sim_col = f"current_{sensor}"
+        if sim_col in df.columns:
+            sim_columns.append(sim_col)
+            y = df[sim_col]
+            y_clean = y.dropna()
+            x_clean = y_clean.index
+            if not y_clean.empty and len(x_clean) == len(y_clean):
+                plt.scatter(x_clean, y_clean.values, s=1, label=sensor)
+    
+    # Calculate mean with condition on number of non-NaN values
+    if sim_columns:
+        sim_df = df[sim_columns]
+        valid_count_sim = sim_df.notna().sum(axis=1)
+        mean_sim = sim_df.mean(axis=1)
+        mean_sim[valid_count_sim <= (len(sim_columns) // 2)] = float('nan')
+        plt.plot(mean_sim.index, mean_sim.values, color='black', linewidth=3, label='Mean (simulated)')
+        
     plt.xlim(start_date, end_date)
     plt.ylabel('Current (mA)')
     plt.title('Simulated Current for All Sensors')
     plt.grid(True)
     plt.tight_layout()
     plt.legend(loc='center left', bbox_to_anchor=(1.01, 0.5), title='Sensors', fontsize='small')
-    plt.savefig(os.path.join(output_dir, "all_simulated.png"), bbox_inches='tight')
+    if output_dir is not None:
+        plt.savefig(os.path.join(output_dir, "all_simulated.png"), bbox_inches='tight')
     plt.show()
     plt.close()
-    # Wykres realnych prądów
+    
+    # Plot of real currents
     plt.figure(figsize=(12, 12))
-    real_df_daily = real_df.resample('1H').mean()
+    real_columns = []
+    
     for sensor in sensors:
-        if sensor not in real_df_daily.columns:
-            continue
-        y = real_df_daily[sensor]
-        if hasattr(y, 'columns'):
-            y = y.iloc[:, 0]
-        y_clean = y.dropna()
-        x_clean = y_clean.index
-        if y_clean.empty or len(x_clean) != len(y_clean):
-            continue
-        plt.scatter(x_clean, y_clean.values, s=1, label=sensor)
-    # Średnia real z warunkiem na liczbę nie-NaN
-    valid_count_real = real_df_daily.notna().sum(axis=1)
-    mean_real = real_df_daily.mean(axis=1)
-    mean_real[valid_count_real <= (real_df_daily.shape[1] // 2)] = float('nan')
-    plt.plot(mean_real.index, mean_real.values, color='black', linewidth=3, label='Mean (real)')
+        real_col = f"real_current_{sensor}"
+        if real_col in df.columns:
+            real_columns.append(real_col)
+            y = df[real_col]
+            y_clean = y.dropna()
+            x_clean = y_clean.index
+            if not y_clean.empty and len(x_clean) == len(y_clean):
+                plt.scatter(x_clean, y_clean.values, s=1, label=sensor)
+    
+    # Calculate mean with condition on number of non-NaN values
+    if real_columns:
+        real_df = df[real_columns]
+        valid_count_real = real_df.notna().sum(axis=1)
+        mean_real = real_df.mean(axis=1)
+        mean_real[valid_count_real <= (len(real_columns) // 2)] = float('nan')
+        plt.plot(mean_real.index, mean_real.values, color='black', linewidth=3, label='Mean (real)')
     plt.xlim(start_date, end_date)
     plt.ylabel('Current (mA)')
     plt.title('Real Current for All Sensors')
     plt.grid(True)
     plt.tight_layout()
     plt.legend(loc='center left', bbox_to_anchor=(1.01, 0.5), title='Sensors', fontsize='small')
-    plt.savefig(os.path.join(output_dir, "all_real.png"), bbox_inches='tight')
+    if output_dir is not None:
+        plt.savefig(os.path.join(output_dir, "all_real.png"), bbox_inches='tight')
     plt.show()
     plt.close()
 
@@ -176,7 +208,7 @@ def plot_temperature_only(result_df: pd.DataFrame, output_path: str = None, star
     plt.show()
 
 
-def plot_simulated_simple(simulated_df, sensors, output_path="out_data/all_simulated_simple.png", start_date=None, end_date=None):
+def plot_simulated_simple(simulated_df, sensors, output_path=None, start_date=None, end_date=None):
     plt.figure(figsize=(12, 8))
     for sensor in sensors:
         if sensor not in simulated_df.columns:
@@ -194,16 +226,18 @@ def plot_simulated_simple(simulated_df, sensors, output_path="out_data/all_simul
     plt.title('Simulated current for all sensors (simple overlay)')
     plt.grid(True)
     plt.tight_layout()
-    plt.savefig(output_path)
+    if output_path:
+        plt.savefig(output_path)
     plt.close()
 
 
-def plot_simulated_pandas(simulated_df, output_path="out_data/all_simulated_pandas.png"):
+def plot_simulated_pandas(simulated_df, output_path=None):
     import matplotlib.pyplot as plt
     plt.figure(figsize=(12, 8))
     simulated_df.plot(ax=plt.gca(), legend=False, alpha=0.7)
     plt.ylabel("Simulated current (mA)")
     plt.title("Simulated current for all sensors (pandas plot)")
     plt.tight_layout()
-    plt.savefig(output_path)
+    if output_path:
+        plt.savefig(output_path)
     plt.close()
