@@ -3,22 +3,26 @@ import matplotlib.pyplot as plt
 import pandas as pd
 
 
-def plot_leakage_current(result_df: pd.DataFrame, current_sample_df: pd.DataFrame, sensor_name: str, 
+def plot_leakage_current(df: pd.DataFrame, sensor_name: str, 
                          output_path: str = None, start_date: pd.Timestamp = None, end_date: pd.Timestamp = None):
-    if sensor_name in current_sample_df.columns:
-        real_current = current_sample_df[sensor_name]
-    else:
-        raise ValueError(f"Sensor {sensor_name} not found in the current sample file.")
+    """Plot detailed view of currents, fluence and temperature for a sensor."""
+    sim_col = f"current_{sensor_name}"
+    real_col = f"real_current_{sensor_name}"
+    temp_col = f"temperature_{sensor_name}"
+    fluence_col = f"fluence_{sensor_name}"
+    
+    if sim_col not in df.columns:
+        raise ValueError(f"Simulated current column not found for sensor {sensor_name}")
 
     if start_date is None:
-        start_date = min(result_df.index.min(), real_current.index.min())
+        start_date = df.index.min()
     if end_date is None:
-        end_date = max(result_df.index.max(), real_current.index.max())
+        end_date = df.index.max()
 
     plt.figure(figsize=(12, 16))
     
     plt.subplot(4, 1, 1)
-    plt.scatter(result_df.index, result_df['current'], color='blue', s=1, label='Leakage Current Simulated')
+    plt.scatter(df.index, df[sim_col], color='blue', s=1, label='Leakage Current Simulated')
     plt.xlim(start_date, end_date)
     plt.ylim(0, 0.3)
     plt.ylabel('Current (mA)')
@@ -26,34 +30,39 @@ def plot_leakage_current(result_df: pd.DataFrame, current_sample_df: pd.DataFram
     plt.grid(True)
     plt.legend()
     
-    plt.subplot(4, 1, 2)
-    plt.scatter(real_current.index, real_current, color='red', s=1, label='Leakage Current (Real Data)')
-    plt.xlim(start_date, end_date)
-    plt.ylabel('Current (mA)')
-    plt.ylim(0, 0.3)
-    plt.title(f'Real Leakage Current for Sensor {sensor_name}')
-    plt.grid(True)
-    plt.legend()
+    if real_col in df.columns:
+        plt.subplot(4, 1, 2)
+        plt.scatter(df.index, df[real_col], color='red', s=1, label='Leakage Current (Real Data)')
+        plt.xlim(start_date, end_date)
+        plt.ylabel('Current (mA)')
+        plt.ylim(0, 0.3)
+        plt.title(f'Real Leakage Current for Sensor {sensor_name}')
+        plt.grid(True)
+        plt.legend()
     
-    plt.subplot(4, 1, 3)
-    plt.scatter(result_df.index, result_df['fluence'], color='green', s=1, label='Fluence')
-    plt.xlim(start_date, end_date)
-    plt.ylabel('Fluence (n/cm²)')
-    plt.title('Fluence')
-    plt.grid(True)
-    plt.legend()
+    if fluence_col in df.columns:
+        plt.subplot(4, 1, 3)
+        plt.scatter(df.index, df[fluence_col], color='green', s=1, label='Fluence')
+        plt.xlim(start_date, end_date)
+        plt.ylabel('Fluence (n/cm²)')
+        plt.title('Fluence')
+        plt.grid(True)
+        plt.legend()
     
-    plt.subplot(4, 1, 4)
-    plt.scatter(result_df.index, result_df['temperature'], color='magenta', s=1, label='Temperature')
-    plt.xlim(start_date, end_date)
-    plt.ylabel('Temperature (K)')
-    plt.title('Temperature')
-    plt.grid(True)
-    plt.legend()
+    if temp_col in df.columns:
+        plt.subplot(4, 1, 4)
+        plt.scatter(df.index, df[temp_col], color='magenta', s=1, label='Temperature')
+        plt.xlim(start_date, end_date)
+        plt.ylabel('Temperature (K)')
+        plt.title('Temperature')
+        plt.grid(True)
+        plt.legend()
 
+    plt.tight_layout()
     if output_path:
         plt.savefig(output_path)
     plt.show()
+    plt.close()
 
 
 def plot_simulated_vs_real(df, sensor_name, output_path=None, start_date=None, end_date=None, weekly_average=False):

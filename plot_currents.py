@@ -5,7 +5,7 @@ import argparse
 import pandas as pd
 
 
-from config import Paths, SIMULATION_PERIOD, CURRENT_TEMP_MODE
+from config import Paths, CURRENT_TEMP_MODE
 from params import Parameters
 params = Parameters()
 import current_preparation_lib as cpl
@@ -89,24 +89,23 @@ def main():
     
     result_df = df[all_filtered_columns]
     
-    # Zastosuj filtr daty początkowej jeśli podano
     if args.start_date:
         start_date = pd.to_datetime(args.start_date)
         result_df = result_df[result_df.index >= start_date]
-    
-    # Apply temperature adjustment based on mode
-    if not args.all_sensors:
-        if CURRENT_TEMP_MODE == 'adjust_real':
-            result_df = cpl.adjust_real_current_with_temperature(result_df, params, args.sensor)
-        elif CURRENT_TEMP_MODE == 'adjust_sim':
-            result_df = cpl.adjust_simulated_current_with_temperature(result_df, params, args.sensor)
-    
-    # Wyświetl wykresy lub zapisz do pliku
+
+
+    if CURRENT_TEMP_MODE == 'adjust_real':
+        result_df = cpl.adjust_real_current_with_temperature(result_df, params, sensors_to_use)
+    elif CURRENT_TEMP_MODE == 'adjust_sim':
+        result_df = cpl.adjust_simulated_current_with_temperature(result_df, params, sensors_to_use)
+
+
     if not args.all_sensors:
         import plot_utils
         sensor = args.sensor
-        print(f"Creating plot for sensor {sensor}")
+        print(f"Creating plots for sensor {sensor}")
         plot_utils.plot_simulated_vs_real(result_df, sensor)
+        plot_utils.plot_leakage_current(result_df, sensor)
     else:
         import plot_utils
         print(f"Creating plots for all {len(sensors_to_use)} sensors")
