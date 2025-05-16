@@ -64,7 +64,6 @@ def align_temperature_to_fluence(fluence_df: pd.DataFrame, temp_df: pd.DataFrame
     freq_seconds = pd.to_timedelta(SIMULATION_PERIOD.lower()).total_seconds()
     time_diff_seconds = (fluence_series.index[0] - temp_series.index[0]).total_seconds()
     modulo = time_diff_seconds % freq_seconds
-    # tu bedzie modulo ok
     print(f"SIMULATION_PERIOD: {SIMULATION_PERIOD}")
     print(f"First fluence record: {fluence_series.index[0]}")
     print(f"First temperature record: {temp_series.index[0]}")
@@ -85,43 +84,32 @@ def align_temperature_to_fluence(fluence_df: pd.DataFrame, temp_df: pd.DataFrame
     
     print(f"Minimum modulo possible: {min_modulo} seconds")
     print(f"Records to remove from temperature: {records_to_remove}")
-    
-    # Usunięcie początkowych rekordów, aby zminimalizować modulo
     if records_to_remove > 0:
         temp_series = temp_series.iloc[records_to_remove:]
         print(f"Removed {records_to_remove} records from temperature series")
         print(f"New first temperature record: {temp_series.index[0]}")
 
-    
-    print(f"Fluence series length: {len(fluence_series)}")
-    # dotąd jest dobrze
-    # Obliczenie modulo po usunięciu rekordów
     new_time_diff = (fluence_series.index[0] - temp_series.index[0]).total_seconds()
     remaining_modulo = new_time_diff % freq_seconds
     print(f"Modulo after removing records: {remaining_modulo} seconds")
     
-    # Przesunięcie TYLKO pierwszej wartości o wartość modulo
     if remaining_modulo != 0:
-
         old_index = temp_series.index.tolist()
         old_index[0] = old_index[0] + timedelta(seconds=remaining_modulo)
         temp_series.index = old_index
         print(f"Adjusted first temperature record by {remaining_modulo} seconds")
         print(f"New first temperature record: {temp_series.index[0]}")
     
-    # Obliczanie modulo po przesunięciu pierwszej wartości
     final_diff = (fluence_series.index[0] - temp_series.index[0]).total_seconds()
     final_modulo_before_resample = final_diff % freq_seconds
     print(f"Modulo after adjusting first record: {final_modulo_before_resample} seconds")
     
-    # Zapamiętaj dokładny czas pierwszego rekordu fluencji przed resamplingiem
     first_fluence_time = fluence_series.index[0]
     first_temp_time = temp_series.index[0]
     
     print(f"First fluence time: {first_fluence_time}")
     print(f"First temperature time: {first_temp_time}")
 
-    # Teraz wykonujemy resampling
     fluence_series = fluence_series.resample(SIMULATION_PERIOD.lower(), origin='start').sum()
     temp_series = temp_series.resample(SIMULATION_PERIOD.lower(), origin='start').mean()
     temp_series = temp_series.ffill().bfill()
@@ -132,21 +120,34 @@ def align_temperature_to_fluence(fluence_df: pd.DataFrame, temp_df: pd.DataFrame
     print(f"First fluence time after resampling: {first_fluence_time}")
     print(f"First temperature time after resampling: {first_temp_time}")
 
-    # Sprawdź modulo po resamplingu
     resampled_modulo = (fluence_series.index[0] - temp_series.index[0]).total_seconds() % freq_seconds
     print(f"Modulo after resampling: {resampled_modulo} seconds")
     
-    # Sprawdź, czy indeksy są zrównane po resamplingu
     final_modulo = (fluence_series.index[0] - temp_series.index[0]).total_seconds() % freq_seconds
     print(f"Final modulo: {final_modulo} seconds")
     return fluence_series, temp_series
 
 
-
 def prepare_sensor_data(fluence_df: pd.DataFrame, temp_df: pd.DataFrame, sensor_name: str) -> tuple:
     fluence_series, temp_series = align_temperature_to_fluence(fluence_df, temp_df, sensor_name)
-    common_index = fluence_series.index.intersection(temp_series.index)
-    return fluence_series[common_index], temp_series[common_index]
+    print("\nDiagnostic info for prepare_sensor_data:")
+    print(f"Fluence series length before union: {len(fluence_series)}")
+    print(f"Temperature series length before union: {len(temp_series)}")
+    print(f"Fluence series time range: {fluence_series.index[0]} to {fluence_series.index[-1]}")
+    print(f"Temperature series time range: {temp_series.index[0]} to {temp_series.index[-1]}")
+    
+    all_index = fluence_series.index.union(temp_series.index)
+    print(f"Combined index length: {len(all_index)}")
+    print(f"Combined index range: {all_index[0]} to {all_index[-1]}")
+    
+    result_fluence = fluence_series.reindex(all_index, fill_value=0)
+    result_temp = temp_series.reindex(all_index, method='ffill').fillna(method='bfill')
+    
+    print(f"Final data points: {len(result_fluence)}")
+    print(f"Missing fluence points filled: {len(all_index) - len(fluence_series)}")
+    print(f"Missing temperature points filled: {len(all_index) - len(temp_series)}\n")
+    
+    return result_fluence, result_temp
 
 @njit
 def calculate_leakage_current(fluence, time_tau, time_theta, alpha_I, alpha_0_star, beta, V):
@@ -221,12 +222,13 @@ def simulate_current_sensor(fluence_series: pd.Series, temp_series: pd.Series, p
         })
     return combined
 
+
 def process_all_sensors(fluence_df, temp_df, params, common_sensors):
     if not common_sensors:
         print("No sensors to process. Empty list provided.")
         return None
         
-    all_simulated = {}
+    result_df = None
     failed_sensors = []
     
     for sensor in tqdm.tqdm(common_sensors, desc="Processing sensors"):
@@ -240,79 +242,46 @@ def process_all_sensors(fluence_df, temp_df, params, common_sensors):
 
             fluence_series, temp_series = prepare_sensor_data(fluence_df, temp_df, sensor)
             sim_df = simulate_current_sensor(fluence_series, temp_series, params, sensor_name=sensor)
-            all_simulated[sensor] = sim_df
+            # Resample każdy sim_df osobno
+            sim_df = sim_df.resample(SIMULATION_PERIOD.lower(), origin=sim_df.index[0]).ffill()
+            
+            if result_df is None:
+                result_df = sim_df
+            else:
+                result_df = pd.concat([result_df, sim_df], axis=1, join='outer')
+                
         except Exception as e:
             print(f"Error processing sensor {sensor}: {str(e)}")
             failed_sensors.append(sensor)
+            
     if failed_sensors:
         print(f"Failed to process {len(failed_sensors)} sensors: {', '.join(failed_sensors[:5])}" + (f" and {len(failed_sensors)-5} more" if len(failed_sensors) > 5 else ""))
-    if len(all_simulated) == 0:
+    if result_df is None:
         print("No sensors were successfully processed")
         return None
-    if len(all_simulated) == 1:
-        return list(all_simulated.values())[0]
-    return pd.concat(all_simulated.values(), axis=1, join='outer')
-
-
-
-@njit
-def _aggregate_window_means(sim_timestamps, real_timestamps, real_values, time_windows):
-    """
-    Optymalizowana przez numba funkcja do obliczania średnich wartości dla okien czasowych.
-    
-    Args:
-        sim_timestamps: numpy array z timestampami symulacji (w nanosekundach)
-        real_timestamps: numpy array z timestampami rzeczywistych danych (w nanosekundach)
-        real_values: numpy array z wartościami rzeczywistych prądów
-        time_windows: numpy array z szerokościami okien czasowych (w nanosekundach)
-    
-    Returns:
-        numpy array z zagregowanymi średnimi (NaN dla pustych okien)
-    """
-    result = np.full(len(sim_timestamps), np.nan)
-    
-    for i in range(len(sim_timestamps)):
-        if np.isnan(time_windows[i]) or time_windows[i] <= 0:
-            continue
         
-        start_time = sim_timestamps[i]
-        end_time = start_time + time_windows[i]
-        
-        sum_values = 0.0
-        count = 0
-        for j in range(len(real_timestamps)):
-            if real_timestamps[j] >= start_time and real_timestamps[j] < end_time:
-                if not np.isnan(real_values[j]):
-                    sum_values += real_values[j]
-                    count += 1
-        if count > 0:
-            result[i] = sum_values / count
-    
-    return result
+    return result_df
+
 
 def aggregate_real_current_data(simulated_df, real_df, sensors):
-
     if real_df is None or simulated_df is None:
         return None
     
     result_data = {}
-    
     for sensor in sensors:
-        time_col = f"time_{sensor}"
         real_col = f"real_current_{sensor}"
-        
-        if time_col not in simulated_df.columns or real_col not in real_df.columns:
+        if real_col not in real_df.columns:
             continue
+            
+        # Resample używając tego samego okresu i punktu startowego co dane symulowane
+        resampled = real_df[real_col].resample(
+            SIMULATION_PERIOD.lower(),
+            origin=simulated_df.index[0]
+        ).mean()
         
-        sim_timestamps = np.array(simulated_df.index.astype(np.int64).values)
-        real_timestamps = np.array(real_df.index.astype(np.int64).values)
-        real_values = np.array(real_df[real_col].values, dtype=np.float64)
+        # Zachowaj tylko dane dla indeksów z simulated_df
+        result_data[real_col] = resampled.reindex(simulated_df.index)
         
-        time_windows = np.array(simulated_df[time_col].values * 1e9, dtype=np.float64)
-
-        aggregated_values = _aggregate_window_means(sim_timestamps, real_timestamps, real_values, time_windows)
-        result_data[real_col] = pd.Series(aggregated_values, index=simulated_df.index)
-
     return pd.DataFrame(result_data)
 
 
