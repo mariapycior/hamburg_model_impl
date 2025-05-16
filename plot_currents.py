@@ -48,6 +48,20 @@ def load_simulated_data(simulated_path):
         print(f"Error loading simulated data: {e}")
         return None
 
+def dataframe_preparation(df: pd.DataFrame, start_date=None, sensors_to_use=None) -> pd.DataFrame:
+    """Prepare DataFrame by applying date filtering and temperature adjustments."""
+    result_df = df.copy()
+    
+    if start_date:
+        start_date = pd.to_datetime(start_date)
+        result_df = result_df[result_df.index >= start_date]
+
+    if CURRENT_TEMP_MODE == 'adjust_real':
+        result_df = cpl.adjust_real_current_with_temperature(result_df, params, sensors_to_use)
+    elif CURRENT_TEMP_MODE == 'adjust_sim':
+        result_df = cpl.adjust_simulated_current_with_temperature(result_df, params, sensors_to_use)
+        
+    return result_df
 
 def main():
     args = parse_arguments()
@@ -89,17 +103,9 @@ def main():
     
     result_df = df[all_filtered_columns]
     
-    if args.start_date:
-        start_date = pd.to_datetime(args.start_date)
-        result_df = result_df[result_df.index >= start_date]
-
-
-    if CURRENT_TEMP_MODE == 'adjust_real':
-        result_df = cpl.adjust_real_current_with_temperature(result_df, params, sensors_to_use)
-    elif CURRENT_TEMP_MODE == 'adjust_sim':
-        result_df = cpl.adjust_simulated_current_with_temperature(result_df, params, sensors_to_use)
-
-
+    # Apply date filtering and temperature adjustments
+    result_df = dataframe_preparation(result_df, args.start_date, sensors_to_use)
+    
     if not args.all_sensors:
         import plot_utils
         sensor = args.sensor
