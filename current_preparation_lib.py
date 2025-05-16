@@ -21,30 +21,42 @@ def adjust_real_current_with_temperature(df: pd.DataFrame, params, sensors: list
     return out
 
 
-def set_temperature_where_fluence_zero(data: pd.DataFrame, value: float = 261.15, min_duration_days: int = 30) -> pd.DataFrame:
+def set_temperature_where_fluence_zero(data: pd.DataFrame, sensors: list, value: float = 261.15, min_duration_days: int = 30) -> pd.DataFrame:
+    """Set temperature values where fluence is zero, handling multiple sensors."""
     out = data.copy()
-    if 'fluence' not in out.columns or 'temperature' not in out.columns:
-        return out
-    zero_mask = (out['fluence'] == 0)
-    if zero_mask.sum() == 0:
-        out.loc[(out['temperature'] < 260) | (out['temperature'] > 264), 'temperature'] = float('nan')
-        return out
-    zero_groups = (zero_mask != zero_mask.shift()).cumsum()
-    group_ids = zero_groups[zero_mask].unique()
-    freq_minutes = int(pd.to_timedelta(SIMULATION_PERIOD.lower()).total_seconds() // 60)
-    min_points = (min_duration_days * 24 * 60) // freq_minutes
-    for gid in group_ids:
-        idx = zero_groups[zero_groups == gid].index
-        if len(idx) >= min_points:
-            out.loc[idx, 'temperature'] = value
-        else:
-            out.loc[idx, 'temperature'] = float('nan')
-    out.loc[(out['temperature'] < 260) | (out['temperature'] > 290), 'temperature'] = float('nan')
+    
+    for sensor in sensors:
+        fluence_col = f"fluence_{sensor}"
+        temp_col = f"temperature_{sensor}"
+        
+        if fluence_col not in out.columns or temp_col not in out.columns:
+            continue
+            
+        zero_mask = (out[fluence_col] == 0)
+        if zero_mask.sum() == 0:
+            out.loc[(out[temp_col] < 260) | (out[temp_col] > 264), temp_col] = float('nan')
+            continue
+            
+        zero_groups = (zero_mask != zero_mask.shift()).cumsum()
+        group_ids = zero_groups[zero_mask].unique()
+        freq_minutes = int(pd.to_timedelta(SIMULATION_PERIOD.lower()).total_seconds() // 60)
+        min_points = (min_duration_days * 24 * 60) // freq_minutes
+        
+        for gid in group_ids:
+            idx = zero_groups[zero_groups == gid].index
+            if len(idx) >= min_points:
+                out.loc[idx, temp_col] = value
+            else:
+                out.loc[idx, temp_col] = float('nan')
+                
+        out.loc[(out[temp_col] < 260) | (out[temp_col] > 290), temp_col] = float('nan')
+    
     return out
 
 def adjust_simulated_current_with_temperature(df: pd.DataFrame, params, sensors: list) -> pd.DataFrame:
     """Adjust simulated current with temperature for multiple sensors."""
     out = df.copy()
+    out = set_temperature_where_fluence_zero(out, sensors)
     for sensor in sensors:
         sim_col = f"current_{sensor}"
         temp_col = f"temperature_{sensor}"

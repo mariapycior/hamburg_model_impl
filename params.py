@@ -12,7 +12,7 @@ T_REF = 294.15  # Reference temperature in K
 # Hamburg model parameters
 E_I_STAR = 1.30  # Energy in eV
 ALPHA_I = 1.23e-17  # Current-related damage rate in A/cm
-ALPHA_0_STAR = 6.74e-17  # Current-related damage coefficient in A/cm
+ALPHA_0_STAR = 7.07e-17  # Current-related damage coefficient in A/cm
 BETA = 3.29e-18  # Second order damage coefficient in A/cm
 E_I = 1.11  # Activation energy in eV
 K_0I = 1.2e13  # Frequency factor in s^-1

@@ -30,6 +30,7 @@ def load_temperature_data(file_path: str) -> pd.DataFrame:
         raise FileNotFoundError(f"Temperature file not found: {file_path}")
     df = pd.read_csv(file_path, index_col="TS", parse_dates=["TS"])
     df = df.dropna(how='all')
+    #df = df + 3.2 
     return df
 
 def load_data(fluence_file: str, temp_files: list) -> tuple:
@@ -99,10 +100,6 @@ def align_temperature_to_fluence(fluence_df: pd.DataFrame, temp_df: pd.DataFrame
         temp_series.index = old_index
         #logger.info(f"Adjusted first temperature record by {remaining_modulo} seconds")
         #logger.info(f"New first temperature record: {temp_series.index[0]}")
-    
-    final_diff = (fluence_series.index[0] - temp_series.index[0]).total_seconds()
-    #final_modulo_before_resample = final_diff % freq_seconds
-    #logger.info(f"Modulo after adjusting first record: {final_modulo_before_resample} seconds")
 
     fluence_series = fluence_series.resample(SIMULATION_PERIOD.lower(), origin='start').sum()
     temp_series = temp_series.resample(SIMULATION_PERIOD.lower(), origin='start').mean()
