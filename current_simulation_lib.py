@@ -1,3 +1,4 @@
+from logger_config import setup_logger
 import numpy as np
 import pandas as pd
 from datetime import timedelta
@@ -5,6 +6,8 @@ import tqdm
 import os
 from config import CURRENT_YEAR_LIST, CURRENT_YEAR_RANGES, SIMULATION_PERIOD, RUN_MODE, SENSOR_NAME, CURRENT_TEMP_MODE, OUTPUT_SIMULATED_DF_PATH
 from numba import njit
+
+logger = setup_logger('current_simulation_lib')
 
 def load_avg_fluence(file_path: str) -> pd.DataFrame:
     if not os.path.exists(file_path):
@@ -40,7 +43,7 @@ def load_data(fluence_file: str, temp_files: list) -> tuple:
         try:
             temp_dfs.append(load_temperature_data(temp_file))
         except Exception as e:
-            print(f"Skipping temperature file {temp_file} due to error: {str(e)}")
+            logger.warning(f"Skipping temperature file {temp_file} due to error: {str(e)}")
             
     if not temp_dfs:
         raise ValueError("No valid temperature data could be loaded")
@@ -64,11 +67,10 @@ def align_temperature_to_fluence(fluence_df: pd.DataFrame, temp_df: pd.DataFrame
     freq_seconds = pd.to_timedelta(SIMULATION_PERIOD.lower()).total_seconds()
     time_diff_seconds = (fluence_series.index[0] - temp_series.index[0]).total_seconds()
     modulo = time_diff_seconds % freq_seconds
-    print(f"SIMULATION_PERIOD: {SIMULATION_PERIOD}")
-    print(f"First fluence record: {fluence_series.index[0]}")
-    print(f"First temperature record: {temp_series.index[0]}")
-    print(f"Time difference: {time_diff_seconds} seconds")
-    print(f"Modulo with simulation period: {modulo} seconds")
+    logger.info(f"SIMULATION_PERIOD: {SIMULATION_PERIOD}")
+    logger.info(f"First fluence record: {fluence_series.index[0]}")
+    logger.info(f"First temperature record: {temp_series.index[0]}")
+    logger.info(f"Modulo with simulation period: {modulo} seconds")
     
     min_modulo = modulo
     records_to_remove = 0
@@ -81,71 +83,45 @@ def align_temperature_to_fluence(fluence_df: pd.DataFrame, temp_df: pd.DataFrame
         if new_modulo < min_modulo:
             min_modulo = new_modulo
             records_to_remove = i
-    
-    print(f"Minimum modulo possible: {min_modulo} seconds")
-    print(f"Records to remove from temperature: {records_to_remove}")
+
     if records_to_remove > 0:
         temp_series = temp_series.iloc[records_to_remove:]
-        print(f"Removed {records_to_remove} records from temperature series")
-        print(f"New first temperature record: {temp_series.index[0]}")
+        logger.info(f"Removed {records_to_remove} records from temperature series")
+        #logger.info(f"New first temperature record: {temp_series.index[0]}")
 
     new_time_diff = (fluence_series.index[0] - temp_series.index[0]).total_seconds()
     remaining_modulo = new_time_diff % freq_seconds
-    print(f"Modulo after removing records: {remaining_modulo} seconds")
+    #logger.info(f"Modulo after removing records: {remaining_modulo} seconds")
     
     if remaining_modulo != 0:
         old_index = temp_series.index.tolist()
         old_index[0] = old_index[0] + timedelta(seconds=remaining_modulo)
         temp_series.index = old_index
-        print(f"Adjusted first temperature record by {remaining_modulo} seconds")
-        print(f"New first temperature record: {temp_series.index[0]}")
+        #logger.info(f"Adjusted first temperature record by {remaining_modulo} seconds")
+        #logger.info(f"New first temperature record: {temp_series.index[0]}")
     
     final_diff = (fluence_series.index[0] - temp_series.index[0]).total_seconds()
-    final_modulo_before_resample = final_diff % freq_seconds
-    print(f"Modulo after adjusting first record: {final_modulo_before_resample} seconds")
-    
-    first_fluence_time = fluence_series.index[0]
-    first_temp_time = temp_series.index[0]
-    
-    print(f"First fluence time: {first_fluence_time}")
-    print(f"First temperature time: {first_temp_time}")
+    #final_modulo_before_resample = final_diff % freq_seconds
+    #logger.info(f"Modulo after adjusting first record: {final_modulo_before_resample} seconds")
 
     fluence_series = fluence_series.resample(SIMULATION_PERIOD.lower(), origin='start').sum()
     temp_series = temp_series.resample(SIMULATION_PERIOD.lower(), origin='start').mean()
     temp_series = temp_series.ffill().bfill()
     
-    first_fluence_time = fluence_series.index[0]
-    first_temp_time = temp_series.index[0]
-    
-    print(f"First fluence time after resampling: {first_fluence_time}")
-    print(f"First temperature time after resampling: {first_temp_time}")
-
-    resampled_modulo = (fluence_series.index[0] - temp_series.index[0]).total_seconds() % freq_seconds
-    print(f"Modulo after resampling: {resampled_modulo} seconds")
-    
     final_modulo = (fluence_series.index[0] - temp_series.index[0]).total_seconds() % freq_seconds
-    print(f"Final modulo: {final_modulo} seconds")
+    logger.info(f"Final modulo: {final_modulo} seconds")
     return fluence_series, temp_series
 
 
 def prepare_sensor_data(fluence_df: pd.DataFrame, temp_df: pd.DataFrame, sensor_name: str) -> tuple:
     fluence_series, temp_series = align_temperature_to_fluence(fluence_df, temp_df, sensor_name)
-    print("\nDiagnostic info for prepare_sensor_data:")
-    print(f"Fluence series length before union: {len(fluence_series)}")
-    print(f"Temperature series length before union: {len(temp_series)}")
-    print(f"Fluence series time range: {fluence_series.index[0]} to {fluence_series.index[-1]}")
-    print(f"Temperature series time range: {temp_series.index[0]} to {temp_series.index[-1]}")
-    
+
     all_index = fluence_series.index.union(temp_series.index)
-    print(f"Combined index length: {len(all_index)}")
-    print(f"Combined index range: {all_index[0]} to {all_index[-1]}")
-    
     result_fluence = fluence_series.reindex(all_index, fill_value=0)
-    result_temp = temp_series.reindex(all_index, method='ffill').fillna(method='bfill')
-    
-    print(f"Final data points: {len(result_fluence)}")
-    print(f"Missing fluence points filled: {len(all_index) - len(fluence_series)}")
-    print(f"Missing temperature points filled: {len(all_index) - len(temp_series)}\n")
+    result_temp = temp_series.reindex(all_index).ffill().bfill()
+
+    logger.info(f"Missing fluence points filled: {len(all_index) - len(fluence_series)}")
+    logger.info(f"Missing temperature points filled: {len(all_index) - len(temp_series)}\n")
     
     return result_fluence, result_temp
 
@@ -225,7 +201,7 @@ def simulate_current_sensor(fluence_series: pd.Series, temp_series: pd.Series, p
 
 def process_all_sensors(fluence_df, temp_df, params, common_sensors):
     if not common_sensors:
-        print("No sensors to process. Empty list provided.")
+        logger.info("No sensors to process. Empty list provided.")
         return None
         
     result_df = None
@@ -242,7 +218,6 @@ def process_all_sensors(fluence_df, temp_df, params, common_sensors):
 
             fluence_series, temp_series = prepare_sensor_data(fluence_df, temp_df, sensor)
             sim_df = simulate_current_sensor(fluence_series, temp_series, params, sensor_name=sensor)
-            # Resample każdy sim_df osobno
             sim_df = sim_df.resample(SIMULATION_PERIOD.lower(), origin=sim_df.index[0]).ffill()
             
             if result_df is None:
@@ -251,13 +226,13 @@ def process_all_sensors(fluence_df, temp_df, params, common_sensors):
                 result_df = pd.concat([result_df, sim_df], axis=1, join='outer')
                 
         except Exception as e:
-            print(f"Error processing sensor {sensor}: {str(e)}")
+            logger.error(f"Error processing sensor {sensor}: {str(e)}")
             failed_sensors.append(sensor)
             
     if failed_sensors:
-        print(f"Failed to process {len(failed_sensors)} sensors: {', '.join(failed_sensors[:5])}" + (f" and {len(failed_sensors)-5} more" if len(failed_sensors) > 5 else ""))
+        logger.warning(f"Failed to process {len(failed_sensors)} sensors: {', '.join(failed_sensors[:5])}" + (f" and {len(failed_sensors)-5} more" if len(failed_sensors) > 5 else ""))
     if result_df is None:
-        print("No sensors were successfully processed")
+        logger.info("No sensors were successfully processed")
         return None
         
     return result_df
@@ -273,13 +248,11 @@ def aggregate_real_current_data(simulated_df, real_df, sensors):
         if real_col not in real_df.columns:
             continue
             
-        # Resample używając tego samego okresu i punktu startowego co dane symulowane
         resampled = real_df[real_col].resample(
             SIMULATION_PERIOD.lower(),
             origin=simulated_df.index[0]
         ).mean()
         
-        # Zachowaj tylko dane dla indeksów z simulated_df
         result_data[real_col] = resampled.reindex(simulated_df.index)
         
     return pd.DataFrame(result_data)
@@ -299,7 +272,7 @@ def load_real_current_data(paths):
                 else:
                     real_all_df = pd.concat([real_all_df, df], axis=0)
             except Exception as e:
-                print(f"Error loading {file_path}: {e}")
+                logger.error(f"Error loading {file_path}: {e}")
     
     if real_all_df.empty:
         return None
@@ -314,8 +287,6 @@ def load_real_current_data(paths):
     return real_all_df
 
 
-### checked
-
 def run_leakage_current_pipeline(fluence_file, temp_files, params, sensor_name=None, available_sensors=None, real_df=None):
     fluence_df, temp_df = load_data(fluence_file, temp_files)
     
@@ -323,7 +294,7 @@ def run_leakage_current_pipeline(fluence_file, temp_files, params, sensor_name=N
     sensors_to_process = [sensor_name] if sensor_name else available_sensors
     
     if not sensors_to_process:
-        print("No sensors available for processing")
+        logger.info("No sensors available for processing")
         return None, []
     
     # Process all sensors
@@ -337,10 +308,10 @@ def run_leakage_current_pipeline(fluence_file, temp_files, params, sensor_name=N
     if real_df is not None:
         aggregated_real_df = aggregate_real_current_data(simulated_df, real_df, processed_sensors)
         if aggregated_real_df is not None and not aggregated_real_df.empty:
-            print(f"Simulation completed with real current data for {len(processed_sensors)} sensors.")
+            logger.info(f"Simulation completed with real current data for {len(processed_sensors)} sensors.")
             return pd.concat([simulated_df, aggregated_real_df], axis=1), processed_sensors
         else:
-            print(f"Warning: Real current data was provided but could not be aggregated.")
+            logger.warning(f"Real current data was provided but could not be aggregated.")
     
-    print(f"Simulation completed for {len(processed_sensors)} sensors. No real current data added.")
+    logger.info(f"Simulation completed for {len(processed_sensors)} sensors. No real current data added.")
     return simulated_df, processed_sensors

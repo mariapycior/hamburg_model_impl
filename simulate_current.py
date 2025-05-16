@@ -8,6 +8,9 @@ from config import (
 from params import Parameters
 import current_simulation_lib
 from current_simulation_lib import load_real_current_data
+from logger_config import setup_logger
+
+logger = setup_logger('simulate_current')
 
 def get_available_sensors(fluence_file):
     fluence_df = pd.read_csv(fluence_file, skiprows=4)
@@ -27,7 +30,7 @@ def prepare_inputs(selected_years):
 def run_all_sensors(selected_years):
     params, paths, fluence_file, temp_files = prepare_inputs(selected_years)
     available_sensors = get_available_sensors(fluence_file)
-    print(f"Found {len(available_sensors)} sensors available")
+    logger.info(f"Found {len(available_sensors)} sensors available")
     
     real_df = load_real_current_data(paths)
     
@@ -38,7 +41,7 @@ def run_all_sensors(selected_years):
     
     if simulated_df is not None:
         if len(sensors) < len(available_sensors):
-            print(f"Warning: Only {len(sensors)} out of {len(available_sensors)} sensors have complete data")
+            logger.warning(f"Only {len(sensors)} out of {len(available_sensors)} sensors have complete data")
         
         output_path = paths.get_output_file(OUTPUT_SIMULATED_DF_PATH)
         simulated_df.to_csv(output_path)
@@ -46,14 +49,14 @@ def run_all_sensors(selected_years):
         real_current_cols = [col for col in simulated_df.columns if col.startswith('real_current_')]
         if real_current_cols:
             real_data_sensors = len(real_current_cols)
-            print(f"Real current data added for {real_data_sensors} out of {len(sensors)} sensors.")
+            logger.info(f"Real current data added for {real_data_sensors} out of {len(sensors)} sensors.")
         else:
-            print("No real current data was found or added.")
+            logger.info("No real current data was found or added.")
             
-        print(f"Simulation completed for {len(sensors)} sensors. Results saved to {output_path}")
+        logger.info(f"Simulation completed for {len(sensors)} sensors. Results saved to {output_path}")
         return simulated_df, sensors
     else:
-        print("No data was processed. Check if sensors exist in both fluence and temperature datasets.")
+        logger.info("No data was processed. Check if sensors exist in both fluence and temperature datasets.")
         return pd.DataFrame(), []
 
 
@@ -68,40 +71,40 @@ def run_single_sensor(selected_years, sensor_name):
     )
     
     if simulated_df is not None:
-        print(f"Simulated DataFrame for sensor {sensor_name}:\n{simulated_df.head()}")
+        logger.info(f"Simulated DataFrame for sensor {sensor_name}:\n{simulated_df.head()}")
         
         real_current_col = f"real_current_{sensor_name}"
         if real_current_col in simulated_df.columns:
             not_null_values = simulated_df[real_current_col].count()
             if not_null_values > 0:
-                print(f"Real current data added for {sensor_name} with {not_null_values} non-null values.")
+                logger.info(f"Real current data added for {sensor_name} with {not_null_values} non-null values.")
             else:
-                print(f"Real current column exists for {sensor_name} but contains only null values.")
+                logger.info(f"Real current column exists for {sensor_name} but contains only null values.")
         else:
-            print(f"No real current data was found for sensor {sensor_name}.")
+            logger.info(f"No real current data was found for sensor {sensor_name}.")
         
         output_path = paths.get_output_file(OUTPUT_SIMULATED_DF_PATH)
         simulated_df.to_csv(output_path)
-        print(f"Simulation completed for sensor {sensor_name}. Results saved to {output_path}")
+        logger.info(f"Simulation completed for sensor {sensor_name}. Results saved to {output_path}")
         return simulated_df, sensor_name
     else:
-        print(f"Failed to process sensor {sensor_name}")
+        logger.info(f"Failed to process sensor {sensor_name}")
         return pd.DataFrame(), sensor_name
 
 if __name__ == "__main__":
     try:
         if RUN_MODE == "single":
-            print(f"Running simulation for single sensor: {SENSOR_NAME}")
+            logger.info(f"Running simulation for single sensor: {SENSOR_NAME}")
             sim, name = run_single_sensor(SELECTED_YEARS, SENSOR_NAME)
-            print(f"Simulation completed for {name}. Results saved to {OUTPUT_SIMULATED_DF_PATH}")
+            logger.info(f"Simulation completed for {name}. Results saved to {OUTPUT_SIMULATED_DF_PATH}")
         else:
-            print(f"Running simulation for all available sensors")
+            logger.info(f"Running simulation for all available sensors")
             sim, sensors = run_all_sensors(SELECTED_YEARS)
             if sensors:
-                print(f"Simulation completed for {len(sensors)} sensors. Results saved to {OUTPUT_SIMULATED_DF_PATH}")
+                logger.info(f"Simulation completed for {len(sensors)} sensors. Results saved to {OUTPUT_SIMULATED_DF_PATH}")
             else:
-                print("No sensors were processed successfully.")
+                logger.info("No sensors were processed successfully.")
     except Exception as e:
-        print(f"Error during simulation: {str(e)}")
+        logger.error(f"Error during simulation: {str(e)}")
         import traceback
         traceback.print_exc()
