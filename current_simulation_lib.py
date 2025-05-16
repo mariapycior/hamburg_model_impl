@@ -73,18 +73,8 @@ def align_temperature_to_fluence(fluence_df: pd.DataFrame, temp_df: pd.DataFrame
     
     min_modulo = modulo
     records_to_remove = 0
-    min_dataset = "none"
-    
-    max_fluence_check = min(len(fluence_series), int(freq_seconds / 60))
+
     max_temp_check = min(len(temp_series), int(freq_seconds / 60))
-    
-    for i in range(1, max_fluence_check):
-        new_time_diff = (fluence_series.index[i] - temp_series.index[0]).total_seconds()
-        new_modulo = new_time_diff % freq_seconds
-        if new_modulo < min_modulo:
-            min_modulo = new_modulo
-            records_to_remove = i
-            min_dataset = "fluence"
     
     for i in range(1, max_temp_check):
         new_time_diff = (fluence_series.index[0] - temp_series.index[i]).total_seconds()
@@ -92,22 +82,15 @@ def align_temperature_to_fluence(fluence_df: pd.DataFrame, temp_df: pd.DataFrame
         if new_modulo < min_modulo:
             min_modulo = new_modulo
             records_to_remove = i
-            min_dataset = "temperature"
     
     print(f"Minimum modulo possible: {min_modulo} seconds")
-    print(f"Records to remove from {min_dataset}: {records_to_remove}")
+    print(f"Records to remove from temperature: {records_to_remove}")
     
-    # Usunięcie początkowych rekordów, aby zminimalizować modulo
-    if min_dataset == "fluence" and records_to_remove > 0:
-        fluence_series = fluence_series.iloc[records_to_remove:]
-        print(f"Removed {records_to_remove} records from fluence series")
-        print(f"New first fluence record: {fluence_series.index[0]}")
-    elif min_dataset == "temperature" and records_to_remove > 0:
+    if records_to_remove > 0:
         temp_series = temp_series.iloc[records_to_remove:]
         print(f"Removed {records_to_remove} records from temperature series")
         print(f"New first temperature record: {temp_series.index[0]}")
     
-    # Korekta pozostałego modulo poprzez dostosowanie pierwszego rekordu temperatury
     new_time_diff = (fluence_series.index[0] - temp_series.index[0]).total_seconds()
     remaining_modulo = new_time_diff % freq_seconds
     if remaining_modulo != 0:
@@ -116,34 +99,25 @@ def align_temperature_to_fluence(fluence_df: pd.DataFrame, temp_df: pd.DataFrame
         print(f"Adjusted temperature time by {remaining_modulo} seconds")
         print(f"New first temperature record: {temp_series.index[0]}")
     
-    # Zapamiętaj dokładny czas pierwszego rekordu fluencji przed resamplingiem
     first_fluence_time = fluence_series.index[0]
-    
-    # Wykonaj resample
     fluence_series = fluence_series.resample(SIMULATION_PERIOD.lower()).sum()
     temp_series = temp_series.resample(SIMULATION_PERIOD.lower()).mean()
     temp_series = temp_series.ffill().bfill()
     
-    # Sprawdź modulo po resamplingu
     resampled_modulo = (fluence_series.index[0] - temp_series.index[0]).total_seconds() % freq_seconds
     print(f"Modulo after resampling: {resampled_modulo} seconds")
     
-    # Jeśli modulo nie jest zerowe, dostosuj indeksy czasowe po resamplingu
     if resampled_modulo != 0:
-        # Dostosuj oba szeregi do dokładnej daty pierwszego rekordu fluencji
         target_start_time = pd.Timestamp(first_fluence_time).floor(SIMULATION_PERIOD.lower())
         shift_fluence = target_start_time - fluence_series.index[0]
         shift_temp = target_start_time - temp_series.index[0]
-        
-        fluence_series.index = fluence_series.index + shift_fluence
-        temp_series.index = temp_series.index + shift_temp
-        print(f"Adjusted resampled series to align with: {target_start_time}")
+        fluence_series.index = fluence_series.index.map(lambda x: x + shift_fluence if x == fluence_series.index[0] else x)
+        temp_series.index = temp_series.index.map(lambda x: x + shift_temp if x == temp_series.index[0] else x)
+        print(f"Adjusted first index of resampled series to align with: {target_start_time}")
     
-    # Sprawdź, czy modulo teraz jest zerowe
     final_modulo = (fluence_series.index[0] - temp_series.index[0]).total_seconds() % freq_seconds
     print(f"Final modulo: {final_modulo} seconds")
     
-    # Utwórz pełny indeks i uzupełnij brakujące wartości
     full_index = pd.date_range(start=temp_series.index[0], end=temp_series.index[-1], freq=SIMULATION_PERIOD.lower())
     fluence_series = fluence_series.reindex(full_index, fill_value=0)
     return fluence_series, temp_series
@@ -279,15 +253,12 @@ def _aggregate_window_means(sim_timestamps, real_timestamps, real_values, time_w
     result = np.full(len(sim_timestamps), np.nan)
     
     for i in range(len(sim_timestamps)):
-        # Jeśli szerokość okna jest NaN lub <= 0, pomijamy
         if np.isnan(time_windows[i]) or time_windows[i] <= 0:
             continue
         
-        # Oblicz koniec przedziału czasowego
         start_time = sim_timestamps[i]
         end_time = start_time + time_windows[i]
         
-        # Wyszukaj wartości w tym przedziale
         sum_values = 0.0
         count = 0
         for j in range(len(real_timestamps)):
@@ -295,8 +266,6 @@ def _aggregate_window_means(sim_timestamps, real_timestamps, real_values, time_w
                 if not np.isnan(real_values[j]):
                     sum_values += real_values[j]
                     count += 1
-        
-        # Oblicz średnią jeśli znaleziono wartości
         if count > 0:
             result[i] = sum_values / count
     
