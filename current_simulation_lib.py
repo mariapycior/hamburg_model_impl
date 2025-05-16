@@ -60,11 +60,11 @@ def align_temperature_to_fluence(fluence_df: pd.DataFrame, temp_df: pd.DataFrame
         raise KeyError(f"Sensor {sensor_name} not found in temperature data")
     fluence_series = fluence_df[sensor_name]
     temp_series = temp_df[sensor_name]
-    
+    # pobrane dane
     freq_seconds = pd.to_timedelta(SIMULATION_PERIOD.lower()).total_seconds()
     time_diff_seconds = (fluence_series.index[0] - temp_series.index[0]).total_seconds()
     modulo = time_diff_seconds % freq_seconds
-    
+    # tu bedzie modulo ok
     print(f"SIMULATION_PERIOD: {SIMULATION_PERIOD}")
     print(f"First fluence record: {fluence_series.index[0]}")
     print(f"First temperature record: {temp_series.index[0]}")
@@ -73,7 +73,7 @@ def align_temperature_to_fluence(fluence_df: pd.DataFrame, temp_df: pd.DataFrame
     
     min_modulo = modulo
     records_to_remove = 0
-
+    
     max_temp_check = min(len(temp_series), int(freq_seconds / 60))
     
     for i in range(1, max_temp_check):
@@ -86,40 +86,60 @@ def align_temperature_to_fluence(fluence_df: pd.DataFrame, temp_df: pd.DataFrame
     print(f"Minimum modulo possible: {min_modulo} seconds")
     print(f"Records to remove from temperature: {records_to_remove}")
     
+    # Usunięcie początkowych rekordów, aby zminimalizować modulo
     if records_to_remove > 0:
         temp_series = temp_series.iloc[records_to_remove:]
         print(f"Removed {records_to_remove} records from temperature series")
         print(f"New first temperature record: {temp_series.index[0]}")
     
+    print(f"Fluence series length: {len(fluence_series)}")
+    # dotąd jest dobrze
+    # Obliczenie modulo po usunięciu rekordów
     new_time_diff = (fluence_series.index[0] - temp_series.index[0]).total_seconds()
     remaining_modulo = new_time_diff % freq_seconds
-    if remaining_modulo != 0:
-        adjustment = timedelta(seconds=remaining_modulo)
-        temp_series.index = temp_series.index + adjustment
-        print(f"Adjusted temperature time by {remaining_modulo} seconds")
-        print(f"New first temperature record: {temp_series.index[0]}")
+    print(f"Modulo after removing records: {remaining_modulo} seconds")
     
+    # Przesunięcie TYLKO pierwszej wartości o wartość modulo
+    if remaining_modulo != 0:
+
+        old_index = temp_series.index.tolist()
+        old_index[0] = old_index[0] + timedelta(seconds=remaining_modulo)
+        temp_series.index = old_index
+        print(f"Adjusted first temperature record by {remaining_modulo} seconds")
+        print(f"New first temperature record: {temp_series.index[0]}")
+        print(f"New first temperature record: {temp_series.index[1]}")
+    
+    # Obliczanie modulo po przesunięciu pierwszej wartości
+    final_diff = (fluence_series.index[0] - temp_series.index[0]).total_seconds()
+    final_modulo_before_resample = final_diff % freq_seconds
+    print(f"Modulo after adjusting first record: {final_modulo_before_resample} seconds")
+    
+    # Zapamiętaj dokładny czas pierwszego rekordu fluencji przed resamplingiem
     first_fluence_time = fluence_series.index[0]
+    
+    # Teraz wykonujemy resampling
     fluence_series = fluence_series.resample(SIMULATION_PERIOD.lower()).sum()
     temp_series = temp_series.resample(SIMULATION_PERIOD.lower()).mean()
     temp_series = temp_series.ffill().bfill()
     
+    # Sprawdź modulo po resamplingu
     resampled_modulo = (fluence_series.index[0] - temp_series.index[0]).total_seconds() % freq_seconds
     print(f"Modulo after resampling: {resampled_modulo} seconds")
     
+    # Jeśli modulo nie jest zerowe, dostosuj TYLKO pierwsze indeksy czasowe po resamplingu
     if resampled_modulo != 0:
         target_start_time = pd.Timestamp(first_fluence_time).floor(SIMULATION_PERIOD.lower())
-        shift_fluence = target_start_time - fluence_series.index[0]
-        shift_temp = target_start_time - temp_series.index[0]
-        fluence_series.index = fluence_series.index.map(lambda x: x + shift_fluence if x == fluence_series.index[0] else x)
-        temp_series.index = temp_series.index.map(lambda x: x + shift_temp if x == temp_series.index[0] else x)
+        first_fluence_idx = fluence_series.index[0]
+        first_temp_idx = temp_series.index[0]
+        
+        # Przesuwamy tylko pierwsze indeksy
+        fluence_series.index = fluence_series.index.map(lambda x: target_start_time if x == first_fluence_idx else x)
+        temp_series.index = temp_series.index.map(lambda x: target_start_time if x == first_temp_idx else x)
         print(f"Adjusted first index of resampled series to align with: {target_start_time}")
     
+    # Sprawdź, czy indeksy są zrównane po resamplingu
     final_modulo = (fluence_series.index[0] - temp_series.index[0]).total_seconds() % freq_seconds
     print(f"Final modulo: {final_modulo} seconds")
-    
-    full_index = pd.date_range(start=temp_series.index[0], end=temp_series.index[-1], freq=SIMULATION_PERIOD.lower())
-    fluence_series = fluence_series.reindex(full_index, fill_value=0)
     return fluence_series, temp_series
 
 
