@@ -60,7 +60,7 @@ def align_temperature_to_fluence(fluence_df: pd.DataFrame, temp_df: pd.DataFrame
         raise KeyError(f"Sensor {sensor_name} not found in temperature data")
     fluence_series = fluence_df[sensor_name]
     temp_series = temp_df[sensor_name]
-    # pobrane dane
+
     freq_seconds = pd.to_timedelta(SIMULATION_PERIOD.lower()).total_seconds()
     time_diff_seconds = (fluence_series.index[0] - temp_series.index[0]).total_seconds()
     modulo = time_diff_seconds % freq_seconds
@@ -91,6 +91,7 @@ def align_temperature_to_fluence(fluence_df: pd.DataFrame, temp_df: pd.DataFrame
         temp_series = temp_series.iloc[records_to_remove:]
         print(f"Removed {records_to_remove} records from temperature series")
         print(f"New first temperature record: {temp_series.index[0]}")
+
     
     print(f"Fluence series length: {len(fluence_series)}")
     # dotąd jest dobrze
@@ -107,7 +108,6 @@ def align_temperature_to_fluence(fluence_df: pd.DataFrame, temp_df: pd.DataFrame
         temp_series.index = old_index
         print(f"Adjusted first temperature record by {remaining_modulo} seconds")
         print(f"New first temperature record: {temp_series.index[0]}")
-        print(f"New first temperature record: {temp_series.index[1]}")
     
     # Obliczanie modulo po przesunięciu pierwszej wartości
     final_diff = (fluence_series.index[0] - temp_series.index[0]).total_seconds()
@@ -116,26 +116,25 @@ def align_temperature_to_fluence(fluence_df: pd.DataFrame, temp_df: pd.DataFrame
     
     # Zapamiętaj dokładny czas pierwszego rekordu fluencji przed resamplingiem
     first_fluence_time = fluence_series.index[0]
+    first_temp_time = temp_series.index[0]
     
+    print(f"First fluence time: {first_fluence_time}")
+    print(f"First temperature time: {first_temp_time}")
+
     # Teraz wykonujemy resampling
-    fluence_series = fluence_series.resample(SIMULATION_PERIOD.lower()).sum()
-    temp_series = temp_series.resample(SIMULATION_PERIOD.lower()).mean()
+    fluence_series = fluence_series.resample(SIMULATION_PERIOD.lower(), origin='start').sum()
+    temp_series = temp_series.resample(SIMULATION_PERIOD.lower(), origin='start').mean()
     temp_series = temp_series.ffill().bfill()
     
+    first_fluence_time = fluence_series.index[0]
+    first_temp_time = temp_series.index[0]
+    
+    print(f"First fluence time after resampling: {first_fluence_time}")
+    print(f"First temperature time after resampling: {first_temp_time}")
+
     # Sprawdź modulo po resamplingu
     resampled_modulo = (fluence_series.index[0] - temp_series.index[0]).total_seconds() % freq_seconds
     print(f"Modulo after resampling: {resampled_modulo} seconds")
-    
-    # Jeśli modulo nie jest zerowe, dostosuj TYLKO pierwsze indeksy czasowe po resamplingu
-    if resampled_modulo != 0:
-        target_start_time = pd.Timestamp(first_fluence_time).floor(SIMULATION_PERIOD.lower())
-        first_fluence_idx = fluence_series.index[0]
-        first_temp_idx = temp_series.index[0]
-        
-        # Przesuwamy tylko pierwsze indeksy
-        fluence_series.index = fluence_series.index.map(lambda x: target_start_time if x == first_fluence_idx else x)
-        temp_series.index = temp_series.index.map(lambda x: target_start_time if x == first_temp_idx else x)
-        print(f"Adjusted first index of resampled series to align with: {target_start_time}")
     
     # Sprawdź, czy indeksy są zrównane po resamplingu
     final_modulo = (fluence_series.index[0] - temp_series.index[0]).total_seconds() % freq_seconds
