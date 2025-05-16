@@ -56,13 +56,11 @@ def plot_leakage_current(result_df: pd.DataFrame, current_sample_df: pd.DataFram
     plt.show()
 
 
-def plot_simulated_vs_real(simulated_series, real_series, sensor_name, output_path=None, start_date=None, end_date=None, weekly_average=False):
+def plot_simulated_vs_real(df, sensor_name, output_path=None, start_date=None, end_date=None, weekly_average=False):
     """
     Plot simulated and real current on the same plot (time series overlay).
-    Handles missing data (NaN, pd.NA) robustly.
     Args:
-        simulated_series: Series or DataFrame with simulated current, indexed by time
-        real_series: Series or DataFrame with real current, indexed by time
+        df: DataFrame with both simulated and real current data
         sensor_name: Name of the sensor
         output_path: Path to save the plot
         start_date: Start date for plotting
@@ -73,56 +71,41 @@ def plot_simulated_vs_real(simulated_series, real_series, sensor_name, output_pa
     import pandas as pd
     import matplotlib.pyplot as plt
 
-    # Obsługa przypadków, gdy któryś z serii jest None
-    if simulated_series is None:
-        simulated_series = pd.Series()
-    if real_series is None:
-        real_series = pd.Series()
-        
-    # Extract series if DataFrame
-    if isinstance(simulated_series, pd.DataFrame):
-        if simulated_series.shape[1] == 1:
-            simulated_series = simulated_series.iloc[:, 0]
-        else:
-            simulated_series = simulated_series.squeeze()
-    if isinstance(real_series, pd.DataFrame):
-        if real_series.shape[1] == 1:
-            real_series = real_series.iloc[:, 0]
-        else:
-            real_series = real_series.squeeze()
-
-    # Ensure correct type and handle NA
-    sim = pd.to_numeric(simulated_series, errors='coerce')
-    real = pd.to_numeric(real_series, errors='coerce')
-    df = pd.DataFrame({'simulated': sim, 'real': real})
-    df = df.dropna(how='all')
-
-    # Filter by date
-    if start_date is not None:
-        df = df[df.index >= pd.to_datetime(start_date)]
-    if end_date is not None:
-        df = df[df.index <= pd.to_datetime(end_date)]
+    sim_col = f"current_{sensor_name}"
+    real_col = f"real_current_{sensor_name}"
+    
+    if sim_col not in df.columns and real_col not in df.columns:
+        print(f"No data found for sensor {sensor_name}")
+        return
 
     if weekly_average:
         df = df.rolling('7d', min_periods=1).mean()
 
     plt.figure(figsize=(12, 8))
-    plt.ylim(0,6)
-    # Zakres osi X
-    if start_date is not None and end_date is not None and not df.empty:
+   #plt.ylim(0,6)
+    
+    if start_date is not None and end_date is not None:
         plt.xlim(pd.to_datetime(start_date), pd.to_datetime(end_date))
-    elif not df.empty:
+    else:
         plt.xlim(df.index.min(), df.index.max())
-    if not df['real'].isna().all():
-        plt.scatter(df.index, df['real'], color='red', s=1, label='Real Current')
-    if not df['simulated'].isna().all():
-        plt.scatter(df.index, df['simulated'], color='blue', s=1, label='Simulated Current')
+
+    if real_col in df.columns:
+        real_data = df[real_col].dropna()
+        if not real_data.empty:
+            plt.scatter(real_data.index, real_data, color='red', s=1, label='Real Current')
+    
+    if sim_col in df.columns:
+        sim_data = df[sim_col].dropna()
+        if not sim_data.empty:
+            plt.scatter(sim_data.index, sim_data, color='blue', s=1, label='Simulated Current')
+
     plt.ylabel('Current (mA)')
     plt.xlabel('Time')
     plt.title(f'Comparison of Real vs Simulated Current for Sensor {sensor_name}')
     plt.grid(True)
     plt.legend()
     plt.tight_layout()
+    
     if output_path:
         plt.savefig(output_path)
     plt.show()

@@ -3,9 +3,11 @@
 import os
 import argparse
 import pandas as pd
-from datetime import datetime
 
-from config import Paths, CURRENT_YEAR_LIST
+
+from config import Paths, SIMULATION_PERIOD, CURRENT_TEMP_MODE
+from params import Parameters
+params = Parameters()
 import current_preparation_lib as cpl
 
 def parse_arguments():
@@ -40,7 +42,6 @@ def load_simulated_data(simulated_path):
         sensors = list_available_sensors(simulated_path)
         if not sensors:
             return None
-            
         all_data = cpl.load_and_prepare_simulated_df(sensors, simulated_path)
         return all_data
     except Exception as e:
@@ -51,7 +52,7 @@ def load_simulated_data(simulated_path):
 def main():
     args = parse_arguments()
     paths = Paths()
-    simulated_path = os.path.join('/home/maria/magisterka/hamburg_new/out_data/data', args.simulated_file)
+    simulated_path = paths.get_output_file(args.simulated_file)
     
     if args.list_sensors:
         sensors = list_available_sensors(simulated_path)
@@ -93,23 +94,19 @@ def main():
         start_date = pd.to_datetime(args.start_date)
         result_df = result_df[result_df.index >= start_date]
     
+    # Apply temperature adjustment based on mode
+    if not args.all_sensors:
+        if CURRENT_TEMP_MODE == 'adjust_real':
+            result_df = cpl.adjust_real_current_with_temperature(result_df, params, args.sensor)
+        elif CURRENT_TEMP_MODE == 'adjust_sim':
+            result_df = cpl.adjust_simulated_current_with_temperature(result_df, params, args.sensor)
+    
     # Wyświetl wykresy lub zapisz do pliku
     if not args.all_sensors:
         import plot_utils
         sensor = args.sensor
-        sim_col = f"current_{sensor}"
-        real_col = f"real_current_{sensor}"
-        
-        # Pobierz dane tylko jeśli kolumny istnieją
-        sim_series = result_df[sim_col] if sim_col in result_df.columns else None
-        real_series = result_df[real_col] if real_col in result_df.columns else None
-        
-        if sim_series is None and real_series is None:
-            print(f"No data for sensor {sensor}")
-            return
-            
         print(f"Creating plot for sensor {sensor}")
-        plot_utils.plot_simulated_vs_real(sim_series, real_series, sensor)
+        plot_utils.plot_simulated_vs_real(result_df, sensor)
     else:
         import plot_utils
         print(f"Creating plots for all {len(sensors_to_use)} sensors")

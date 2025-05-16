@@ -2,16 +2,21 @@ import numpy as np
 import pandas as pd
 from config import CURRENT_TEMP_MODE, SIMULATION_PERIOD, OUTPUT_SIMULATED_DF_PATH
 
-def adjust_real_current_with_temperature(current_data: pd.DataFrame, temperature_data: pd.DataFrame, params, column: str) -> pd.DataFrame:
-    if CURRENT_TEMP_MODE == 'none':
-        return current_data
-    T = temperature_data[column].reindex(current_data.index, method='nearest').values
+def adjust_real_current_with_temperature(df: pd.DataFrame, params, sensor_name: str) -> pd.DataFrame:
+    """Adjust real current with temperature for specific sensor."""
+    out = df.copy()
+    real_col = f"real_current_{sensor_name}"
+    temp_col = f"temperature_{sensor_name}"
+    
+    if real_col not in out.columns or temp_col not in out.columns:
+        return out
+        
+    T = out[temp_col].values
     T_ref = params.T_ref
     E_eff = params.E_eff
     kB = params.kb
     R_Tref = (T_ref / T) ** 2 * np.exp(-(E_eff / (2 * kB)) * (1 / T_ref - 1 / T))
-    out = current_data.copy()
-    out[column] = out[column].values * R_Tref
+    out[real_col] = out[real_col].values * R_Tref
     return out
 
 
@@ -36,18 +41,28 @@ def set_temperature_where_fluence_zero(data: pd.DataFrame, value: float = 261.15
     out.loc[(out['temperature'] < 260) | (out['temperature'] > 290), 'temperature'] = float('nan')
     return out
 
-def adjust_simulated_current_with_temperature(data: pd.DataFrame, params) -> pd.DataFrame:
-    if CURRENT_TEMP_MODE == 'none':
-        return data
-    data = set_temperature_where_fluence_zero(data)
-    T = data['temperature'].values
+def adjust_simulated_current_with_temperature(df: pd.DataFrame, params, sensor_name: str) -> pd.DataFrame:
+    """Adjust simulated current with temperature for specific sensor."""
+    out = df.copy()
+    sim_col = f"current_{sensor_name}"
+    temp_col = f"temperature_{sensor_name}"
+    fluence_col = f"fluence_{sensor_name}"
+    
+    if sim_col not in out.columns or temp_col not in out.columns:
+        return out
+
+    # Set temperature where fluence is zero
+    if fluence_col in out.columns:
+        zero_mask = (out[fluence_col] == 0)
+        out.loc[zero_mask, temp_col] = 261.15
+        out.loc[(out[temp_col] < 260) | (out[temp_col] > 290), temp_col] = float('nan')
+        
+    T = out[temp_col].values
     T_ref = params.T_ref
     E_eff = params.E_eff
     kB = params.kb
     R_Tref = (T_ref / T) ** 2 * np.exp(-(E_eff / (2 * kB)) * (1/T - 1/T_ref))
-    print('T_REF', T_ref)
-    out = data.copy()
-    out['current'] = out['current'].values * R_Tref
+    out[sim_col] = out[sim_col].values * R_Tref
     return out
 
 def prepare_sensor_current(current_df: pd.DataFrame, temp_df: pd.DataFrame, params, sensor_name: str) -> pd.DataFrame:
