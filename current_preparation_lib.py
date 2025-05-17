@@ -21,6 +21,7 @@ def adjust_real_current_with_temperature(df: pd.DataFrame, params, sensors: list
     return out
 
 
+
 def set_temperature_where_fluence_zero(data: pd.DataFrame, sensors: list, value: float = 261.15, min_duration_days: int = 30) -> pd.DataFrame:
     """Set temperature values where fluence is zero, handling multiple sensors."""
     out = data.copy()
@@ -72,12 +73,6 @@ def adjust_simulated_current_with_temperature(df: pd.DataFrame, params, sensors:
         out[sim_col] = out[sim_col].values * R_Tref
     return out
 
-def prepare_sensor_current(current_df: pd.DataFrame, temp_df: pd.DataFrame, params, sensor_name: str) -> pd.DataFrame:
-    if CURRENT_TEMP_MODE == 'adjust_real':
-        return adjust_real_current_with_temperature(current_df, temp_df, params, sensor_name)
-    else:
-        return current_df
-
 
 def load_and_prepare_simulated_df(sensor_names, path=OUTPUT_SIMULATED_DF_PATH):
     """
@@ -104,4 +99,18 @@ def load_and_prepare_simulated_df(sensor_names, path=OUTPUT_SIMULATED_DF_PATH):
         return df[columns_to_keep]
     else:
         return None
+    
+def add_delivered_fluence(df: pd.DataFrame, params, sensors: list) -> pd.DataFrame:
+    """Add delivered fluence columns for each sensor."""
+    out = df.copy()
+    
+    for sensor in sensors:
+        fluence_col = f"fluence_{sensor}"
+        if fluence_col not in out.columns:
+            continue
+            
+        deliv_fluence_col = f"delivered_fluence_{sensor}"
+        out[deliv_fluence_col] = out[fluence_col].cumsum()
+    
+    return out
 
