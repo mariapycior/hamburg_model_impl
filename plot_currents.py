@@ -83,8 +83,15 @@ def main():
     try:
         df = pd.read_csv(simulated_path, index_col=0, parse_dates=True)
         print(f"Data loaded from {simulated_path}")
-        # Add integrated luminosity plot using plot_utils
-        # plot_utils.plot_integrated_luminosity(df)
+        
+        # Create sensor summary and plot position dependence
+        import plot_utils
+        summary_df = cpl.create_sensor_summary(df)
+        print("\nSensor summary:")
+        print(summary_df)
+        plot_utils.plot_currents_vs_position(summary_df)
+        
+        # Continue with existing plotting...
     except Exception as e:
         print(f"Failed to load simulation data: {e}")
         return
