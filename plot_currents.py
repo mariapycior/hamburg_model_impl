@@ -52,10 +52,12 @@ def dataframe_preparation(df: pd.DataFrame, start_date=None, sensors_to_use=None
     """Prepare DataFrame by applying date filtering and temperature adjustments."""
     result_df = df.copy()
     
+    # Filter by date
     if start_date:
         start_date = pd.to_datetime(start_date)
         result_df = result_df[result_df.index >= start_date]
 
+    # Adjust to temperature
     if CURRENT_TEMP_MODE == 'adjust_real':
         result_df = cpl.adjust_real_current_with_temperature(result_df, params, sensors_to_use)
     elif CURRENT_TEMP_MODE == 'adjust_sim':
@@ -66,6 +68,8 @@ def dataframe_preparation(df: pd.DataFrame, start_date=None, sensors_to_use=None
         
     return result_df
 
+
+###########################################################################
 def main():
     args = parse_arguments()
     paths = Paths()
