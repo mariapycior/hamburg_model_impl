@@ -20,6 +20,28 @@ def adjust_real_current_with_temperature(df: pd.DataFrame, params, sensors: list
         out[real_col] = out[real_col].values * R_Tref
     return out
 
+def adjust_both_with_new_temperature(df: pd.DataFrame, params, sensors: list, T_new: float) -> pd.DataFrame:
+    """Adjust both real and simulated currents to a new temperature for multiple sensors."""
+    out = df.copy()
+    for sensor in sensors:
+        real_col = f"real_current_{sensor}"
+        sim_col = f"current_{sensor}"
+        temp_col = f"temperature_{sensor}"
+        
+        if real_col not in out.columns or sim_col not in out.columns or temp_col not in out.columns:
+            continue
+            
+        T_real = out[temp_col].values
+        T_ref = params.T_ref #simulation reference temperature
+        E_eff = params.E_eff
+        kB = params.kb
+        R_Tref_real = (T_new / T_real) ** 2 * np.exp(-(E_eff / (2 * kB)) * (1 / T_new - 1 / T_real))
+        R_Tref_sim = (T_new / T_ref) ** 2 * np.exp(-(E_eff / (2 * kB)) * (1/T_new - 1/T_ref))
+        
+        out[real_col] = out[real_col].values * R_Tref_real
+        out[sim_col] = out[sim_col].values * R_Tref_sim
+        
+    return out
 
 
 def set_temperature_where_fluence_zero(data: pd.DataFrame, sensors: list, value: float = 261.15, min_duration_days: int = 30) -> pd.DataFrame:

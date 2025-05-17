@@ -57,11 +57,15 @@ def dataframe_preparation(df: pd.DataFrame, start_date=None, sensors_to_use=None
         start_date = pd.to_datetime(start_date)
         result_df = result_df[result_df.index >= start_date]
 
+    T_new = 273.15-8  # New temperature in Kelvin
+
     # Adjust to temperature
     if CURRENT_TEMP_MODE == 'adjust_real':
         result_df = cpl.adjust_real_current_with_temperature(result_df, params, sensors_to_use)
     elif CURRENT_TEMP_MODE == 'adjust_sim':
         result_df = cpl.adjust_simulated_current_with_temperature(result_df, params, sensors_to_use)
+    elif CURRENT_TEMP_MODE == 'adjust_both':
+        result_df = cpl.adjust_both_with_new_temperature(result_df, params, sensors_to_use, T_new)
     
     # Add cumulative fluence
     result_df = cpl.add_delivered_fluence(result_df, params, sensors_to_use)
@@ -114,7 +118,6 @@ def main():
     result_df = dataframe_preparation(result_df, args.start_date, sensors_to_use)
     
     if not args.all_sensors:
-        import plot_utils
         sensor = args.sensor
         print(f"Creating plots for sensor {sensor}")
         plot_utils.plot_simulated_vs_real(result_df, sensor)
