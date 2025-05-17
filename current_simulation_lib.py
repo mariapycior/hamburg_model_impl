@@ -4,6 +4,7 @@ import pandas as pd
 from datetime import timedelta
 import tqdm
 import os
+from scipy.interpolate import interp1d
 from config import CURRENT_YEAR_LIST, CURRENT_YEAR_RANGES, SIMULATION_PERIOD, RUN_MODE, SENSOR_NAME, CURRENT_TEMP_MODE, OUTPUT_SIMULATED_DF_PATH
 from numba import njit
 
@@ -314,3 +315,47 @@ def run_leakage_current_pipeline(fluence_file, temp_files, params, sensor_name=N
     
     logger.info(f"Simulation completed for {len(processed_sensors)} sensors. No real current data added.")
     return simulated_df, processed_sensors
+
+
+def load_lumi_data(file_path: str) -> pd.DataFrame:
+    if not os.path.exists(file_path):
+        raise FileNotFoundError(f"Luminosity  file not found: {file_path}")
+    with open(file_path, 'r') as f:
+        lines = [next(f) for _ in range(3)]
+    try:
+        bin_seconds = float(lines[2].split(',')[0])
+    except Exception:
+        bin_seconds = 300.0
+    shift_seconds = bin_seconds / 2.0
+    df = pd.read_csv(file_path, skiprows=4)
+    df['bin_centre_date'] = pd.to_datetime(df['bin_centre_date'], format='%d-%m-%Y %H:%M:%S')
+    df.set_index('bin_centre_date', inplace=True)
+    df.index = df.index - pd.Timedelta(seconds=shift_seconds)
+    return df
+
+
+def add_luminosity_from_lumi_df(simulated_df: pd.DataFrame, lumi_file: str) -> pd.DataFrame:
+    """Add luminosity values from lumi file to simulated_df using last known value method."""
+    if simulated_df is None:
+        logger.warning("simulated_df is None")
+        return simulated_df
+        
+    try:
+        # Load luminosity data
+        lumi_df = load_lumi_data(lumi_file)
+        
+        # Reindex luminosity data to simulation timestamps using forward fill
+        lumi_series = lumi_df['integrated_luminosity'].reindex(
+            simulated_df.index,
+            method='pad'  # forward fill - uses last known value
+        )
+        
+        # Add to simulated DataFrame
+        simulated_df['integrated_luminosity'] = lumi_series
+        
+        logger.info("Successfully added luminosity data to simulation results")
+        return simulated_df
+        
+    except Exception as e:
+        logger.error(f"Error adding luminosity data: {str(e)}")
+        return simulated_df

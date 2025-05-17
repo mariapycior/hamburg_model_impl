@@ -2,7 +2,7 @@ import os
 import pandas as pd
 import numpy as np
 from config import (
-    Paths, FLUENCE_FILENAME, RUN_MODE, SENSOR_NAME, SELECTED_YEARS, OUTPUT_SIMULATED_DF_PATH,
+    Paths, FLUENCE_FILENAME, LUMI_FILENAME, RUN_MODE, SENSOR_NAME, SELECTED_YEARS, OUTPUT_SIMULATED_DF_PATH,
     CURRENT_YEAR_LIST
 )
 from params import Parameters
@@ -18,12 +18,13 @@ def prepare_inputs(selected_years):
     paths = Paths()
     params = Parameters()
     fluence_file = paths.get_fluence_file(FLUENCE_FILENAME)
+    lumi_file = paths.get_lumi_file(LUMI_FILENAME)
     temp_files = paths.get_temperature_files_for_years(selected_years)
-    return params, paths, fluence_file, temp_files
+    return params, paths, fluence_file, lumi_file, temp_files
 
 
 def run_all_sensors(selected_years):
-    params, paths, fluence_file, temp_files = prepare_inputs(selected_years)
+    params, paths, fluence_file, lumi_file, temp_files = prepare_inputs(selected_years)
     available_sensors = get_available_sensors(fluence_file)
     print(f"Found {len(available_sensors)} sensors available")
     
@@ -34,6 +35,7 @@ def run_all_sensors(selected_years):
         real_df=real_df
     )
     
+    simulated_df = current_simulation_lib.add_luminosity_from_lumi_df(simulated_df, lumi_file)
     if simulated_df is not None:
         if len(sensors) < len(available_sensors):
             print(f"Warning: Only {len(sensors)} out of {len(available_sensors)} sensors have complete data")
@@ -56,7 +58,7 @@ def run_all_sensors(selected_years):
 
 
 def run_single_sensor(selected_years, sensor_name):
-    params, paths, fluence_file, temp_files = prepare_inputs(selected_years)
+    params, paths, fluence_file, lumi_file, temp_files = prepare_inputs(selected_years)
     
     real_df = load_real_current_data(paths)
     
@@ -64,7 +66,8 @@ def run_single_sensor(selected_years, sensor_name):
         fluence_file, temp_files, params, sensor_name=sensor_name,
         real_df=real_df
     )
-    
+    simulated_df = current_simulation_lib.add_luminosity_from_lumi_df(simulated_df, lumi_file)
+
     if simulated_df is not None:
         print(f"Simulated DataFrame for sensor {sensor_name}:\n{simulated_df.head()}")
         
@@ -77,7 +80,7 @@ def run_single_sensor(selected_years, sensor_name):
                 print(f"Real current column exists for {sensor_name} but contains only null values.")
         else:
             print(f"No real current data was found for sensor {sensor_name}.")
-        
+        #tutaj
         output_path = paths.get_output_file(OUTPUT_SIMULATED_DF_PATH)
         simulated_df.to_csv(output_path)
         print(f"Simulation completed for sensor {sensor_name}. Results saved to {output_path}")

@@ -16,6 +16,7 @@ class Paths:
         self.fluence_dir = os.path.join(self.base_dir, 'fluence')
         self.current_dir = os.path.join(self.base_dir, 'current')
         self.temperature_dir = os.path.join(self.base_dir, 'temperature')
+        self.lumi_dir = os.path.join(self.base_dir, 'lumi')  # new directory for luminosity files
         
         # Ensure output directory exists
         os.makedirs(self.output_dir, exist_ok=True)
@@ -32,6 +33,10 @@ class Paths:
         """Get full path to a temperature file."""
         return os.path.join(self.temperature_dir, filename)
 
+    def get_lumi_file(self, filename: str) -> str:
+        """Get full path to a luminosity file."""
+        return os.path.join(self.lumi_dir, filename)
+
     def get_temperature_files_for_years(self, years: list) -> list:
         """Get temperature files for specified years."""
         return [self.get_temperature_file(f'temperature_1T_{year}.csv') for year in years]
@@ -42,6 +47,7 @@ class Paths:
 
 # --- Input File Configuration ---
 FLUENCE_FILENAME = "avgFluenceBinned.csv"
+LUMI_FILENAME = "lumi_binned.csv"
 
 # Current file to year mapping
 CURRENT_YEAR_RANGES = {
