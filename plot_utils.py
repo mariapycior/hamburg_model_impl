@@ -188,9 +188,6 @@ def plot_all_sensors(df, sensors, output_dir=None, start_date=None, end_date=Non
         plt.savefig(os.path.join(output_dir, "all_real.png"), bbox_inches='tight')
     plt.show()
     plt.close()
-    
-    # Add call to plot currents vs delivered fluence
-    plot_all_currents_vs_delivered_fluence(df, sensors, output_dir)
 
 
 def plot_temperature_only(result_df: pd.DataFrame, output_path: str = None, start_date: pd.Timestamp = None, end_date: pd.Timestamp = None):

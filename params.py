@@ -18,7 +18,7 @@ E_I = 1.11  # Activation energy in eV
 K_0I = 1.2e13  # Frequency factor in s^-1
 T_0 = 1.0  # Reference time in days
 V = 0.805  # Bias voltage in V
-E_EFF = 1.20  # Effective activation energy in eV
+E_EFF = 1.21  # Effective activation energy in eV
 
 class Parameters:
     """Container for simulation parameters.

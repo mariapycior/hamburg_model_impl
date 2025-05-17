@@ -69,7 +69,7 @@ def dataframe_preparation(df: pd.DataFrame, start_date=None, sensors_to_use=None
     return result_df
 
 
-###########################################################################
+##--------------------------------------------------------------------------##
 def main():
     args = parse_arguments()
     paths = Paths()
@@ -118,7 +118,7 @@ def main():
         sensor = args.sensor
         print(f"Creating plots for sensor {sensor}")
         plot_utils.plot_simulated_vs_real(result_df, sensor)
-        plot_utils.plot_leakage_current(result_df, sensor)
+        #plot_utils.plot_leakage_current(result_df, sensor)
         plot_utils.plot_currents_vs_cumulative_fluence(result_df, sensor)
     else:
         import plot_utils
