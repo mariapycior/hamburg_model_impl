@@ -41,7 +41,7 @@ class Paths:
         return os.path.join(self.output_dir, filename)
 
 # --- Input File Configuration ---
-FLUENCE_FILENAME = "avgFluenceBinned_1h.csv"
+FLUENCE_FILENAME = "avgFluenceBinned.csv"
 
 # Current file to year mapping
 CURRENT_YEAR_RANGES = {
@@ -68,6 +68,6 @@ SIMULATION_PERIOD = '24H'
 OUTPUT_SIMULATED_DF_PATH = "simulated_df.csv"
 
 # --- Runtime settings ---
-RUN_MODE = "single"  # "single" or "all"
+RUN_MODE = "all"  # "single" or "all"
 SENSOR_NAME = "VL02_CT"
 SELECTED_YEARS = range(2011, 2019)
