@@ -66,7 +66,8 @@ def run_single_sensor(selected_years, sensor_name):
         fluence_file, temp_files, params, sensor_name=sensor_name,
         real_df=real_df
     )
-    
+    simulated_df = current_simulation_lib.add_luminosity_from_lumi_df(simulated_df, lumi_file)
+
     if simulated_df is not None:
         print(f"Simulated DataFrame for sensor {sensor_name}:\n{simulated_df.head()}")
         

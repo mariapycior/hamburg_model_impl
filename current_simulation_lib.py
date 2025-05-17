@@ -333,8 +333,9 @@ def load_lumi_data(file_path: str) -> pd.DataFrame:
     df.index = df.index - pd.Timedelta(seconds=shift_seconds)
     return df
 
+
 def add_luminosity_from_lumi_df(simulated_df: pd.DataFrame, lumi_file: str) -> pd.DataFrame:
-    """Add luminosity values from lumi file to simulated_df based on the nearest time match."""
+    """Add luminosity values from lumi file to simulated_df using last known value method."""
     if simulated_df is None:
         logger.warning("simulated_df is None")
         return simulated_df
@@ -343,15 +344,14 @@ def add_luminosity_from_lumi_df(simulated_df: pd.DataFrame, lumi_file: str) -> p
         # Load luminosity data
         lumi_df = load_lumi_data(lumi_file)
         
-        # Create interpolation function
-        lumi_interp = interp1d(lumi_df.index.astype(np.int64), 
-                             lumi_df['integrated_luminosity'].values,
-                             bounds_error=False,
-                             fill_value=(lumi_df['integrated_luminosity'].iloc[0], 
-                                       lumi_df['integrated_luminosity'].iloc[-1]))
+        # Reindex luminosity data to simulation timestamps using forward fill
+        lumi_series = lumi_df['integrated_luminosity'].reindex(
+            simulated_df.index,
+            method='pad'  # forward fill - uses last known value
+        )
         
-        # Interpolate values for simulated_df timestamps
-        simulated_df['integrated_luminosity'] = lumi_interp(simulated_df.index.astype(np.int64))
+        # Add to simulated DataFrame
+        simulated_df['integrated_luminosity'] = lumi_series
         
         logger.info("Successfully added luminosity data to simulation results")
         return simulated_df
