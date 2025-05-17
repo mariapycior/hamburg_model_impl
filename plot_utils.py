@@ -337,3 +337,56 @@ def plot_all_currents_vs_delivered_fluence(df, sensors, output_dir=None):
     
     plt.show()
     plt.close('all')
+
+
+def plot_integrated_luminosity(df: pd.DataFrame, output_path: str = None):
+    """Plot integrated luminosity over time."""
+    try:
+        plt.figure(figsize=(10, 6))
+        df['integrated_luminosity'].plot()
+        plt.title('Integrated Luminosity vs Time')
+        plt.xlabel('Time')
+        plt.ylabel('Integrated Luminosity')
+        plt.grid(True)
+        if output_path:
+            plt.savefig(output_path)
+        plt.show()
+        plt.close()
+        print("Created integrated luminosity plot")
+    except Exception as e:
+        print(f"Error creating integrated luminosity plot: {e}")
+
+
+def plot_currents_vs_integrated_luminosity(df: pd.DataFrame, sensor_name: str, output_path: str = None):
+    """Plot both simulated and real currents against integrated luminosity."""
+    sim_col = f"current_{sensor_name}"
+    real_col = f"real_current_{sensor_name}"
+    
+    if 'integrated_luminosity' not in df.columns:
+        print("No integrated luminosity data found")
+        return
+        
+    plt.figure(figsize=(12, 8))
+    
+    if real_col in df.columns:
+        real_data = df[[real_col, 'integrated_luminosity']].dropna()
+        if not real_data.empty:
+            plt.scatter(real_data['integrated_luminosity'], real_data[real_col], 
+                       color='red', s=1, label='Real Leakage Current')
+    
+    if sim_col in df.columns:
+        sim_data = df[[sim_col, 'integrated_luminosity']].dropna()
+        if not sim_data.empty:
+            plt.scatter(sim_data['integrated_luminosity'], sim_data[sim_col], 
+                       color='blue', s=1, label='Simulated Leakage Current')
+    
+    plt.xlabel('Integrated Luminosity')
+    plt.ylabel('Leakage Current (mA)')
+    plt.title(f'Leakage Current vs Integrated Luminosity for Sensor {sensor_name}')
+    plt.grid(True)
+    plt.legend()
+    
+    if output_path:
+        plt.savefig(output_path)
+    plt.show()
+    plt.close()

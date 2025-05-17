@@ -3,7 +3,7 @@
 import os
 import argparse
 import pandas as pd
-
+import matplotlib.pyplot as plt
 
 from config import Paths, CURRENT_TEMP_MODE
 from params import Parameters
@@ -68,8 +68,6 @@ def dataframe_preparation(df: pd.DataFrame, start_date=None, sensors_to_use=None
         
     return result_df
 
-
-##--------------------------------------------------------------------------##
 def main():
     args = parse_arguments()
     paths = Paths()
@@ -85,6 +83,8 @@ def main():
     try:
         df = pd.read_csv(simulated_path, index_col=0, parse_dates=True)
         print(f"Data loaded from {simulated_path}")
+        # Add integrated luminosity plot using plot_utils
+        # plot_utils.plot_integrated_luminosity(df)
     except Exception as e:
         print(f"Failed to load simulation data: {e}")
         return
@@ -99,12 +99,12 @@ def main():
     else:
         sensors_to_use = [args.sensor]
 
-    all_filtered_columns = []
+    all_filtered_columns = ['integrated_luminosity']  # Dodajemy tę kolumnę jako pierwszą
     for sensor in sensors_to_use:
         sensor_columns = [col for col in df.columns if col.endswith(f"_{sensor}")]
         all_filtered_columns.extend(sensor_columns)
     
-    if not all_filtered_columns:
+    if len(all_filtered_columns) <= 1:  # Zmienione z if not all_filtered_columns
         print(f"No data found for sensors: {', '.join(sensors_to_use)}")
         return
     
@@ -120,6 +120,7 @@ def main():
         plot_utils.plot_simulated_vs_real(result_df, sensor)
         #plot_utils.plot_leakage_current(result_df, sensor)
         plot_utils.plot_currents_vs_cumulative_fluence(result_df, sensor)
+        #plot_utils.plot_currents_vs_integrated_luminosity(result_df, sensor)
     else:
         import plot_utils
         print(f"Creating plots for all {len(sensors_to_use)} sensors")
