@@ -390,3 +390,35 @@ def plot_currents_vs_integrated_luminosity(df: pd.DataFrame, sensor_name: str, o
         plt.savefig(output_path)
     plt.show()
     plt.close()
+
+
+def plot_currents_vs_position(summary_df: pd.DataFrame, output_path: str = None):
+    """
+    Plot simulated and real currents against sensor position.
+    Args:
+        summary_df: DataFrame from create_sensor_summary with columns [current_sim, current_real, position]
+    """
+    plt.figure(figsize=(12, 8))
+    
+    # Plot simulated currents
+    mask_sim = summary_df['current_sim'].notna()
+    plt.scatter(summary_df[mask_sim]['position'], 
+               summary_df[mask_sim]['current_sim'],
+               color='blue', label='Simulated Current', s=50)
+    
+    # Plot real currents
+    mask_real = summary_df['current_real'].notna()
+    plt.scatter(summary_df[mask_real]['position'], 
+               summary_df[mask_real]['current_real'],
+               color='red', label='Real Current', s=50)
+    
+    plt.xlabel('Position Z [mm]')
+    plt.ylabel('Leakage Current [mA]')
+    plt.title('Leakage Currents vs Position')
+    plt.grid(True)
+    plt.legend()
+    
+    if output_path:
+        plt.savefig(output_path)
+    plt.show()
+    plt.close()

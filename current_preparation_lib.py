@@ -114,3 +114,50 @@ def add_delivered_fluence(df: pd.DataFrame, params, sensors: list) -> pd.DataFra
     
     return out
 
+def create_sensor_summary(df: pd.DataFrame, date=None) -> pd.DataFrame:
+    """
+    Create a summary DataFrame with sensor currents and positions.
+    Args:
+        df: DataFrame with sensor data
+        date: Optional date for which to get the currents (if None, uses last date)
+    Returns:
+        DataFrame with sensor names as index and columns: current_sim, current_real, position
+    """
+    print("Creating sensor summary...")
+    
+    from VeloDetectorElement import VeloDetectorElement
+    velo = VeloDetectorElement()
+    
+    # Get data for specified date
+    if date is None:
+        date = df.index[-1]
+    print(f"Using date: {date}")
+    
+    # Prepare empty DataFrame
+    summary = pd.DataFrame(columns=['current_sim', 'current_real', 'position'])
+    
+    # Find all unique sensors
+    sim_sensors = [col.replace('current_', '') for col in df.columns if col.startswith('current_') and not col.startswith('current_real')]
+    print(f"Found {len(sim_sensors)} sensors")
+    
+    # Fill data for each sensor
+    for sensor in sim_sensors:
+        sim_col = f'current_{sensor}'
+        real_col = f'real_current_{sensor}'
+        
+        # Get last non-NaN value for each column
+        sim_val = df[sim_col].dropna().iloc[-1] if sim_col in df.columns else None
+        real_val = df[real_col].dropna().iloc[-1] if real_col in df.columns else None
+        
+        try:
+            # Add 'HV' to sensor name for position lookup
+            sensor_key = (sensor, 'HV')
+            position = velo.sensor_name2sensor_z(sensor_key)
+            summary.loc[sensor] = [sim_val, real_val, position]
+        except Exception as e:
+            print(f"Warning: Could not get position for sensor {sensor}: {e}")
+            summary.loc[sensor] = [sim_val, real_val, None]
+    
+    print("Summary created successfully")
+    return summary.sort_values('position')
+
