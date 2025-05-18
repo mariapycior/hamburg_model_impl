@@ -62,7 +62,8 @@ def dataframe_preparation(df: pd.DataFrame, start_date=None, sensors_to_use=None
         result_df = cpl.adjust_real_current_with_temperature(result_df, params, sensors_to_use)
     elif CURRENT_TEMP_MODE == 'adjust_sim':
         result_df = cpl.adjust_simulated_current_with_temperature(result_df, params, sensors_to_use)
-    
+    elif CURRENT_TEMP_MODE == 'adjust_both':
+        result_df = cpl.adjust_both_with_new_temperature(result_df, params, sensors_to_use, 273.15)
     # Add cumulative fluence
     result_df = cpl.add_delivered_fluence(result_df, params, sensors_to_use)
         

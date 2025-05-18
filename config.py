@@ -63,8 +63,8 @@ CURRENT_YEAR_LIST = [
 ]
 
 # --- Simulation Configuration ---
-# Mode for current-temperature adjustment: 'adjust_sim', 'adjust_real', or 'none'
-CURRENT_TEMP_MODE = 'adjust_real'
+# Mode for current-temperature adjustment: 'adjust_sim', 'adjust_real', or 'adjust_both'
+CURRENT_TEMP_MODE = 'adjust_both'
 
 # Resampling period for simulation data
 # Available values: '1min', '1H', '10H', '24H', '1W'
