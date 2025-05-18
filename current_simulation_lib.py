@@ -351,7 +351,7 @@ def add_luminosity_from_lumi_df(simulated_df: pd.DataFrame, lumi_file: str) -> p
         )
         
         # Add to simulated DataFrame
-        simulated_df['integrated_luminosity'] = lumi_series
+        simulated_df['integrated_luminosity'] = lumi_series/1000000 # convert to fb-1
         
         logger.info("Successfully added luminosity data to simulation results")
         return simulated_df

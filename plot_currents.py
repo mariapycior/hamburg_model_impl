@@ -87,8 +87,8 @@ def main():
         # Create sensor summary and plot position dependence
         import plot_utils
         summary_df = cpl.create_sensor_summary(df)
-        print("\nSensor summary:")
-        print(summary_df)
+        # print("\nSensor summary:")  # Commented out to prevent printing sensor details
+        # print(summary_df)  # Commented out to prevent printing sensor details
         plot_utils.plot_currents_vs_position(summary_df)
         
         # Continue with existing plotting...
@@ -127,7 +127,7 @@ def main():
         plot_utils.plot_simulated_vs_real(result_df, sensor)
         #plot_utils.plot_leakage_current(result_df, sensor)
         plot_utils.plot_currents_vs_cumulative_fluence(result_df, sensor)
-        #plot_utils.plot_currents_vs_integrated_luminosity(result_df, sensor)
+        plot_utils.plot_currents_vs_integrated_luminosity(result_df, sensor)
     else:
         import plot_utils
         print(f"Creating plots for all {len(sensors_to_use)} sensors")

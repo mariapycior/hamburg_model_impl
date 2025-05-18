@@ -131,14 +131,12 @@ def create_sensor_summary(df: pd.DataFrame, date=None) -> pd.DataFrame:
     # Get data for specified date
     if date is None:
         date = df.index[-1]
-    print(f"Using date: {date}")
     
     # Prepare empty DataFrame
     summary = pd.DataFrame(columns=['current_sim', 'current_real', 'position'])
     
     # Find all unique sensors
     sim_sensors = [col.replace('current_', '') for col in df.columns if col.startswith('current_') and not col.startswith('current_real')]
-    print(f"Found {len(sim_sensors)} sensors")
     
     # Fill data for each sensor
     for sensor in sim_sensors:
