@@ -63,7 +63,7 @@ def dataframe_preparation(df: pd.DataFrame, start_date=None, sensors_to_use=None
     elif CURRENT_TEMP_MODE == 'adjust_sim':
         result_df = cpl.adjust_simulated_current_with_temperature(result_df, params, sensors_to_use)
     elif CURRENT_TEMP_MODE == 'adjust_both':
-        result_df = cpl.adjust_both_with_new_temperature(result_df, params, sensors_to_use, 273.15)
+        result_df = cpl.adjust_both_with_new_temperature(result_df, params, sensors_to_use, 279.15)
     # Add cumulative fluence
     result_df = cpl.add_delivered_fluence(result_df, params, sensors_to_use)
         
@@ -85,55 +85,50 @@ def main():
         df = pd.read_csv(simulated_path, index_col=0, parse_dates=True)
         print(f"Data loaded from {simulated_path}")
         
-        # Create sensor summary and plot position dependence
-        import plot_utils
-        summary_df = cpl.create_sensor_summary(df)
-        # print("\nSensor summary:")  # Commented out to prevent printing sensor details
-        # print(summary_df)  # Commented out to prevent printing sensor details
-        plot_utils.plot_currents_vs_position(summary_df)
+        all_sensors = list_available_sensors(simulated_path)    
+        if not all_sensors:
+            print("No sensors found in data")
+            return
+            
+        if args.all_sensors:
+            sensors_to_use = all_sensors
+        else:
+            sensors_to_use = [args.sensor]
+
+        all_filtered_columns = ['integrated_luminosity']
+        for sensor in sensors_to_use:
+            sensor_columns = [col for col in df.columns if col.endswith(f"_{sensor}")]
+            all_filtered_columns.extend(sensor_columns)
         
-        # Continue with existing plotting...
+        if len(all_filtered_columns) <= 1:
+            print(f"No data found for sensors: {', '.join(sensors_to_use)}")
+            return
+        
+        result_df = df[all_filtered_columns]
+        
+        # Apply date filtering and temperature adjustments
+        result_df = dataframe_preparation(result_df, args.start_date, sensors_to_use)
+        
+        # Create sensor summary and plot position dependence AFTER all adjustments
+        import plot_utils
+        target_luminosity = 6.5
+        summary_df = cpl.create_sensor_summary(result_df, target_luminosity=target_luminosity)
+        plot_utils.plot_currents_vs_position(summary_df, target_luminosity=target_luminosity)
+        
+        if not args.all_sensors:
+            sensor = args.sensor
+            print(f"Creating plots for sensor {sensor}")
+            plot_utils.plot_simulated_vs_real(result_df, sensor)
+            plot_utils.plot_currents_vs_cumulative_fluence(result_df, sensor)
+            plot_utils.plot_currents_vs_integrated_luminosity(result_df, sensor)
+        else:
+            print(f"Creating plots for all {len(sensors_to_use)} sensors")
+            #plot_utils.plot_all_sensors(result_df, sensors_to_use)
+            #plot_utils.plot_all_currents_vs_delivered_fluence(result_df, sensors_to_use)
+            
     except Exception as e:
         print(f"Failed to load simulation data: {e}")
         return
-        
-    all_sensors = list_available_sensors(simulated_path)    
-    if not all_sensors:
-        print("No sensors found in data")
-        return
-        
-    if args.all_sensors:
-        sensors_to_use = all_sensors
-    else:
-        sensors_to_use = [args.sensor]
-
-    all_filtered_columns = ['integrated_luminosity']  # Dodajemy tę kolumnę jako pierwszą
-    for sensor in sensors_to_use:
-        sensor_columns = [col for col in df.columns if col.endswith(f"_{sensor}")]
-        all_filtered_columns.extend(sensor_columns)
-    
-    if len(all_filtered_columns) <= 1:  # Zmienione z if not all_filtered_columns
-        print(f"No data found for sensors: {', '.join(sensors_to_use)}")
-        return
-    
-    result_df = df[all_filtered_columns]
-    
-    # Apply date filtering and temperature adjustments
-    result_df = dataframe_preparation(result_df, args.start_date, sensors_to_use)
-    
-    if not args.all_sensors:
-        import plot_utils
-        sensor = args.sensor
-        print(f"Creating plots for sensor {sensor}")
-        plot_utils.plot_simulated_vs_real(result_df, sensor)
-        #plot_utils.plot_leakage_current(result_df, sensor)
-        plot_utils.plot_currents_vs_cumulative_fluence(result_df, sensor)
-        plot_utils.plot_currents_vs_integrated_luminosity(result_df, sensor)
-    else:
-        import plot_utils
-        print(f"Creating plots for all {len(sensors_to_use)} sensors")
-        plot_utils.plot_all_sensors(result_df, sensors_to_use)
-        plot_utils.plot_all_currents_vs_delivered_fluence(result_df, sensors_to_use)
 
 
 if __name__ == "__main__":

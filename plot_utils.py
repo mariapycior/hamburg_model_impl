@@ -392,11 +392,13 @@ def plot_currents_vs_integrated_luminosity(df: pd.DataFrame, sensor_name: str, o
     plt.close()
 
 
-def plot_currents_vs_position(summary_df: pd.DataFrame, output_path: str = None):
+def plot_currents_vs_position(summary_df: pd.DataFrame, target_luminosity: float = None, output_path: str = None):
     """
     Plot simulated and real currents against sensor position.
     Args:
-        summary_df: DataFrame from create_sensor_summary with columns [current_sim, current_real, position]
+        summary_df: DataFrame from create_sensor_summary with columns [current_sim, current_real, position, luminosity]
+        target_luminosity: The target luminosity value used for the plot
+        output_path: Optional path to save the plot
     """
     plt.figure(figsize=(12, 8))
     
@@ -414,7 +416,14 @@ def plot_currents_vs_position(summary_df: pd.DataFrame, output_path: str = None)
     
     plt.xlabel('Position Z [mm]')
     plt.ylabel('Leakage Current [mA]')
-    plt.title('Leakage Currents vs Position')
+    title = 'Leakage Currents vs Position'
+    if target_luminosity is not None:
+        title += f'\nTarget L = {target_luminosity:.1f} fb⁻¹'
+        if 'luminosity' in summary_df.columns:
+            mean_lumi = summary_df['luminosity'].mean()
+            std_lumi = summary_df['luminosity'].std()
+            title += f'\nActual L = {mean_lumi:.1f}±{std_lumi:.1f} fb⁻¹'
+    plt.title(title)
     plt.grid(True)
     plt.legend()
     
