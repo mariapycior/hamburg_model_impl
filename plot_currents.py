@@ -95,12 +95,13 @@ def main():
             sensor = args.sensor
             print(f"Creating plots for sensor {sensor}")
             plot_utils.plot_simulated_vs_real(result_df, sensor)
+            plot_utils.plot_leakage_current(result_df, sensor)
             plot_utils.plot_currents_vs_integrated_luminosity(result_df, sensor)
         else:
             # Multi-sensor mode
             print(f"Creating plots for all {len(sensors_to_use)} sensors")
-            #plot_utils.plot_all_sensors(result_df, sensors_to_use)
-            #plot_utils.plot_all_currents_vs_luminosity(result_df, sensors_to_use)
+            plot_utils.plot_all_sensors(result_df, sensors_to_use)
+            plot_utils.plot_all_currents_vs_luminosity(result_df, sensors_to_use)
             
     except Exception as e:
         print(f"Failed to process data: {e}")

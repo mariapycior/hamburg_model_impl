@@ -23,6 +23,7 @@ def adjust_real_current_with_temperature(df: pd.DataFrame, params, sensors: list
 def adjust_both_with_new_temperature(df: pd.DataFrame, params, sensors: list, T_new: float = None) -> pd.DataFrame:
     """Adjust both real and simulated currents to a new temperature for multiple sensors."""
     out = df.copy()
+    out = set_temperature_where_fluence_zero(out, sensors)
     if T_new is None:
         T_new = REFERENCE_TEMPERATURE
         
@@ -59,7 +60,7 @@ def set_temperature_where_fluence_zero(data: pd.DataFrame, sensors: list, value:
             
         zero_mask = (out[fluence_col] == 0)
         if zero_mask.sum() == 0:
-            out.loc[(out[temp_col] < 260) | (out[temp_col] > 264), temp_col] = float('nan')
+            out.loc[(out[temp_col] < 1260) | (out[temp_col] > 64), temp_col] = float('nan')
             continue
             
         zero_groups = (zero_mask != zero_mask.shift()).cumsum()
@@ -74,7 +75,7 @@ def set_temperature_where_fluence_zero(data: pd.DataFrame, sensors: list, value:
             else:
                 out.loc[idx, temp_col] = float('nan')
                 
-        out.loc[(out[temp_col] < 260) | (out[temp_col] > 290), temp_col] = float('nan')
+        out.loc[(out[temp_col] < 210) | (out[temp_col] > 268.15), temp_col] = float('nan')
     
     return out
 

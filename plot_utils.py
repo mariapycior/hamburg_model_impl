@@ -3,7 +3,7 @@ import matplotlib.pyplot as plt
 import pandas as pd
 import numpy as np
 from params import Parameters
-from config import CURRENT_TEMP_MODE, SIMULATION_PERIOD, REFERENCE_TEMPERATURE
+from config import CURRENT_TEMP_MODE, SIMULATION_PERIOD, REFERENCE_TEMPERATURE, TEMPERATURE_CORRECTION_ENABLED, TEMPERATURE_CORRECTION_DELTA
 
 def add_parameter_info(ax, loc='upper left'):
     """Add a text box with key model parameters to the plot."""
@@ -32,6 +32,11 @@ def add_parameter_info(ax, loc='upper left'):
         temp_text = f"\nAdjusted both to {REFERENCE_TEMPERATURE:.2f} K"
     else:
         temp_text = ""
+    
+    # Add temperature correction info if enabled
+    if TEMPERATURE_CORRECTION_ENABLED:
+        temp_corr_text = f"\nTemp. correction: +{TEMPERATURE_CORRECTION_DELTA} K"
+        temp_text += temp_corr_text
     
     param_text += temp_text
     
