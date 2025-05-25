@@ -4,8 +4,9 @@ import os
 import argparse
 import pandas as pd
 import matplotlib.pyplot as plt
+import plot_utils
 
-from config import Paths, CURRENT_TEMP_MODE
+from config import Paths, CURRENT_TEMP_MODE, TARGET_LUMINOSITIES
 from params import Parameters
 params = Parameters()
 import current_preparation_lib as cpl
@@ -22,6 +23,8 @@ def parse_arguments():
                         help='Process all sensors')
     parser.add_argument('--list-sensors', action='store_true',
                         help='List all available sensors')
+    parser.add_argument('--plot-currents-vs-position', action='store_true',
+                        help='Plot currents vs position for all sensors')
     return parser.parse_args()
 
 def list_available_sensors(simulated_path):
@@ -48,26 +51,7 @@ def load_simulated_data(simulated_path):
         print(f"Error loading simulated data: {e}")
         return None
 
-def dataframe_preparation(df: pd.DataFrame, start_date=None, sensors_to_use=None) -> pd.DataFrame:
-    """Prepare DataFrame by applying date filtering and temperature adjustments."""
-    result_df = df.copy()
-    
-    # Filter by date
-    if start_date:
-        start_date = pd.to_datetime(start_date)
-        result_df = result_df[result_df.index >= start_date]
 
-    # Adjust to temperature
-    if CURRENT_TEMP_MODE == 'adjust_real':
-        result_df = cpl.adjust_real_current_with_temperature(result_df, params, sensors_to_use)
-    elif CURRENT_TEMP_MODE == 'adjust_sim':
-        result_df = cpl.adjust_simulated_current_with_temperature(result_df, params, sensors_to_use)
-    elif CURRENT_TEMP_MODE == 'adjust_both':
-        result_df = cpl.adjust_both_with_new_temperature(result_df, params, sensors_to_use, 279.15)
-    # Add cumulative fluence
-    result_df = cpl.add_delivered_fluence(result_df, params, sensors_to_use)
-        
-    return result_df
 
 def main():
     args = parse_arguments()
@@ -82,52 +66,44 @@ def main():
         return
     
     try:
-        df = pd.read_csv(simulated_path, index_col=0, parse_dates=True)
-        print(f"Data loaded from {simulated_path}")
-        
-        all_sensors = list_available_sensors(simulated_path)    
+        # Determine which sensors to use
+        all_sensors = list_available_sensors(simulated_path)
         if not all_sensors:
             print("No sensors found in data")
             return
-            
-        if args.all_sensors:
-            sensors_to_use = all_sensors
-        else:
-            sensors_to_use = [args.sensor]
-
-        all_filtered_columns = ['integrated_luminosity']
-        for sensor in sensors_to_use:
-            sensor_columns = [col for col in df.columns if col.endswith(f"_{sensor}")]
-            all_filtered_columns.extend(sensor_columns)
         
-        if len(all_filtered_columns) <= 1:
+        sensors_to_use = all_sensors if args.all_sensors else [args.sensor]
+        
+        # Load data for selected sensors
+        result_df = cpl.load_and_prepare_simulated_df(sensors_to_use, simulated_path)
+        if result_df is None or result_df.empty:
             print(f"No data found for sensors: {', '.join(sensors_to_use)}")
             return
+            
+        print(f"Data loaded from {simulated_path}")
         
-        result_df = df[all_filtered_columns]
+        # Prepare data for analysis (temperature adjustments, etc.)
+        result_df = cpl.prepare_data_for_analysis(result_df, params, sensors_to_use, args.start_date)
         
-        # Apply date filtering and temperature adjustments
-        result_df = dataframe_preparation(result_df, args.start_date, sensors_to_use)
-        
-        # Create sensor summary and plot position dependence AFTER all adjustments
-        import plot_utils
-        target_luminosities = [0.8, 3.1, 6.5]  # przykładowe wartości
-        summary_df = cpl.current_for_lumi(result_df, target_luminosities)
-        plot_utils.plot_currents_vs_position(summary_df, target_luminosities)
+        # Generate plots based on options
+        if args.plot_currents_vs_position or args.all_sensors:
+            curr_vs_pos_df = cpl.current_for_lumi(result_df)  # Uses TARGET_LUMINOSITIES from config
+            plot_utils.plot_currents_vs_position(curr_vs_pos_df, TARGET_LUMINOSITIES)
         
         if not args.all_sensors:
+            # Single sensor mode - create detailed plots for the selected sensor
             sensor = args.sensor
             print(f"Creating plots for sensor {sensor}")
             plot_utils.plot_simulated_vs_real(result_df, sensor)
-            plot_utils.plot_currents_vs_cumulative_fluence(result_df, sensor)
             plot_utils.plot_currents_vs_integrated_luminosity(result_df, sensor)
         else:
+            # Multi-sensor mode
             print(f"Creating plots for all {len(sensors_to_use)} sensors")
             #plot_utils.plot_all_sensors(result_df, sensors_to_use)
-            #plot_utils.plot_all_currents_vs_delivered_fluence(result_df, sensors_to_use)
+            #plot_utils.plot_all_currents_vs_luminosity(result_df, sensors_to_use)
             
     except Exception as e:
-        print(f"Failed to load simulation data: {e}")
+        print(f"Failed to process data: {e}")
         return
 
 

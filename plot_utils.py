@@ -1,6 +1,44 @@
 import os
 import matplotlib.pyplot as plt
 import pandas as pd
+import numpy as np
+from params import Parameters
+from config import CURRENT_TEMP_MODE, SIMULATION_PERIOD, REFERENCE_TEMPERATURE
+
+def add_parameter_info(ax, loc='upper left'):
+    """Add a text box with key model parameters to the plot."""
+    params = Parameters()
+    
+    # Calculate simulation timestep in hours
+    timestep = pd.to_timedelta(SIMULATION_PERIOD.lower()).total_seconds() / 3600
+    
+    # Create parameter text
+    param_text = (
+        f"$\\alpha_I$: {params.alpha_I:.2e} A/cm\n"
+        f"$\\alpha_0^*$: {params.alpha_0_star:.2e} A/cm\n"
+        f"$\\beta$: {params.beta:.2e} A/cm\n"
+        f"$E_I$: {params.E_I:.2f} eV\n"
+        f"$V$: {params.V:.3f} cm$^3$\n"
+        f"$E_{{eff}}$: {params.E_eff:.2f} eV\n"
+        f"Timestep: {timestep:.1f} h"
+    )
+    
+    # Add temperature adjustment info
+    if CURRENT_TEMP_MODE == 'adjust_real':
+        temp_text = "\nAdjusted real to sim. temperature"
+    elif CURRENT_TEMP_MODE == 'adjust_sim':
+        temp_text = "\nAdjusted sim. to real temperature"
+    elif CURRENT_TEMP_MODE == 'adjust_both':
+        temp_text = f"\nAdjusted both to {REFERENCE_TEMPERATURE:.2f} K"
+    else:
+        temp_text = ""
+    
+    param_text += temp_text
+    
+    # Add text box to plot
+    props = dict(boxstyle='round', facecolor='white', alpha=0.7)
+    ax.text(0.02, 0.98, param_text, transform=ax.transAxes, fontsize=8,
+            verticalalignment='top', horizontalalignment='left', bbox=props)
 
 
 def plot_leakage_current(df: pd.DataFrame, sensor_name: str, 
@@ -76,10 +114,6 @@ def plot_simulated_vs_real(df, sensor_name, output_path=None, start_date=None, e
         end_date: End date for plotting
         weekly_average: If True, plot 7-day rolling mean
     """
-    import numpy as np
-    import pandas as pd
-    import matplotlib.pyplot as plt
-
     sim_col = f"current_{sensor_name}"
     real_col = f"real_current_{sensor_name}"
     
@@ -90,8 +124,7 @@ def plot_simulated_vs_real(df, sensor_name, output_path=None, start_date=None, e
     if weekly_average:
         df = df.rolling('7d', min_periods=1).mean()
 
-    plt.figure(figsize=(12, 8))
-   #plt.ylim(0,6)
+    fig, ax = plt.subplots(figsize=(12, 8))
     
     if start_date is not None and end_date is not None:
         plt.xlim(pd.to_datetime(start_date), pd.to_datetime(end_date))
@@ -101,18 +134,21 @@ def plot_simulated_vs_real(df, sensor_name, output_path=None, start_date=None, e
     if real_col in df.columns:
         real_data = df[real_col].dropna()
         if not real_data.empty:
-            plt.scatter(real_data.index, real_data, color='red', s=1, label='Real Leakage Current')
+            ax.scatter(real_data.index, real_data, color='red', s=1, label='Real Leakage Current')
     
     if sim_col in df.columns:
         sim_data = df[sim_col].dropna()
         if not sim_data.empty:
-            plt.scatter(sim_data.index, sim_data, color='blue', s=1, label='Simulated Leakage Current')
+            ax.scatter(sim_data.index, sim_data, color='blue', s=1, label='Simulated Leakage Current')
 
-    plt.ylabel('Leakage Current (mA)')
-    plt.xlabel('Time')
-    plt.title(f'Comparison of Real vs Simulated Leakage Current for Sensor {sensor_name}')
-    plt.grid(True)
-    plt.legend()
+    # Add parameter info box
+    add_parameter_info(ax)
+    
+    ax.set_ylabel('Leakage Current (mA)')
+    ax.set_xlabel('Time')
+    ax.set_title(f'Comparison of Real vs Simulated Leakage Current for Sensor {sensor_name}')
+    ax.grid(True)
+    ax.legend()
     plt.tight_layout()
     
     if output_path:
@@ -125,7 +161,7 @@ def plot_all_sensors(df, sensors, output_dir=None, start_date=None, end_date=Non
     import os
     
     # Plot of simulated current for all sensors
-    plt.figure(figsize=(12, 12))
+    fig, ax = plt.subplots(figsize=(12, 12))
     sim_columns = []
     
     for sensor in sensors:
@@ -136,7 +172,7 @@ def plot_all_sensors(df, sensors, output_dir=None, start_date=None, end_date=Non
             y_clean = y.dropna()
             x_clean = y_clean.index
             if not y_clean.empty and len(x_clean) == len(y_clean):
-                plt.scatter(x_clean, y_clean.values, s=1, label=sensor)
+                ax.scatter(x_clean, y_clean.values, s=1, label=sensor)
     
     # Calculate mean with condition on number of non-NaN values
     if sim_columns:
@@ -144,21 +180,24 @@ def plot_all_sensors(df, sensors, output_dir=None, start_date=None, end_date=Non
         valid_count_sim = sim_df.notna().sum(axis=1)
         mean_sim = sim_df.mean(axis=1)
         mean_sim[valid_count_sim <= (len(sim_columns) // 2)] = float('nan')
-        plt.plot(mean_sim.index, mean_sim.values, color='black', linewidth=3, label='Mean (simulated)')
+        ax.plot(mean_sim.index, mean_sim.values, color='black', linewidth=3, label='Mean (simulated)')
+    
+    # Add parameter info box
+    add_parameter_info(ax)
         
-    plt.xlim(start_date, end_date)
-    plt.ylabel('Leakage Current (mA)')
-    plt.title('Simulated Leakage Current for All Sensors')
-    plt.grid(True)
+    ax.set_xlim(start_date, end_date)
+    ax.set_ylabel('Leakage Current (mA)')
+    ax.set_title('Simulated Leakage Current for All Sensors')
+    ax.grid(True)
     plt.tight_layout()
-    plt.legend(loc='center left', bbox_to_anchor=(1.01, 0.5), title='Sensors', fontsize='small')
+    ax.legend(loc='center left', bbox_to_anchor=(1.01, 0.5), title='Sensors', fontsize='small')
     if output_dir is not None:
         plt.savefig(os.path.join(output_dir, "all_simulated.png"), bbox_inches='tight')
     plt.show()
     plt.close()
     
     # Plot of real currents
-    plt.figure(figsize=(12, 12))
+    fig, ax = plt.subplots(figsize=(12, 12))
     real_columns = []
     
     for sensor in sensors:
@@ -169,7 +208,7 @@ def plot_all_sensors(df, sensors, output_dir=None, start_date=None, end_date=Non
             y_clean = y.dropna()
             x_clean = y_clean.index
             if not y_clean.empty and len(x_clean) == len(y_clean):
-                plt.scatter(x_clean, y_clean.values, s=1, label=sensor)
+                ax.scatter(x_clean, y_clean.values, s=1, label=sensor)
     
     # Calculate mean with condition on number of non-NaN values
     if real_columns:
@@ -177,13 +216,17 @@ def plot_all_sensors(df, sensors, output_dir=None, start_date=None, end_date=Non
         valid_count_real = real_df.notna().sum(axis=1)
         mean_real = real_df.mean(axis=1)
         mean_real[valid_count_real <= (len(real_columns) // 2)] = float('nan')
-        plt.plot(mean_real.index, mean_real.values, color='black', linewidth=3, label='Mean (real)')
-    plt.xlim(start_date, end_date)
-    plt.ylabel('Leakage Current (mA)')
-    plt.title('Real Leakage Current for All Sensors')
-    plt.grid(True)
+        ax.plot(mean_real.index, mean_real.values, color='black', linewidth=3, label='Mean (real)')
+    
+    # Add parameter info box
+    add_parameter_info(ax)
+    
+    ax.set_xlim(start_date, end_date)
+    ax.set_ylabel('Leakage Current (mA)')
+    ax.set_title('Real Leakage Current for All Sensors')
+    ax.grid(True)
     plt.tight_layout()
-    plt.legend(loc='center left', bbox_to_anchor=(1.01, 0.5), title='Sensors', fontsize='small')
+    ax.legend(loc='center left', bbox_to_anchor=(1.01, 0.5), title='Sensors', fontsize='small')
     if output_dir is not None:
         plt.savefig(os.path.join(output_dir, "all_real.png"), bbox_inches='tight')
     plt.show()
@@ -208,41 +251,6 @@ def plot_temperature_only(result_df: pd.DataFrame, output_path: str = None, star
     plt.show()
 
 
-def plot_simulated_simple(simulated_df, sensors, output_path=None, start_date=None, end_date=None):
-    plt.figure(figsize=(12, 8))
-    for sensor in sensors:
-        if sensor not in simulated_df.columns:
-            continue
-        y = simulated_df[sensor]
-        if hasattr(y, 'columns'):
-            y = y.iloc[:, 0]
-        y_clean = y.dropna()
-        x_clean = y_clean.index
-        if y_clean.empty or len(x_clean) != len(y_clean):
-            continue
-        plt.plot(x_clean, y_clean.values, label=sensor, alpha=0.7, linewidth=1)
-    plt.xlim(start_date, end_date)
-    plt.ylabel('Simulated Leakage Current (mA)')
-    plt.title('Simulated Leakage Current for all sensors (simple overlay)')
-    plt.grid(True)
-    plt.tight_layout()
-    if output_path:
-        plt.savefig(output_path)
-    plt.close()
-
-
-def plot_simulated_pandas(simulated_df, output_path=None):
-    import matplotlib.pyplot as plt
-    plt.figure(figsize=(12, 8))
-    simulated_df.plot(ax=plt.gca(), legend=False, alpha=0.7)
-    plt.ylabel("Simulated Leakage Current (mA)")
-    plt.title("Simulated Leakage Current for all sensors (pandas plot)")
-    plt.tight_layout()
-    if output_path:
-        plt.savefig(output_path)
-    plt.close()
-
-
 def plot_currents_vs_cumulative_fluence(df: pd.DataFrame, sensor_name: str, output_path: str = None):
     """Plot both simulated and real currents against delivered fluence."""
     sim_col = f"current_{sensor_name}"
@@ -253,25 +261,28 @@ def plot_currents_vs_cumulative_fluence(df: pd.DataFrame, sensor_name: str, outp
         print(f"No delivered fluence data found for sensor {sensor_name}")
         return
         
-    plt.figure(figsize=(12, 8))
+    fig, ax = plt.subplots(figsize=(12, 8))
     
     if real_col in df.columns:
         real_data = df[[real_col, deliv_fluence_col]].dropna()
         if not real_data.empty:
-            plt.scatter(real_data[deliv_fluence_col], real_data[real_col], 
+            ax.scatter(real_data[deliv_fluence_col], real_data[real_col], 
                        color='red', s=1, label='Real Leakage Current')
     
     if sim_col in df.columns:
         sim_data = df[[sim_col, deliv_fluence_col]].dropna()
         if not sim_data.empty:
-            plt.scatter(sim_data[deliv_fluence_col], sim_data[sim_col], 
+            ax.scatter(sim_data[deliv_fluence_col], sim_data[sim_col], 
                        color='blue', s=1, label='Simulated Leakage Current')
     
-    plt.xlabel('Delivered Fluence (n/cm²)')
-    plt.ylabel('Leakage Current (mA)')
-    plt.title(f'Leakage Current vs Delivered Fluence for Sensor {sensor_name}')
-    plt.grid(True)
-    plt.legend()
+    # Add parameter info box
+    add_parameter_info(ax)
+    
+    ax.set_xlabel('Delivered Fluence (n/cm²)')
+    ax.set_ylabel('Leakage Current (mA)')
+    ax.set_title(f'Leakage Current vs Delivered Fluence for Sensor {sensor_name}')
+    ax.grid(True)
+    ax.legend()
     
     if output_path:
         plt.savefig(output_path)
@@ -279,64 +290,67 @@ def plot_currents_vs_cumulative_fluence(df: pd.DataFrame, sensor_name: str, outp
     plt.close()
 
 
-def plot_all_currents_vs_delivered_fluence(df, sensors, output_dir=None):
-    """Plot all sensors currents against delivered fluence in two separate plots."""
-    # Plot of simulated currents vs delivered fluence
-    plt.figure(figsize=(12, 12))
+def plot_all_currents_vs_luminosity(df, sensors, output_dir=None):
+    """Plot all sensors currents against integrated luminosity in two separate plots."""
+    if 'integrated_luminosity' not in df.columns:
+        print("No integrated luminosity data found")
+        return
+        
+    # Plot of simulated currents vs luminosity
+    fig, ax = plt.subplots(figsize=(12, 12))
     sim_columns = []
     
     for sensor in sensors:
         sim_col = f"current_{sensor}"
-        deliv_fluence_col = f"delivered_fluence_{sensor}"
         
-        if sim_col in df.columns and deliv_fluence_col in df.columns:
+        if sim_col in df.columns:
             sim_columns.append(sim_col)
-            sim_data = df[[sim_col, deliv_fluence_col]].dropna()
+            sim_data = df[[sim_col, 'integrated_luminosity']].dropna()
             if not sim_data.empty:
-                plt.scatter(sim_data[deliv_fluence_col], sim_data[sim_col], 
+                ax.scatter(sim_data['integrated_luminosity'], sim_data[sim_col], 
                           s=1, label=sensor)
     
-    plt.xlabel('Delivered Fluence (n/cm²)')
-    plt.ylabel('Leakage Current (mA)')
-    plt.title('Simulated Leakage Current vs Delivered Fluence')
-    plt.grid(True)
-    plt.legend(loc='center left', bbox_to_anchor=(1.01, 0.5), 
-              title='Sensors', fontsize='small')
+    # Add parameter info box
+    add_parameter_info(ax)
+    
+    ax.set_xlabel('Integrated Luminosity (fb$^{-1}$)')
+    ax.set_ylabel('Leakage Current (mA)')
+    ax.set_title('Simulated Leakage Current vs Integrated Luminosity for All Sensors')
+    ax.grid(True)
     plt.tight_layout()
-    
+    ax.legend(loc='center left', bbox_to_anchor=(1.01, 0.5), title='Sensors', fontsize='small')
     if output_dir is not None:
-        plt.savefig(os.path.join(output_dir, "sim_vs_fluence.png"), 
-                   bbox_inches='tight')
+        plt.savefig(os.path.join(output_dir, "all_simulated_vs_luminosity.png"), bbox_inches='tight')
+    plt.show()
+    plt.close()
     
-    # Plot of real currents vs delivered fluence
-    plt.figure(figsize=(12, 12))
+    # Plot of real currents vs luminosity
+    fig, ax = plt.subplots(figsize=(12, 12))
     real_columns = []
     
     for sensor in sensors:
         real_col = f"real_current_{sensor}"
-        deliv_fluence_col = f"delivered_fluence_{sensor}"
         
-        if real_col in df.columns and deliv_fluence_col in df.columns:
+        if real_col in df.columns:
             real_columns.append(real_col)
-            real_data = df[[real_col, deliv_fluence_col]].dropna()
+            real_data = df[[real_col, 'integrated_luminosity']].dropna()
             if not real_data.empty:
-                plt.scatter(real_data[deliv_fluence_col], real_data[real_col], 
+                ax.scatter(real_data['integrated_luminosity'], real_data[real_col], 
                           s=1, label=sensor)
     
-    plt.xlabel('Delivered Fluence (n/cm²)')
-    plt.ylabel('Leakage Current (mA)')
-    plt.title('Real Leakage Current vs Delivered Fluence')
-    plt.grid(True)
-    plt.legend(loc='center left', bbox_to_anchor=(1.01, 0.5), 
-              title='Sensors', fontsize='small')
+    # Add parameter info box
+    add_parameter_info(ax)
+    
+    ax.set_xlabel('Integrated Luminosity (fb$^{-1}$)')
+    ax.set_ylabel('Leakage Current (mA)')
+    ax.set_title('Real Leakage Current vs Integrated Luminosity for All Sensors')
+    ax.grid(True)
     plt.tight_layout()
-    
+    ax.legend(loc='center left', bbox_to_anchor=(1.01, 0.5), title='Sensors', fontsize='small')
     if output_dir is not None:
-        plt.savefig(os.path.join(output_dir, "real_vs_fluence.png"), 
-                   bbox_inches='tight')
-    
+        plt.savefig(os.path.join(output_dir, "all_real_vs_luminosity.png"), bbox_inches='tight')
     plt.show()
-    plt.close('all')
+    plt.close()
 
 
 def plot_integrated_luminosity(df: pd.DataFrame, output_path: str = None):
@@ -361,30 +375,34 @@ def plot_currents_vs_integrated_luminosity(df: pd.DataFrame, sensor_name: str, o
     """Plot both simulated and real currents against integrated luminosity."""
     sim_col = f"current_{sensor_name}"
     real_col = f"real_current_{sensor_name}"
+    lumi_col = "integrated_luminosity"
     
-    if 'integrated_luminosity' not in df.columns:
+    if lumi_col not in df.columns:
         print("No integrated luminosity data found")
         return
-        
-    plt.figure(figsize=(12, 8))
     
-    if real_col in df.columns:
-        real_data = df[[real_col, 'integrated_luminosity']].dropna()
-        if not real_data.empty:
-            plt.scatter(real_data['integrated_luminosity'], real_data[real_col], 
-                       color='red', s=1, label='Real Leakage Current')
+    fig, ax = plt.subplots(figsize=(12, 8))
     
     if sim_col in df.columns:
-        sim_data = df[[sim_col, 'integrated_luminosity']].dropna()
+        sim_data = df[[sim_col, lumi_col]].dropna()
         if not sim_data.empty:
-            plt.scatter(sim_data['integrated_luminosity'], sim_data[sim_col], 
-                       color='blue', s=1, label='Simulated Leakage Current')
+            ax.scatter(sim_data[lumi_col], sim_data[sim_col], 
+                      color='blue', s=2, alpha=0.7, label='Simulated')
     
-    plt.xlabel('Integrated Luminosity')
-    plt.ylabel('Leakage Current (mA)')
-    plt.title(f'Leakage Current vs Integrated Luminosity for Sensor {sensor_name}')
-    plt.grid(True)
-    plt.legend()
+    if real_col in df.columns:
+        real_data = df[[real_col, lumi_col]].dropna()
+        if not real_data.empty:
+            ax.scatter(real_data[lumi_col], real_data[real_col], 
+                      color='red', s=2, alpha=0.7, label='Real')
+    
+    # Add parameter info box
+    add_parameter_info(ax)
+    
+    ax.set_xlabel('Integrated Luminosity (fb$^{-1}$)')
+    ax.set_ylabel('Leakage Current (mA)')
+    ax.set_title(f'Leakage Current vs Integrated Luminosity for Sensor {sensor_name}')
+    ax.grid(True)
+    ax.legend()
     
     if output_path:
         plt.savefig(output_path)
@@ -400,44 +418,49 @@ def plot_currents_vs_position(summary_df: pd.DataFrame, target_luminosities: lis
         target_luminosities: List of target luminosity values used for the plot
         output_path: Optional path to save the plot
     """
-    fig = plt.figure(figsize=(12, 16))
+    fig, ax = plt.subplots(figsize=(14, 8))
     
-    # Plot simulated currents
-    plt.subplot(2, 1, 1)
-    for lumi in target_luminosities:
-        lumi_str = f'_f{lumi:.1f}'
-        current_col = f'current_sim{lumi_str}'
+    markers = ['o', '^', 's', 'D']
+    colors = ['blue', 'red', 'green', 'purple']
+    
+    for i, target_lumi in enumerate(target_luminosities):
+        lumi_str = f'_f{target_lumi:.1f}'
+        sim_col = f'current_sim{lumi_str}'
+        real_col = f'current_real{lumi_str}'
         
-        mask = summary_df[current_col].notna()
-        plt.scatter(summary_df[mask]['position'], 
-                   summary_df[mask][current_col],
-                   label=f'L = {lumi:.1f} fb⁻¹', s=50)
-    
-    plt.xlabel('Position Z [mm]')
-    plt.ylabel('Leakage Current [mA]')
-    plt.title('Simulated Leakage Currents vs Position')
-    plt.grid(True)
-    plt.legend()
-    
-    # Plot real currents
-    plt.subplot(2, 1, 2)
-    for lumi in target_luminosities:
-        lumi_str = f'_f{lumi:.1f}'
-        current_col = f'current_real{lumi_str}'
+        # Extract values for this luminosity target
+        positions = summary_df['position'].values
+        sim_values = summary_df[sim_col].values if sim_col in summary_df.columns else None
+        real_values = summary_df[real_col].values if real_col in summary_df.columns else None
         
-        mask = summary_df[current_col].notna()
-        plt.scatter(summary_df[mask]['position'], 
-                   summary_df[mask][current_col],
-                   label=f'L = {lumi:.1f} fb⁻¹', s=50)
+        # Skip if no data
+        if sim_values is None and real_values is None:
+            continue
+            
+        # Simulated current vs position
+        color_idx = i % len(colors)
+        marker_idx = i % len(markers)
+        
+        if sim_values is not None:
+            ax.scatter(positions, sim_values, 
+                      color=colors[color_idx], marker=markers[marker_idx],
+                      s=50, label=f'Sim @ {target_lumi} fb$^{{-1}}$')
+            
+        # Real current vs position - use same color but hollow markers
+        if real_values is not None:
+            ax.scatter(positions, real_values, 
+                      edgecolor=colors[color_idx], marker=markers[marker_idx],
+                      facecolor='none', s=50, label=f'Real @ {target_lumi} fb$^{{-1}}$')
     
-    plt.xlabel('Position Z [mm]')
-    plt.ylabel('Leakage Current [mA]')
-    plt.title('Real Leakage Currents vs Position')
-    plt.grid(True)
-    plt.legend()
+    # Add parameter info box
+    add_parameter_info(ax, loc='upper right')
     
-    # Adjust spacing between subplots
-    plt.tight_layout(h_pad=2.0)  # Increased space between plots
+    ax.set_xlabel('Sensor Z Position (mm)')
+    ax.set_ylabel('Leakage Current (mA)')
+    ax.set_title('Leakage Current vs Sensor Position at Different Luminosities')
+    ax.grid(True)
+    ax.legend(fontsize=8)
+    plt.tight_layout()
     
     if output_path:
         plt.savefig(output_path)

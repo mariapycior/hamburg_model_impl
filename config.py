@@ -66,6 +66,12 @@ CURRENT_YEAR_LIST = [
 # Mode for current-temperature adjustment: 'adjust_sim', 'adjust_real', or 'adjust_both'
 CURRENT_TEMP_MODE = 'adjust_both'
 
+# Reference temperature for adjusting currents (in Kelvin)
+REFERENCE_TEMPERATURE = 273.15
+
+# Target luminosity values for current vs position plots (in fb^-1)
+TARGET_LUMINOSITIES = [0.8, 3.1, 6.5]
+
 # Resampling period for simulation data
 # Available values: '1min', '1H', '10H', '24H', '1W'
 SIMULATION_PERIOD = '6H'
