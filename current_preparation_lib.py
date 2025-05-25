@@ -135,12 +135,13 @@ def add_delivered_fluence(df: pd.DataFrame, params, sensors: list) -> pd.DataFra
     
     return out
 
-def create_sensor_summary(df: pd.DataFrame, date=None) -> pd.DataFrame:
+def create_sensor_summary(df: pd.DataFrame, target_luminosity=3.1) -> pd.DataFrame:
     """
     Create a summary DataFrame with sensor currents and positions.
+    For each sensor finds the closest luminosity point to target_luminosity.
     Args:
         df: DataFrame with sensor data
-        date: Optional date for which to get the currents (if None, uses last date)
+        target_luminosity: Target integrated luminosity value
     Returns:
         DataFrame with sensor names as index and columns: current_sim, current_real, position
     """
@@ -149,12 +150,8 @@ def create_sensor_summary(df: pd.DataFrame, date=None) -> pd.DataFrame:
     from VeloDetectorElement import VeloDetectorElement
     velo = VeloDetectorElement()
     
-    # Get data for specified date
-    if date is None:
-        date = df.index[-1]
-    
     # Prepare empty DataFrame
-    summary = pd.DataFrame(columns=['current_sim', 'current_real', 'position'])
+    summary = pd.DataFrame(columns=['current_sim', 'current_real', 'position', 'luminosity'])
     
     # Find all unique sensors
     sim_sensors = [col.replace('current_', '') for col in df.columns if col.startswith('current_') and not col.startswith('current_real')]
@@ -164,19 +161,64 @@ def create_sensor_summary(df: pd.DataFrame, date=None) -> pd.DataFrame:
         sim_col = f'current_{sensor}'
         real_col = f'real_current_{sensor}'
         
-        # Get last non-NaN value for each column
-        sim_val = df[sim_col].dropna().iloc[-1] if sim_col in df.columns else None
-        real_val = df[real_col].dropna().iloc[-1] if real_col in df.columns else None
+        # Get data for this sensor
+        sensor_data = df[[sim_col, real_col, 'integrated_luminosity']].dropna()
+        if not sensor_data.empty and 'integrated_luminosity' in sensor_data.columns:
+            # Find closest luminosity point for this sensor
+            closest_idx = (sensor_data['integrated_luminosity'] - target_luminosity).abs().idxmin()
+            sim_val = sensor_data[sim_col].loc[closest_idx]
+            real_val = sensor_data[real_col].loc[closest_idx]
+            lumi_val = sensor_data['integrated_luminosity'].loc[closest_idx]
+        else:
+            sim_val = df[sim_col].dropna().iloc[-1] if sim_col in df.columns else None
+            real_val = df[real_col].dropna().iloc[-1] if real_col in df.columns else None
+            lumi_val = None
         
         try:
-            # Add 'HV' to sensor name for position lookup
             sensor_key = (sensor, 'HV')
             position = velo.sensor_name2sensor_z(sensor_key)
-            summary.loc[sensor] = [sim_val, real_val, position]
+            summary.loc[sensor] = [sim_val, real_val, position, lumi_val]
         except Exception as e:
             print(f"Warning: Could not get position for sensor {sensor}: {e}")
-            summary.loc[sensor] = [sim_val, real_val, None]
+            summary.loc[sensor] = [sim_val, real_val, None, lumi_val]
     
-    print("Summary created successfully")
+    print(f"Summary created successfully (target luminosity: {target_luminosity})")
+    return summary.sort_values('position')
+
+def current_for_lumi(df: pd.DataFrame, target_luminosities: list) -> pd.DataFrame:
+    from VeloDetectorElement import VeloDetectorElement
+    velo = VeloDetectorElement()
+    
+    summary = pd.DataFrame()
+    sim_sensors = [col.replace('current_', '') for col in df.columns if col.startswith('current_') and not col.startswith('current_real')]
+    
+    for target_lumi in target_luminosities:
+        current_cols = []
+        for sensor in sim_sensors:
+            sim_col = f'current_{sensor}'
+            real_col = f'real_current_{sensor}'
+            
+            sensor_data = df[[sim_col, real_col, 'integrated_luminosity']].dropna()
+            if not sensor_data.empty and 'integrated_luminosity' in sensor_data.columns:
+                closest_idx = (sensor_data['integrated_luminosity'] - target_lumi).abs().idxmin()
+                sim_val = sensor_data[sim_col].loc[closest_idx]
+                real_val = sensor_data[real_col].loc[closest_idx]
+            else:
+                sim_val = None
+                real_val = None
+            
+            try:
+                sensor_key = (sensor, 'HV')
+                position = velo.sensor_name2sensor_z(sensor_key)
+            except:
+                position = None
+                
+            if sensor not in summary.index:
+                summary.loc[sensor, 'position'] = position
+                
+            lumi_str = f'_f{target_lumi:.1f}'
+            summary.loc[sensor, f'current_sim{lumi_str}'] = sim_val
+            summary.loc[sensor, f'current_real{lumi_str}'] = real_val
+            
     return summary.sort_values('position')
 

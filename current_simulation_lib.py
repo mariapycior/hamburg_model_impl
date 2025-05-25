@@ -216,7 +216,7 @@ def process_all_sensors(fluence_df, temp_df, params, common_sensors):
 
             fluence_series, temp_series = prepare_sensor_data(fluence_df, temp_df, sensor)
             # Add 3.2 to temperature when fluence is above zero
-            #temp_series[fluence_series > 0] += 3.2
+            temp_series[fluence_series > 0] += 3.2
             sim_df = simulate_current_sensor(fluence_series, temp_series, params, sensor_name=sensor)
             sim_df = sim_df.resample(SIMULATION_PERIOD.lower(), origin=sim_df.index[0]).ffill()
             

@@ -14,10 +14,10 @@ E_I_STAR = 1.30  # Energy in eV
 ALPHA_I = 1.23e-17  # Current-related damage rate in A/cm
 ALPHA_0_STAR = 7.07e-17  # Current-related damage coefficient in A/cm
 BETA = 3.29e-18  # Second order damage coefficient in A/cm
-E_I = 1.11  # Activation energy in eV
+E_I = 1.09  # Activation energy in eV
 K_0I = 1.2e13  # Frequency factor in s^-1
 T_0 = 1.0  # Reference time in days
-V = 0.805  # Bias voltage in V
+V = 0.805  # Objętość
 E_EFF = 1.21  # Effective activation energy in eV
 
 class Parameters:

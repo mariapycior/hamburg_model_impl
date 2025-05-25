@@ -392,31 +392,52 @@ def plot_currents_vs_integrated_luminosity(df: pd.DataFrame, sensor_name: str, o
     plt.close()
 
 
-def plot_currents_vs_position(summary_df: pd.DataFrame, output_path: str = None):
+def plot_currents_vs_position(summary_df: pd.DataFrame, target_luminosities: list, output_path: str = None):
     """
     Plot simulated and real currents against sensor position.
     Args:
-        summary_df: DataFrame from create_sensor_summary with columns [current_sim, current_real, position]
+        summary_df: DataFrame from create_sensor_summary with columns [current_sim, current_real, position, luminosity]
+        target_luminosities: List of target luminosity values used for the plot
+        output_path: Optional path to save the plot
     """
-    plt.figure(figsize=(12, 8))
+    fig = plt.figure(figsize=(12, 16))
     
     # Plot simulated currents
-    mask_sim = summary_df['current_sim'].notna()
-    plt.scatter(summary_df[mask_sim]['position'], 
-               summary_df[mask_sim]['current_sim'],
-               color='blue', label='Simulated Current', s=50)
-    
-    # Plot real currents
-    mask_real = summary_df['current_real'].notna()
-    plt.scatter(summary_df[mask_real]['position'], 
-               summary_df[mask_real]['current_real'],
-               color='red', label='Real Current', s=50)
+    plt.subplot(2, 1, 1)
+    for lumi in target_luminosities:
+        lumi_str = f'_f{lumi:.1f}'
+        current_col = f'current_sim{lumi_str}'
+        
+        mask = summary_df[current_col].notna()
+        plt.scatter(summary_df[mask]['position'], 
+                   summary_df[mask][current_col],
+                   label=f'L = {lumi:.1f} fb⁻¹', s=50)
     
     plt.xlabel('Position Z [mm]')
     plt.ylabel('Leakage Current [mA]')
-    plt.title('Leakage Currents vs Position')
+    plt.title('Simulated Leakage Currents vs Position')
     plt.grid(True)
     plt.legend()
+    
+    # Plot real currents
+    plt.subplot(2, 1, 2)
+    for lumi in target_luminosities:
+        lumi_str = f'_f{lumi:.1f}'
+        current_col = f'current_real{lumi_str}'
+        
+        mask = summary_df[current_col].notna()
+        plt.scatter(summary_df[mask]['position'], 
+                   summary_df[mask][current_col],
+                   label=f'L = {lumi:.1f} fb⁻¹', s=50)
+    
+    plt.xlabel('Position Z [mm]')
+    plt.ylabel('Leakage Current [mA]')
+    plt.title('Real Leakage Currents vs Position')
+    plt.grid(True)
+    plt.legend()
+    
+    # Adjust spacing between subplots
+    plt.tight_layout(h_pad=2.0)  # Increased space between plots
     
     if output_path:
         plt.savefig(output_path)
