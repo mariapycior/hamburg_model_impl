@@ -185,3 +185,40 @@ def create_sensor_summary(df: pd.DataFrame, target_luminosity=3.1) -> pd.DataFra
     print(f"Summary created successfully (target luminosity: {target_luminosity})")
     return summary.sort_values('position')
 
+def current_for_lumi(df: pd.DataFrame, target_luminosities: list) -> pd.DataFrame:
+    from VeloDetectorElement import VeloDetectorElement
+    velo = VeloDetectorElement()
+    
+    summary = pd.DataFrame()
+    sim_sensors = [col.replace('current_', '') for col in df.columns if col.startswith('current_') and not col.startswith('current_real')]
+    
+    for target_lumi in target_luminosities:
+        current_cols = []
+        for sensor in sim_sensors:
+            sim_col = f'current_{sensor}'
+            real_col = f'real_current_{sensor}'
+            
+            sensor_data = df[[sim_col, real_col, 'integrated_luminosity']].dropna()
+            if not sensor_data.empty and 'integrated_luminosity' in sensor_data.columns:
+                closest_idx = (sensor_data['integrated_luminosity'] - target_lumi).abs().idxmin()
+                sim_val = sensor_data[sim_col].loc[closest_idx]
+                real_val = sensor_data[real_col].loc[closest_idx]
+            else:
+                sim_val = None
+                real_val = None
+            
+            try:
+                sensor_key = (sensor, 'HV')
+                position = velo.sensor_name2sensor_z(sensor_key)
+            except:
+                position = None
+                
+            if sensor not in summary.index:
+                summary.loc[sensor, 'position'] = position
+                
+            lumi_str = f'_f{target_lumi:.1f}'
+            summary.loc[sensor, f'current_sim{lumi_str}'] = sim_val
+            summary.loc[sensor, f'current_real{lumi_str}'] = real_val
+            
+    return summary.sort_values('position')
+

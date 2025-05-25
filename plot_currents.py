@@ -111,9 +111,9 @@ def main():
         
         # Create sensor summary and plot position dependence AFTER all adjustments
         import plot_utils
-        target_luminosity = 6.5
-        summary_df = cpl.create_sensor_summary(result_df, target_luminosity=target_luminosity)
-        plot_utils.plot_currents_vs_position(summary_df, target_luminosity=target_luminosity)
+        target_luminosities = [0.8, 3.1, 6.5]  # przykładowe wartości
+        summary_df = cpl.current_for_lumi(result_df, target_luminosities)
+        plot_utils.plot_currents_vs_position(summary_df, target_luminosities)
         
         if not args.all_sensors:
             sensor = args.sensor
