@@ -67,7 +67,7 @@ CURRENT_YEAR_LIST = [
 CURRENT_TEMP_MODE = 'adjust_both'
 
 # Reference temperature for adjusting currents (in Kelvin)
-REFERENCE_TEMPERATURE = 273.15
+REFERENCE_TEMPERATURE = 279.35
 
 # Temperature correction settings
 TEMPERATURE_CORRECTION_ENABLED = True # Whether to apply temperature correction
