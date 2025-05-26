@@ -56,68 +56,135 @@ def adjust_both_with_new_temperature(df: pd.DataFrame, params, sensors: list, T_
     return out
 
 def set_temperature_where_fluence_zero(data: pd.DataFrame, sensors: list, threshold_percent: float =50.0) -> pd.DataFrame:
-    """Filter temperature values based on histogram analysis by month.
+    """Filter temperature values in two steps:
     
-    For each month separately, keeps only values from bins that exceed threshold_percent of the highest bin.
+    1. For periods with fluence > 0:
+       - Apply monthly histogram filtering to keep only values in significant bins
+    
+    2. For periods with fluence = 0:
+       - Use the most common temperature from non-zero fluence data histogram
+       - Apply this single temperature value to all zero fluence periods
     """
     out = data.copy()
     
     for sensor in sensors:
         temp_col = f"temperature_{sensor}"
+        fluence_col = f"fluence_{sensor}"
         
         if temp_col not in out.columns:
             continue
-        
-        # Get all data with timestamps    
-        temp_series = out[temp_col].copy()
-        if temp_series.isna().all():
+            
+        if fluence_col not in out.columns:
+            # If no fluence data, apply histogram filtering to all data
+            out = _apply_histogram_filtering(out, sensor, temp_col, None, threshold_percent)
             continue
             
-        # Process each month separately
-        # Create a mask that will collect all valid points
-        all_valid_mask = pd.Series(False, index=out.index)
+        # Separate zero and non-zero fluence periods
+        zero_fluence_mask = (out[fluence_col] == 0)
+        nonzero_fluence_mask = ~zero_fluence_mask & ~out[fluence_col].isna()
         
-        # Group by year and month
-        for (year, month), month_data in temp_series.groupby([temp_series.index.year, temp_series.index.month]):
-            # Skip if we have too few data points
-            if len(month_data) < 20:
-                continue
-                
-            # Get data without NaN values
-            month_data_clean = month_data.dropna()
-            if len(month_data_clean) == 0:
-                continue
-                
-            # Remove extreme values (below 200K and above 300K)
-            mask = (month_data_clean > 200) & (month_data_clean < 300)
-            filtered_month_data = month_data_clean[mask]
-            if len(filtered_month_data) < 10:  # Skip if too few points after filtering
-                continue
-                
-            # Create histogram for this month
-            hist, bin_edges = np.histogram(filtered_month_data, bins=100)
-            
-            # Find maximum bin count and threshold
-            max_bin_count = np.max(hist)
-            threshold = (threshold_percent / 100) * max_bin_count
-            
-            # Find bins that exceed the threshold
-            valid_bins = np.where(hist >= threshold)[0]
-            if len(valid_bins) == 0:
-                continue
-                
-            # Create mask for values that belong to valid bins
-            month_mask = pd.Series(False, index=month_data.index)
-            
-            for bin_idx in valid_bins:
-                bin_min = bin_edges[bin_idx]
-                bin_max = bin_edges[bin_idx + 1]
-                month_mask |= (month_data >= bin_min) & (month_data < bin_max)
-            
-            # Add this month's valid points to the overall mask
-            all_valid_mask.loc[month_mask.index] = month_mask
+        # KROK 1: Filtrowanie danych z niezerową fluencją histogramami miesięcznymi
+        if nonzero_fluence_mask.any():
+            out = _apply_histogram_filtering(out, sensor, temp_col, nonzero_fluence_mask, threshold_percent)
         
-        # Set values outside valid bins to NaN
+        # KROK 2: Użyj najczęstszej temperatury z niezerowej fluencji dla okresów z zerową fluencją
+        if zero_fluence_mask.any() and nonzero_fluence_mask.any():
+            # Pobierz wszystkie temperatury z NIEZEROWĄ fluencją 
+            nonzero_temp_data = out.loc[nonzero_fluence_mask, temp_col].dropna()
+            
+            if len(nonzero_temp_data) > 0:
+                # Ogranicz do rozsądnego zakresu
+                nonzero_temp_filtered = nonzero_temp_data[(nonzero_temp_data > 200) & (nonzero_temp_data < 300)]
+                
+                if len(nonzero_temp_filtered) > 0:
+                    # Stwórz histogram dla całego okresu z niezerową fluencją
+                    hist, bin_edges = np.histogram(nonzero_temp_filtered, bins=100)
+                    
+                    # Znajdź bin z najwyższą liczbą wystąpień
+                    max_bin_idx = np.argmax(hist)
+                    bin_min = bin_edges[max_bin_idx]
+                    bin_max = bin_edges[max_bin_idx + 1]
+                    
+                    # Oblicz średnią wartość tego binu
+                    bin_mean = (bin_min + bin_max) / 2
+                    
+                    # Ustaw tę temperaturę dla wszystkich okresów z zerową fluencją
+                    out.loc[zero_fluence_mask, temp_col] = bin_mean
+    
+    return out
+
+
+def _apply_histogram_filtering(data: pd.DataFrame, sensor: str, temp_col: str, mask=None, threshold_percent: float=50.0) -> pd.DataFrame:
+    """Apply histogram filtering to temperature data by month.
+    
+    If mask is provided, only apply to data points where mask is True.
+    """
+    out = data.copy()
+    
+    # If mask provided, only analyze those points
+    if mask is not None:
+        temp_series = out.loc[mask, temp_col].copy()
+    else:
+        temp_series = out[temp_col].copy()
+        
+    if temp_series.isna().all():
+        return out
+        
+    # Process each month separately
+    # Create a mask that will collect all valid points
+    all_valid_mask = pd.Series(False, index=temp_series.index)
+    
+    # Group by year and month
+    for (year, month), month_data in temp_series.groupby([temp_series.index.year, temp_series.index.month]):
+        # Skip if we have too few data points
+        if len(month_data) < 20:
+            continue
+            
+        # Get data without NaN values
+        month_data_clean = month_data.dropna()
+        if len(month_data_clean) == 0:
+            continue
+            
+        # Remove extreme values (below 200K and above 300K)
+        filter_mask = (month_data_clean > 200) & (month_data_clean < 300)
+        filtered_month_data = month_data_clean[filter_mask]
+        if len(filtered_month_data) < 10:  # Skip if too few points after filtering
+            continue
+            
+        # Create histogram for this month
+        hist, bin_edges = np.histogram(filtered_month_data, bins=100)
+        
+        # Find maximum bin count and threshold
+        max_bin_count = np.max(hist)
+        threshold = (threshold_percent / 100) * max_bin_count
+        
+        # Find bins that exceed the threshold
+        valid_bins = np.where(hist >= threshold)[0]
+        if len(valid_bins) == 0:
+            continue
+            
+        # Create mask for values that belong to valid bins
+        month_mask = pd.Series(False, index=month_data.index)
+        
+        for bin_idx in valid_bins:
+            bin_min = bin_edges[bin_idx]
+            bin_max = bin_edges[bin_idx + 1]
+            month_mask |= (month_data >= bin_min) & (month_data < bin_max)
+        
+        # Add this month's valid points to the overall mask
+        all_valid_mask.loc[month_mask.index] = month_mask
+    
+    # Apply filtering only to the relevant subset of data
+    if mask is not None:
+        # Create a mask for the whole dataset, initialized with the original mask
+        full_mask = mask.copy()
+        # Set to False the points in the mask that didn't pass the histogram filtering
+        invalid_points = mask.index[mask & ~all_valid_mask]
+        full_mask.loc[invalid_points] = False
+        # Set to NaN the points that didn't pass the filtering
+        out.loc[mask & ~full_mask & ~out[temp_col].isna(), temp_col] = float('nan')
+    else:
+        # If no mask provided, apply to all data
         out.loc[~all_valid_mask & ~out[temp_col].isna(), temp_col] = float('nan')
     
     return out

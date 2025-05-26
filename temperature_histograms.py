@@ -9,133 +9,131 @@ from config import Paths
 paths = Paths()
 simulated_path = paths.get_output_file('simulated_df.csv')
 df = pd.read_csv(simulated_path, index_col=0, parse_dates=True)
-df_filtered = df.copy()
 
-# Próg filtrowania (procent najwyższego binu)
-THRESHOLD_PERCENT = 30
+# Wybierz 4 sensory do analizy
+all_sensors = set()
+for col in df.columns:
+    if col.startswith('temperature_'):
+        sensor = col.replace('temperature_', '')
+        all_sensors.add(sensor)
 
-# Znajdź kolumny temperatury
-temp_columns = [col for col in df.columns if col.startswith('temperature_')]
+selected_sensors = list(all_sensors)[:4] if len(all_sensors) >= 4 else list(all_sensors)
+print(f"Wybrane sensory do analizy: {selected_sensors}")
 
-# Liczba sensorów dla wykresu
-plot_sensors = min(4, len(temp_columns))
-selected_plot_sensors = temp_columns[:plot_sensors]
+# Przygotuj trzy wersje danych
+df_all = df.copy()  # Wszystkie dane
+df_nonzero_fluence = df.copy()  # Tylko dane z niezerową fluencją
+df_zero_fluence = df.copy()  # Tylko dane z zerową fluencją
 
-# Utwórz wykres histogramów dla przykładowych 4 sensorów
-plt.figure(figsize=(15, 10))
-
-# Przetwarzaj wszystkie sensory
-filtered_counts = {}
-valid_bin_ranges = {}
-
-for i, sensor_col in enumerate(temp_columns):
-    # Pobierz dane temperatury bez NaN
-    temp_data = df[sensor_col].dropna()
+# Przygotuj dane dla każdego sensora
+for sensor in selected_sensors:
+    temp_col = f"temperature_{sensor}"
+    fluence_col = f"fluence_{sensor}"
     
-    # Usuń wartości skrajne (poniżej 200K i powyżej 300K)
-    original_temp_data = temp_data.copy()
-    temp_data = temp_data[(temp_data > 200) & (temp_data < 300)]
-    
-    if len(temp_data) == 0:
+    if temp_col not in df.columns or fluence_col not in df.columns:
         continue
-        
-    sensor_name = sensor_col.replace('temperature_', '')
     
-    # Utwórz histogram
-    hist, bin_edges = np.histogram(temp_data, bins=100)
+    # Ustaw NaN dla zerowej fluencji w df_nonzero_fluence
+    zero_fluence_mask = (df[fluence_col] == 0)
+    df_nonzero_fluence.loc[zero_fluence_mask, temp_col] = np.nan
     
-    # Znajdź maksymalną wartość histogramu
-    max_bin_count = np.max(hist)
-    threshold = (THRESHOLD_PERCENT / 100) * max_bin_count
-    
-    # Znajdź biny, które przekraczają próg
-    valid_bins = np.where(hist >= threshold)[0]
-    
-    if len(valid_bins) > 0:
-        # Stwórz maskę dla wszystkich wartości, które należą do ważnych binów
-        valid_mask = np.zeros_like(temp_data, dtype=bool)
-        
-        for bin_idx in valid_bins:
-            bin_min = bin_edges[bin_idx]
-            bin_max = bin_edges[bin_idx + 1]
-            valid_mask |= (temp_data >= bin_min) & (temp_data < bin_max)
-        
-        # Zachowaj tylko wartości z ważnych binów
-        valid_data = temp_data[valid_mask]
-        
-        # Zastosuj filtr do oryginalnych danych
-        new_mask = np.ones_like(original_temp_data, dtype=bool)
-        
-        for bin_idx in valid_bins:
-            bin_min = bin_edges[bin_idx]
-            bin_max = bin_edges[bin_idx + 1]
-            in_bin_mask = (original_temp_data >= bin_min) & (original_temp_data < bin_max)
-            new_mask &= ~in_bin_mask  # Odwróć maskę - chcemy indeksy, które NIE są w tych binach
-        
-        # Indeksy w df do ustawienia na NaN
-        indices_to_nan = original_temp_data[new_mask].index
-        
-        # Zapisz zakres ważnych binów dla wykresu
-        valid_bin_mins = [bin_edges[idx] for idx in valid_bins]
-        valid_bin_maxs = [bin_edges[idx+1] for idx in valid_bins]
-        valid_bin_ranges[sensor_name] = list(zip(valid_bin_mins, valid_bin_maxs))
-        
-        # Zapisz ile wartości jest poniżej progu
-        total_points = len(original_temp_data)
-        filtered_points = len(indices_to_nan)
-        filtered_counts[sensor_name] = (total_points, filtered_points)
-        
-        # Ustaw NaN dla wartości poza ważnymi binami
-        df_filtered.loc[indices_to_nan, sensor_col] = np.nan
-        
-        # Rysuj wykresy dla wybranych sensorów
-        if sensor_col in selected_plot_sensors:
-            idx = selected_plot_sensors.index(sensor_col)
-            
-            plt.subplot(2, 2, idx + 1)
-            
-            # Narysuj pełny histogram i zaznacz ważne biny
-            counts, bins, patches = plt.hist(temp_data, bins=100, color='skyblue', 
-                                     edgecolor='black', alpha=0.3, label='Wszystkie dane')
-            
-            # Zaznacz ważne biny na histogramie
-            for bin_idx in valid_bins:
-                patches[bin_idx].set_facecolor('blue')
-                patches[bin_idx].set_alpha(0.7)
-            
-            # Dodaj linię progu
-            plt.axhline(threshold, color='red', linestyle='dashed', 
-                       linewidth=1, label=f'Próg {THRESHOLD_PERCENT}%: {threshold:.0f} punktów')
-            
-            # Dodaj informacje o średniej i medianie
-            mean_temp = np.mean(valid_data) if len(valid_data) > 0 else np.nan
-            median_temp = np.median(valid_data) if len(valid_data) > 0 else np.nan
-            if not np.isnan(mean_temp):
-                plt.axvline(mean_temp, color='green', linestyle='dashed', 
-                          linewidth=1, label=f'Średnia po filtracji: {mean_temp:.2f}K')
-            
-            plt.title(f'Rozkład temperatur - {sensor_name}\n(niebieskie biny powyżej progu {THRESHOLD_PERCENT}%)')
-            plt.xlabel('Temperatura [K]')
-            plt.ylabel('Liczba pomiarów')
-            plt.grid(True, alpha=0.3)
-            plt.legend(fontsize='small')
+    # Ustaw NaN dla niezerowej fluencji w df_zero_fluence
+    nonzero_fluence_mask = (df[fluence_col] != 0) & ~df[fluence_col].isna()
+    df_zero_fluence.loc[nonzero_fluence_mask, temp_col] = np.nan
 
-# Zapisz przefiltrowane dane
-plt.tight_layout()
-plt.savefig('temperature_histograms_filtered.png', dpi=300)
-plt.show()
-
-output_file = 'simulated_df_filtered_temp.csv'
-df_filtered.to_csv(paths.get_output_file(output_file))
-
-# Wypisz statystyki filtrowania
-print(f"Zapisano przefiltrowane dane do: {output_file}")
-print(f"Próg filtrowania: {THRESHOLD_PERCENT}% najwyższego binu")
-print("\nStatystyki filtrowania (sensor, wszystkie punkty, odfiltrowane punkty, % odfiltrowanych):")
-for sensor, (total, filtered) in filtered_counts.items():
-    percent = (filtered / total * 100) if total > 0 else 0
-    print(f"{sensor}: {total} punktów, {filtered} odfiltrowanych ({percent:.1f}%)")
+# Utwórz histogramy dla każdego sensora
+for sensor in selected_sensors:
+    # Pobierz dane temperaturowe dla sensora
+    temp_col = f"temperature_{sensor}"
+    if temp_col not in df.columns:
+        continue
     
-    # Wypisz zakresy zachowanych binów
-    if sensor in valid_bin_ranges and len(valid_bin_ranges[sensor]) < 10:  # Pokazuj tylko jeśli nie ma za dużo binów
-        print(f"  Zachowane zakresy: {', '.join([f'{min:.2f}-{max:.2f}K' for min, max in valid_bin_ranges[sensor]])}")
+    fluence_col = f"fluence_{sensor}"
+    if fluence_col not in df.columns:
+        continue
+    
+    # Przygotuj dane do histogramów
+    temperature_data = df[temp_col].dropna().copy()
+    
+    # Wersja z niezerową fluencją
+    nonzero_fluence = df.loc[df[fluence_col] > 0, temp_col].dropna()
+    
+    # Wersja z zerową fluencją
+    zero_fluence = df.loc[df[fluence_col] == 0, temp_col].dropna()
+    
+    # Znajdź bin z najwyższą liczbą wystąpień dla danych z zerową fluencją
+    if len(zero_fluence) > 0:
+        hist, bin_edges = np.histogram(zero_fluence, bins=100)
+        if hist.max() > 0:
+            max_bin_idx = np.argmax(hist)
+            max_bin_min = bin_edges[max_bin_idx]
+            max_bin_max = bin_edges[max_bin_idx + 1]
+            # Oblicz średnią wartość w najwyższym binie
+            bin_values = zero_fluence[(zero_fluence >= max_bin_min) & (zero_fluence < max_bin_max)]
+            if len(bin_values) > 0:
+                bin_mean = bin_values.mean()
+                print(f"{sensor}: Najwyższy bin dla zerowej fluencji w przedziale {max_bin_min:.2f}-{max_bin_max:.2f}K, średnia: {bin_mean:.4f}K")
+
+# Twórz wykresy dla każdego sensora
+for sensor in selected_sensors:
+    temp_col = f"temperature_{sensor}"
+    fluence_col = f"fluence_{sensor}"
+    
+    if temp_col not in df.columns or fluence_col not in df.columns:
+        continue
+    
+    # Utwórz 3 rodzaje histogramów na jednym wykresie
+    plt.figure(figsize=(15, 8))
+    
+    # 1. Wszystkie dane
+    plt.subplot(1, 3, 1)
+    all_temp_data = df_all[temp_col].dropna()
+    all_temp_filtered = all_temp_data[(all_temp_data > 200) & (all_temp_data < 300)]
+    if len(all_temp_filtered) > 0:
+        plt.hist(all_temp_filtered, bins=100, color='blue', alpha=0.7, edgecolor='black')
+        plt.axvline(all_temp_filtered.mean(), color='red', linestyle='dashed', 
+                    linewidth=2, label=f'Śr: {all_temp_filtered.mean():.2f}K')
+        plt.title(f"{sensor} - Wszystkie dane\n({len(all_temp_filtered)} punktów)")
+        plt.xlabel("Temperatura [K]")
+        plt.ylabel("Liczba pomiarów")
+        plt.grid(alpha=0.3)
+        plt.legend()
+    
+    # 2. Tylko niezerowa fluencja
+    plt.subplot(1, 3, 2)
+    nonzero_temp_data = df_nonzero_fluence[temp_col].dropna()
+    nonzero_temp_filtered = nonzero_temp_data[(nonzero_temp_data > 200) & (nonzero_temp_data < 300)]
+    if len(nonzero_temp_filtered) > 0:
+        plt.hist(nonzero_temp_filtered, bins=100, color='green', alpha=0.7, edgecolor='black')
+        plt.axvline(nonzero_temp_filtered.mean(), color='red', linestyle='dashed', 
+                    linewidth=2, label=f'Śr: {nonzero_temp_filtered.mean():.2f}K')
+        plt.title(f"{sensor} - Tylko niezerowa fluencja\n({len(nonzero_temp_filtered)} punktów)")
+        plt.xlabel("Temperatura [K]")
+        plt.ylabel("Liczba pomiarów")
+        plt.grid(alpha=0.3)
+        plt.legend()
+    
+    # 3. Tylko zerowa fluencja
+    plt.subplot(1, 3, 3)
+    zero_temp_data = df_zero_fluence[temp_col].dropna()
+    zero_temp_filtered = zero_temp_data[(zero_temp_data > 200) & (zero_temp_data < 300)]
+    if len(zero_temp_filtered) > 0:
+        plt.hist(zero_temp_filtered, bins=100, color='orange', alpha=0.7, edgecolor='black')
+        plt.axvline(zero_temp_filtered.mean(), color='red', linestyle='dashed', 
+                    linewidth=2, label=f'Śr: {zero_temp_filtered.mean():.2f}K')
+        plt.title(f"{sensor} - Tylko zerowa fluencja\n({len(zero_temp_filtered)} punktów)")
+        plt.xlabel("Temperatura [K]")
+        plt.ylabel("Liczba pomiarów")
+        plt.grid(alpha=0.3)
+        plt.legend()
+    
+    # Dodaj statystyki porównawcze
+    plt.tight_layout()
+    plt.show()
+
+# Komunikat podsumowujący
+print("Wyświetlono histogramy temperatur w trzech wariantach:")
+print("1. Dla wszystkich danych")
+print("2. Tylko dla danych z niezerową fluencją")
+print("3. Tylko dla danych z zerową fluencją")
+

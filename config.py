@@ -64,7 +64,7 @@ CURRENT_YEAR_LIST = [
 
 # --- Simulation Configuration ---
 # Mode for current-temperature adjustment: 'adjust_sim', 'adjust_real', or 'adjust_both'
-CURRENT_TEMP_MODE = 'adjust_real'
+CURRENT_TEMP_MODE = 'adjust_sim'
 
 # Reference temperature for adjusting currents (in Kelvin)
 REFERENCE_TEMPERATURE = 276.35
