@@ -2,9 +2,17 @@ import numpy as np
 import pandas as pd
 from config import CURRENT_TEMP_MODE, SIMULATION_PERIOD, OUTPUT_SIMULATED_DF_PATH, REFERENCE_TEMPERATURE, TARGET_LUMINOSITIES
 
+def load_temperature_data(file_path: str) -> pd.DataFrame:
+    if not os.path.exists(file_path):
+        raise FileNotFoundError(f"Temperature file not found: {file_path}")
+    df = pd.read_csv(file_path, index_col="TS", parse_dates=["TS"])
+    df = df.dropna(how='all')
+    return df
+
 def adjust_real_current_with_temperature(df: pd.DataFrame, params, sensors: list) -> pd.DataFrame:
     """Adjust real current with temperature for multiple sensors."""
     out = df.copy()
+    out = set_temperature_where_fluence_zero(out, sensors)
     for sensor in sensors:
         real_col = f"real_current_{sensor}"
         temp_col = f"temperature_{sensor}"
@@ -47,35 +55,70 @@ def adjust_both_with_new_temperature(df: pd.DataFrame, params, sensors: list, T_
         
     return out
 
-def set_temperature_where_fluence_zero(data: pd.DataFrame, sensors: list, value: float = 261.15, min_duration_days: int = 30) -> pd.DataFrame:
-    """Set temperature values where fluence is zero, handling multiple sensors."""
+def set_temperature_where_fluence_zero(data: pd.DataFrame, sensors: list, threshold_percent: float =50.0) -> pd.DataFrame:
+    """Filter temperature values based on histogram analysis by month.
+    
+    For each month separately, keeps only values from bins that exceed threshold_percent of the highest bin.
+    """
     out = data.copy()
     
     for sensor in sensors:
-        fluence_col = f"fluence_{sensor}"
         temp_col = f"temperature_{sensor}"
         
-        if fluence_col not in out.columns or temp_col not in out.columns:
+        if temp_col not in out.columns:
             continue
-            
-        zero_mask = (out[fluence_col] == 0)
-        if zero_mask.sum() == 0:
-            out.loc[(out[temp_col] < 1260) | (out[temp_col] > 64), temp_col] = float('nan')
-            continue
-            
-        zero_groups = (zero_mask != zero_mask.shift()).cumsum()
-        group_ids = zero_groups[zero_mask].unique()
-        freq_minutes = int(pd.to_timedelta(SIMULATION_PERIOD.lower()).total_seconds() // 60)
-        min_points = (min_duration_days * 24 * 60) // freq_minutes
         
-        for gid in group_ids:
-            idx = zero_groups[zero_groups == gid].index
-            if len(idx) >= min_points:
-                out.loc[idx, temp_col] = value
-            else:
-                out.loc[idx, temp_col] = float('nan')
+        # Get all data with timestamps    
+        temp_series = out[temp_col].copy()
+        if temp_series.isna().all():
+            continue
+            
+        # Process each month separately
+        # Create a mask that will collect all valid points
+        all_valid_mask = pd.Series(False, index=out.index)
+        
+        # Group by year and month
+        for (year, month), month_data in temp_series.groupby([temp_series.index.year, temp_series.index.month]):
+            # Skip if we have too few data points
+            if len(month_data) < 20:
+                continue
                 
-        out.loc[(out[temp_col] < 210) | (out[temp_col] > 268.15), temp_col] = float('nan')
+            # Get data without NaN values
+            month_data_clean = month_data.dropna()
+            if len(month_data_clean) == 0:
+                continue
+                
+            # Remove extreme values (below 200K and above 300K)
+            mask = (month_data_clean > 200) & (month_data_clean < 300)
+            filtered_month_data = month_data_clean[mask]
+            if len(filtered_month_data) < 10:  # Skip if too few points after filtering
+                continue
+                
+            # Create histogram for this month
+            hist, bin_edges = np.histogram(filtered_month_data, bins=100)
+            
+            # Find maximum bin count and threshold
+            max_bin_count = np.max(hist)
+            threshold = (threshold_percent / 100) * max_bin_count
+            
+            # Find bins that exceed the threshold
+            valid_bins = np.where(hist >= threshold)[0]
+            if len(valid_bins) == 0:
+                continue
+                
+            # Create mask for values that belong to valid bins
+            month_mask = pd.Series(False, index=month_data.index)
+            
+            for bin_idx in valid_bins:
+                bin_min = bin_edges[bin_idx]
+                bin_max = bin_edges[bin_idx + 1]
+                month_mask |= (month_data >= bin_min) & (month_data < bin_max)
+            
+            # Add this month's valid points to the overall mask
+            all_valid_mask.loc[month_mask.index] = month_mask
+        
+        # Set values outside valid bins to NaN
+        out.loc[~all_valid_mask & ~out[temp_col].isna(), temp_col] = float('nan')
     
     return out
 
