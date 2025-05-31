@@ -2,15 +2,15 @@ import numpy as np
 import pandas as pd
 from config import CURRENT_TEMP_MODE, SIMULATION_PERIOD, OUTPUT_SIMULATED_DF_PATH, REFERENCE_TEMPERATURE, TARGET_LUMINOSITIES
 
+import os
+
 def load_temperature_data(file_path: str) -> pd.DataFrame:
     if not os.path.exists(file_path):
         raise FileNotFoundError(f"Temperature file not found: {file_path}")
     df = pd.read_csv(file_path, index_col="TS", parse_dates=["TS"])
-    df = df.dropna(how='all')
-    return df
+    return df.dropna(how='all')
 
 def adjust_real_current_with_temperature(df: pd.DataFrame, params, sensors: list) -> pd.DataFrame:
-    """Adjust real current with temperature for multiple sensors."""
     out = df.copy()
     out = set_temperature_where_fluence_zero(out, sensors)
     for sensor in sensors:
@@ -20,16 +20,12 @@ def adjust_real_current_with_temperature(df: pd.DataFrame, params, sensors: list
         if real_col not in out.columns or temp_col not in out.columns:
             continue
             
-        T = out[temp_col].values
-        T_ref = params.T_ref
-        E_eff = params.E_eff
-        kB = params.kb
-        R_Tref = (T_ref / T) ** 2 * np.exp(-(E_eff / (2 * kB)) * (1 / T_ref - 1 / T))
+        R_Tref = _calculate_temperature_adjustment(
+            out[temp_col].values, params.T_ref, params.E_eff, params.kb, reverse=True)
         out[real_col] = out[real_col].values * R_Tref
     return out
 
 def adjust_both_with_new_temperature(df: pd.DataFrame, params, sensors: list, T_new: float = None) -> pd.DataFrame:
-    """Adjust both real and simulated currents to a new temperature for multiple sensors."""
     out = df.copy()
     out = set_temperature_where_fluence_zero(out, sensors)
     if T_new is None:
@@ -43,28 +39,31 @@ def adjust_both_with_new_temperature(df: pd.DataFrame, params, sensors: list, T_
         if real_col not in out.columns or sim_col not in out.columns or temp_col not in out.columns:
             continue
             
-        T_real = out[temp_col].values
-        T_ref = params.T_ref
-        E_eff = params.E_eff
-        kB = params.kb
-        R_Tref_real = (T_new / T_real) ** 2 * np.exp(-(E_eff / (2 * kB)) * (1 / T_new - 1 / T_real))
-        R_Tref_sim = (T_new / T_ref) ** 2 * np.exp(-(E_eff / (2 * kB)) * (1/T_new - 1/T_ref))
+        R_Tref_real = _calculate_temperature_adjustment(
+            T_new, out[temp_col].values, params.E_eff, params.kb)
+        R_Tref_sim = _calculate_temperature_adjustment(
+            T_new, params.T_ref, params.E_eff, params.kb)
         
         out[real_col] = out[real_col].values * R_Tref_real
         out[sim_col] = out[sim_col].values * R_Tref_sim
         
     return out
 
+def get_temperature_bin_mean(temp_data):
+    if len(temp_data) == 0:
+        return None
+    
+    filtered_temp = temp_data[(temp_data > 200) & (temp_data < 300)]
+    if len(filtered_temp) == 0:
+        return None
+        
+    hist, bin_edges = np.histogram(filtered_temp, bins=100)
+    max_bin_idx = np.argmax(hist)
+    bin_min = bin_edges[max_bin_idx]
+    bin_max = bin_edges[max_bin_idx + 1]
+    return (bin_min + bin_max) / 2
+
 def set_temperature_where_fluence_zero(data: pd.DataFrame, sensors: list, threshold_percent: float =50.0) -> pd.DataFrame:
-    """Filter temperature values in two steps:
-    
-    1. For periods with fluence > 0:
-       - Apply monthly histogram filtering to keep only values in significant bins
-    
-    2. For periods with fluence = 0:
-       - Use the most common temperature from non-zero fluence data histogram
-       - Apply this single temperature value to all zero fluence periods
-    """
     out = data.copy()
     
     for sensor in sensors:
@@ -75,122 +74,80 @@ def set_temperature_where_fluence_zero(data: pd.DataFrame, sensors: list, thresh
             continue
             
         if fluence_col not in out.columns:
-            # If no fluence data, apply histogram filtering to all data
             out = _apply_histogram_filtering(out, sensor, temp_col, None, threshold_percent)
             continue
             
-        # Separate zero and non-zero fluence periods
         zero_fluence_mask = (out[fluence_col] == 0)
         nonzero_fluence_mask = ~zero_fluence_mask & ~out[fluence_col].isna()
         
-        # KROK 1: Filtrowanie danych z niezerową fluencją histogramami miesięcznymi
         if nonzero_fluence_mask.any():
             out = _apply_histogram_filtering(out, sensor, temp_col, nonzero_fluence_mask, threshold_percent)
         
-        # KROK 2: Użyj najczęstszej temperatury z niezerowej fluencji dla okresów z zerową fluencją
         if zero_fluence_mask.any() and nonzero_fluence_mask.any():
-            # Pobierz wszystkie temperatury z NIEZEROWĄ fluencją 
             nonzero_temp_data = out.loc[nonzero_fluence_mask, temp_col].dropna()
+            bin_mean = get_temperature_bin_mean(nonzero_temp_data)
             
-            if len(nonzero_temp_data) > 0:
-                # Ogranicz do rozsądnego zakresu
-                nonzero_temp_filtered = nonzero_temp_data[(nonzero_temp_data > 200) & (nonzero_temp_data < 300)]
-                
-                if len(nonzero_temp_filtered) > 0:
-                    # Stwórz histogram dla całego okresu z niezerową fluencją
-                    hist, bin_edges = np.histogram(nonzero_temp_filtered, bins=100)
-                    
-                    # Znajdź bin z najwyższą liczbą wystąpień
-                    max_bin_idx = np.argmax(hist)
-                    bin_min = bin_edges[max_bin_idx]
-                    bin_max = bin_edges[max_bin_idx + 1]
-                    
-                    # Oblicz średnią wartość tego binu
-                    bin_mean = (bin_min + bin_max) / 2
-                    
-                    # Ustaw tę temperaturę dla wszystkich okresów z zerową fluencją
-                    out.loc[zero_fluence_mask, temp_col] = bin_mean
+            if bin_mean is not None:
+                out.loc[zero_fluence_mask, temp_col] = bin_mean
     
     return out
 
 
 def _apply_histogram_filtering(data: pd.DataFrame, sensor: str, temp_col: str, mask=None, threshold_percent: float=50.0) -> pd.DataFrame:
-    """Apply histogram filtering to temperature data by month.
-    
-    If mask is provided, only apply to data points where mask is True.
-    """
     out = data.copy()
     
-    # If mask provided, only analyze those points
-    if mask is not None:
-        temp_series = out.loc[mask, temp_col].copy()
-    else:
-        temp_series = out[temp_col].copy()
-        
+    temp_series = out.loc[mask, temp_col].copy() if mask is not None else out[temp_col].copy()
     if temp_series.isna().all():
         return out
         
-    # Process each month separately
-    # Create a mask that will collect all valid points
     all_valid_mask = pd.Series(False, index=temp_series.index)
     
-    # Group by year and month
     for (year, month), month_data in temp_series.groupby([temp_series.index.year, temp_series.index.month]):
-        # Skip if we have too few data points
         if len(month_data) < 20:
             continue
             
-        # Get data without NaN values
         month_data_clean = month_data.dropna()
         if len(month_data_clean) == 0:
             continue
             
-        # Remove extreme values (below 200K and above 300K)
         filter_mask = (month_data_clean > 200) & (month_data_clean < 300)
         filtered_month_data = month_data_clean[filter_mask]
-        if len(filtered_month_data) < 10:  # Skip if too few points after filtering
+        if len(filtered_month_data) < 10:
             continue
             
-        # Create histogram for this month
         hist, bin_edges = np.histogram(filtered_month_data, bins=100)
-        
-        # Find maximum bin count and threshold
         max_bin_count = np.max(hist)
         threshold = (threshold_percent / 100) * max_bin_count
-        
-        # Find bins that exceed the threshold
         valid_bins = np.where(hist >= threshold)[0]
+        
         if len(valid_bins) == 0:
             continue
             
-        # Create mask for values that belong to valid bins
         month_mask = pd.Series(False, index=month_data.index)
-        
         for bin_idx in valid_bins:
             bin_min = bin_edges[bin_idx]
             bin_max = bin_edges[bin_idx + 1]
             month_mask |= (month_data >= bin_min) & (month_data < bin_max)
         
-        # Add this month's valid points to the overall mask
         all_valid_mask.loc[month_mask.index] = month_mask
     
-    # Apply filtering only to the relevant subset of data
     if mask is not None:
-        # Create a mask for the whole dataset, initialized with the original mask
         full_mask = mask.copy()
-        # Set to False the points in the mask that didn't pass the histogram filtering
         invalid_points = mask.index[mask & ~all_valid_mask]
         full_mask.loc[invalid_points] = False
-        # Set to NaN the points that didn't pass the filtering
         out.loc[mask & ~full_mask & ~out[temp_col].isna(), temp_col] = float('nan')
     else:
-        # If no mask provided, apply to all data
         out.loc[~all_valid_mask & ~out[temp_col].isna(), temp_col] = float('nan')
     
     return out
 
+def _calculate_temperature_adjustment(T, T_ref, E_eff, kB, reverse=False):
+    if reverse:
+        return (T_ref / T) ** 2 * np.exp(-(E_eff / (2 * kB)) * (1 / T_ref - 1 / T))
+    else:
+        return (T / T_ref) ** 2 * np.exp(-(E_eff / (2 * kB)) * (1 / T - 1 / T_ref))
+
 def adjust_simulated_current_with_temperature(df: pd.DataFrame, params, sensors: list) -> pd.DataFrame:
-    """Adjust simulated current with temperature for multiple sensors."""
     out = df.copy()
     out = set_temperature_where_fluence_zero(out, sensors)
     for sensor in sensors:
@@ -200,43 +157,36 @@ def adjust_simulated_current_with_temperature(df: pd.DataFrame, params, sensors:
         if sim_col not in out.columns or temp_col not in out.columns:
             continue
             
-        T = out[temp_col].values
-        T_ref = params.T_ref
-        E_eff = params.E_eff
-        kB = params.kb
-        R_Tref = (T / T_ref) ** 2 * np.exp(-(E_eff / (2 * kB)) * (1/T - 1/T_ref))
-        out[sim_col] = (out[sim_col].values) * R_Tref #+ 0.0509
+        R_Tref = _calculate_temperature_adjustment(
+            out[temp_col].values, params.T_ref, params.E_eff, params.kb)
+        out[sim_col] = out[sim_col].values * R_Tref
     return out
 
 
 def load_and_prepare_simulated_df(sensor_names, path=OUTPUT_SIMULATED_DF_PATH):
-    """
-    Load simulated_df and map columns for the given sensor(s).
-    sensor_names: str or list of str
-    Returns original DataFrame with all columns for all requested sensors
-    """
-    df = pd.read_csv(path, index_col=0, parse_dates=True)
-    
-    from config import SELECTED_YEARS
-    if SELECTED_YEARS:
-        years_mask = df.index.year.isin(SELECTED_YEARS)
-        df = df[years_mask]
-    
     if isinstance(sensor_names, str):
         sensor_names = [sensor_names]
         
-    columns_to_keep = ['integrated_luminosity'] if 'integrated_luminosity' in df.columns else []
-    for sensor in sensor_names:
-        sensor_columns = [col for col in df.columns if col.endswith(f"_{sensor}")]
-        columns_to_keep.extend(sensor_columns)
-    
-    if len(columns_to_keep) > 1:  # Ensure we have more than just luminosity column
-        return df[columns_to_keep]
-    else:
+    try:
+        df = pd.read_csv(path, index_col=0, parse_dates=True)
+        df.index = pd.to_datetime(df.index)
+        df = df.sort_index()
+        
+        available_sensors = set()
+        for col in df.columns:
+            if col.startswith('current_'):
+                available_sensors.add(col.replace('current_', ''))
+        
+        missing_sensors = set(sensor_names) - available_sensors
+        if missing_sensors:
+            print(f"Warning: Sensors not found in simulated data: {', '.join(missing_sensors)}")
+        
+        return df
+    except Exception as e:
+        print(f"Error loading simulated data: {e}")
         return None
-    
+
 def add_delivered_fluence(df: pd.DataFrame, params, sensors: list) -> pd.DataFrame:
-    """Add delivered fluence columns for each sensor."""
     out = df.copy()
     
     for sensor in sensors:
