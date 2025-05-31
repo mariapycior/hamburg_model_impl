@@ -3,7 +3,12 @@ import matplotlib.pyplot as plt
 import pandas as pd
 import numpy as np
 from params import Parameters
-from config import CURRENT_TEMP_MODE, SIMULATION_PERIOD, REFERENCE_TEMPERATURE, TEMPERATURE_CORRECTION_ENABLED, TEMPERATURE_CORRECTION_DELTA
+from config import SIMULATION_PERIOD, TEMPERATURE_CORRECTION_ENABLED, TEMPERATURE_CORRECTION_DELTA
+from config_plot import (
+    CURRENT_TEMP_MODE, REFERENCE_TEMPERATURE,
+    USE_LINES_FOR_SIMULATION, SHOW_ERROR_BANDS, ERROR_PERCENTAGE, PLOT_RESAMPLING_PERIOD,
+    SCATTER_MARKER_SIZE, LINE_WIDTH, ERROR_BAND_ALPHA, REAL_DATA_COLOR, SIMULATED_DATA_COLOR, ERROR_BAND_COLOR
+)
 
 def add_parameter_info(ax, loc='upper left'):
     params = Parameters()
@@ -38,15 +43,52 @@ def add_parameter_info(ax, loc='upper left'):
             verticalalignment='top', horizontalalignment='left', bbox=props)
 
 
-def setup_subplot(ax, x_data, y_data, color, label, title, ylabel, xlim, ylim=None, use_line=False):
+def resample_data(data, period):
+    """Resample data based on specified period."""
+    if period and isinstance(data, pd.Series) and not data.empty:
+        return data.resample(period).mean()
+    return data
+
+def setup_subplot(ax, x_data, y_data, color, label, title, ylabel, xlim, ylim=None, use_line=None, show_error_band=None, is_current_plot=False, force_no_error=False):
+    # Determine whether to use lines based on parameter or global config
+    use_line = USE_LINES_FOR_SIMULATION if use_line is None else use_line
+    show_error_band = SHOW_ERROR_BANDS if show_error_band is None else show_error_band
+    
+    # Do not show error band if explicitly told not to
+    if force_no_error:
+        show_error_band = False
+    
+    # Resample data if needed
+    if PLOT_RESAMPLING_PERIOD:
+        y_data_series = pd.Series(y_data, index=x_data)
+        y_data_series = y_data_series.dropna()
+        y_data_series = resample_data(y_data_series, PLOT_RESAMPLING_PERIOD)
+        x_data = y_data_series.index
+        y_data = y_data_series.values
+    
+    # Create a pandas Series for easier handling
+    y_data_series = pd.Series(y_data, index=x_data)
+    y_data_series = y_data_series.sort_index()  # Sort by time index
+    
+    # First draw error band if needed (so it's below the line/points)
+    if use_line and show_error_band and is_current_plot:
+        error_value = y_data_series * (ERROR_PERCENTAGE / 100)
+        ax.fill_between(
+            y_data_series.index, 
+            y_data_series - error_value, 
+            y_data_series + error_value, 
+            color=ERROR_BAND_COLOR, 
+            alpha=ERROR_BAND_ALPHA, 
+            label=f'{ERROR_PERCENTAGE}% Error Band'
+        )
+    
+    # Then draw the actual data (line or scatter) on top
     if use_line:
         # For simulated data, use a line plot
-        y_data_series = pd.Series(y_data, index=x_data)
-        y_data_series = y_data_series.sort_index()  # Sort by time index
-        ax.plot(y_data_series.index, y_data_series.values, color=color, linewidth=1, label=label)
+        line = ax.plot(y_data_series.index, y_data_series.values, color=color, linewidth=LINE_WIDTH, label=label)
     else:
         # For real data or other data types, use scatter
-        ax.scatter(x_data, y_data, color=color, s=1, label=label)
+        ax.scatter(y_data_series.index, y_data_series.values, color=color, s=SCATTER_MARKER_SIZE, label=label)
     
     ax.set_xlim(xlim)
     if ylim:
@@ -57,7 +99,8 @@ def setup_subplot(ax, x_data, y_data, color, label, title, ylabel, xlim, ylim=No
     ax.legend()
 
 def plot_leakage_current(df: pd.DataFrame, sensor_name: str, 
-                       output_path: str = None, start_date: pd.Timestamp = None, end_date: pd.Timestamp = None):
+                       output_path: str = None, start_date: pd.Timestamp = None, end_date: pd.Timestamp = None,
+                       use_lines: bool = None, show_error_band: bool = None, resampling_period: str = None):
     sim_col = f"current_{sensor_name}"
     real_col = f"real_current_{sensor_name}"
     temp_col = f"temperature_{sensor_name}"
@@ -73,16 +116,18 @@ def plot_leakage_current(df: pd.DataFrame, sensor_name: str,
 
     fig, axes = plt.subplots(4, 1, figsize=(6, 8))
     
-    # Plot simulated current as line
-    setup_subplot(axes[0], df.index, df[sim_col], 'blue', 'Leakage Current Simulated', 
+    # Plot simulated current
+    setup_subplot(axes[0], df.index, df[sim_col], SIMULATED_DATA_COLOR, 'Leakage Current Simulated', 
                  f'Simulated Leakage Current for Sensor {sensor_name}', 'Leakage Current (mA)', 
-                 (start_date, end_date), (0, 0.3), use_line=True)
+                 (start_date, end_date), (0, 0.3), use_line=use_lines, show_error_band=show_error_band,
+                 is_current_plot=True)
     
-    # Plot real current if available (as scatter)
+    # Plot real current if available
     if real_col in df.columns:
-        setup_subplot(axes[1], df.index, df[real_col], 'red', 'Leakage Current (Real Data)', 
+        setup_subplot(axes[1], df.index, df[real_col], REAL_DATA_COLOR, 'Leakage Current (Real Data)', 
                      f'Real Leakage Current for Sensor {sensor_name}', 'Leakage Current (mA)', 
-                     (start_date, end_date), (0, 0.3))
+                     (start_date, end_date), (0, 0.3), use_line=False,
+                     is_current_plot=True)
     
     # Plot fluence if available
     if fluence_col in df.columns:
@@ -102,7 +147,8 @@ def plot_leakage_current(df: pd.DataFrame, sensor_name: str,
 
 
 def plot_simulated_vs_real(df: pd.DataFrame, sensor_name: str, output_path: str = None, 
-                        start_date: pd.Timestamp = None, end_date: pd.Timestamp = None, weekly_average: bool = False):
+                        start_date: pd.Timestamp = None, end_date: pd.Timestamp = None, weekly_average: bool = False,
+                        use_lines: bool = None, show_error_band: bool = None, resampling_period: str = None):
     sim_col = f"current_{sensor_name}"
     real_col = f"real_current_{sensor_name}"
     
@@ -110,8 +156,16 @@ def plot_simulated_vs_real(df: pd.DataFrame, sensor_name: str, output_path: str 
         print(f"No data found for sensor {sensor_name}")
         return
 
+    # Apply resampling if specified
+    temp_df = df.copy()
+    
+    # Apply custom resampling period if provided
+    custom_period = resampling_period or PLOT_RESAMPLING_PERIOD
+    
     if weekly_average:
-        df = df.rolling('7d', min_periods=1).mean()
+        temp_df = temp_df.rolling('7d', min_periods=1).mean()
+    elif custom_period:
+        temp_df = temp_df.resample(custom_period).mean()
 
     fig, ax = plt.subplots(figsize=(6, 8))
     
@@ -120,19 +174,39 @@ def plot_simulated_vs_real(df: pd.DataFrame, sensor_name: str, output_path: str 
     else:
         ax.set_xlim(df.index.min(), df.index.max())
 
-    # Plot real data as scatter points
-    if real_col in df.columns:
-        real_data = df[real_col].dropna()
+    # Plot real data
+    if real_col in temp_df.columns:
+        real_data = temp_df[real_col].dropna()
         if not real_data.empty:
-            ax.scatter(real_data.index, real_data, color='red', s=1, label='Real Leakage Current')
+            ax.scatter(real_data.index, real_data, color=REAL_DATA_COLOR, s=SCATTER_MARKER_SIZE, label='Real Leakage Current')
     
-    # Plot simulated data as a line
-    if sim_col in df.columns:
-        sim_data = df[sim_col].dropna()
+    # Plot simulated data
+    if sim_col in temp_df.columns:
+        sim_data = temp_df[sim_col].dropna()
         if not sim_data.empty:
             # Sort data by index to ensure proper line connection
             sim_data = sim_data.sort_index()
-            ax.plot(sim_data.index, sim_data, color='blue', linewidth=1, label='Simulated Leakage Current')
+            
+            # Determine whether to use lines based on parameter or global config
+            use_line_plot = USE_LINES_FOR_SIMULATION if use_lines is None else use_lines
+            show_error = SHOW_ERROR_BANDS if show_error_band is None else show_error_band
+            
+            if use_line_plot:
+                ax.plot(sim_data.index, sim_data, color=SIMULATED_DATA_COLOR, linewidth=LINE_WIDTH, label='Simulated Leakage Current')
+                
+                # Add error band if requested
+                if show_error:
+                    error_value = sim_data * (ERROR_PERCENTAGE / 100)
+                    ax.fill_between(
+                        sim_data.index, 
+                        sim_data - error_value, 
+                        sim_data + error_value, 
+                        color=ERROR_BAND_COLOR, 
+                        alpha=ERROR_BAND_ALPHA, 
+                        label=f'{ERROR_PERCENTAGE}% Error Band'
+                    )
+            else:
+                ax.scatter(sim_data.index, sim_data, color=SIMULATED_DATA_COLOR, s=SCATTER_MARKER_SIZE, label='Simulated Leakage Current')
 
     add_parameter_info(ax)
     
@@ -150,23 +224,58 @@ def plot_simulated_vs_real(df: pd.DataFrame, sensor_name: str, output_path: str 
 
 
 def plot_sensors_data(df: pd.DataFrame, sensors: list, column_prefix: str, title: str, 
-                     output_path: str = None, start_date: pd.Timestamp = None, end_date: pd.Timestamp = None):
+                     output_path: str = None, start_date: pd.Timestamp = None, end_date: pd.Timestamp = None,
+                     use_lines: bool = None, show_error_band: bool = None, resampling_period: str = None,
+                     force_no_error: bool = False):
     fig, ax = plt.subplots(figsize=(8,6))
     columns = []
     
+    # Apply resampling if specified
+    temp_df = df.copy()
+    custom_period = resampling_period or PLOT_RESAMPLING_PERIOD
+    if custom_period:
+        temp_df = temp_df.resample(custom_period).mean()
+    
     for sensor in sensors:
         col_name = f"{column_prefix}_{sensor}"
-        if col_name in df.columns:
+        if col_name in temp_df.columns:
             columns.append(col_name)
-            y = df[col_name]
+            y = temp_df[col_name]
             y_clean = y.dropna()
             if not y_clean.empty:
-                # Use scatter for real data, line for simulated data
+                # Determine whether to use lines based on parameter or global config
+                use_line_plot = USE_LINES_FOR_SIMULATION if use_lines is None else use_lines
+                show_error = SHOW_ERROR_BANDS if show_error_band is None else show_error_band
+                
+                # Do not show error band if explicitly told not to
+                if force_no_error:
+                    show_error = False
+                
+                # For real data always use scatter, for simulated data use config
+                # Determine if this is a current plot (needed for error bands)
+                is_current_plot = column_prefix == "current" or column_prefix == "real_current"
+                
+                # First draw error band if needed (so it's below the points/line)
+                if column_prefix != "real_current" and use_line_plot and show_error and is_current_plot:
+                    y_sorted = y_clean.sort_index()  # Ensure data is sorted by time
+                    error_value = y_sorted * (ERROR_PERCENTAGE / 100)
+                    ax.fill_between(
+                        y_sorted.index, 
+                        y_sorted - error_value, 
+                        y_sorted + error_value, 
+                        color=ERROR_BAND_COLOR, 
+                        alpha=ERROR_BAND_ALPHA
+                    )
+                
+                # Then draw the actual data
                 if column_prefix == "real_current":
-                    ax.scatter(y_clean.index, y_clean.values, s=1, label=sensor)
+                    ax.scatter(y_clean.index, y_clean.values, s=SCATTER_MARKER_SIZE, label=sensor)
                 else:  # For simulated data
                     y_sorted = y_clean.sort_index()  # Ensure data is sorted by time
-                    ax.plot(y_sorted.index, y_sorted.values, linewidth=1, label=sensor)
+                    if use_line_plot:
+                        line = ax.plot(y_sorted.index, y_sorted.values, linewidth=LINE_WIDTH, label=sensor)
+                    else:
+                        ax.scatter(y_sorted.index, y_sorted.values, s=SCATTER_MARKER_SIZE, label=sensor)
     
     # Calculate mean with condition on number of non-NaN values
     if columns:
@@ -193,16 +302,18 @@ def plot_sensors_data(df: pd.DataFrame, sensors: list, column_prefix: str, title
     plt.close()
 
 def plot_all_sensors(df: pd.DataFrame, sensors: list, output_dir: str = None, 
-                    start_date: pd.Timestamp = None, end_date: pd.Timestamp = None):
-    # Plot simulated current for all sensors
+                    start_date: pd.Timestamp = None, end_date: pd.Timestamp = None,
+                    use_lines: bool = None, show_error_band: bool = None, resampling_period: str = None):
+    # Plot simulated current for all sensors (no error bands when plotting all sensors)
     sim_output = None if output_dir is None else os.path.join(output_dir, 'all_sensors_simulated.png')
     plot_sensors_data(df, sensors, 'current', 'Simulated Leakage Current for All Sensors', 
-                     sim_output, start_date, end_date)
+                     sim_output, start_date, end_date, use_lines, show_error_band, resampling_period,
+                     force_no_error=True)  # Force no error band for all sensors plot
     
-    # Plot real current for all sensors
+    # Plot real current for all sensors (if available)
     real_output = None if output_dir is None else os.path.join(output_dir, 'all_sensors_real.png')
     plot_sensors_data(df, sensors, 'real_current', 'Real Leakage Current for All Sensors', 
-                     real_output, start_date, end_date)
+                     real_output, start_date, end_date, False, False, resampling_period)
 
 
 def plot_temperature_only(result_df: pd.DataFrame, output_path: str = None, start_date: pd.Timestamp = None, end_date: pd.Timestamp = None):
@@ -223,41 +334,89 @@ def plot_temperature_only(result_df: pd.DataFrame, output_path: str = None, star
     plt.show()
 
 
-def plot_currents_vs_cumulative_fluence(df: pd.DataFrame, sensor_name: str, output_path: str = None):
-    """Plot both simulated and real currents against delivered fluence."""
+def plot_currents_vs_cumulative_fluence(df: pd.DataFrame, sensor_name: str, output_path: str = None,
+                                 use_lines: bool = None, show_error_band: bool = None):
+    """
+    Plot both simulated and real currents against delivered fluence.
+    """
     sim_col = f"current_{sensor_name}"
     real_col = f"real_current_{sensor_name}"
-    deliv_fluence_col = f"delivered_fluence_{sensor_name}"
+    fluence_col = f"fluence_{sensor_name}"
     
-    if deliv_fluence_col not in df.columns:
-        print(f"No delivered fluence data found for sensor {sensor_name}")
+    if fluence_col not in df.columns or (sim_col not in df.columns and real_col not in df.columns):
+        print(f"Missing data for plotting {sensor_name} currents vs fluence")
         return
+    
+    # Resample data if specified - similar to luminosity plot
+    temp_df = df.copy()
+    if PLOT_RESAMPLING_PERIOD:
+        # Create bins for fluence
+        bin_size = 1e13  # adjust as needed based on fluence range
+        temp_df['fluence_bin'] = (temp_df[fluence_col] / bin_size).astype(int) * bin_size
         
-    fig, ax = plt.subplots(figsize=(8,6))
+        # Group by fluence bins and average the currents
+        if sim_col in temp_df.columns:
+            sim_grouped = temp_df.groupby('fluence_bin')[sim_col].mean()
+        if real_col in temp_df.columns:
+            real_grouped = temp_df.groupby('fluence_bin')[real_col].mean()
+        
+        # Create new dataframe with binned data
+        df_binned = pd.DataFrame()
+        if sim_col in temp_df.columns:
+            df_binned[sim_col] = sim_grouped
+        if real_col in temp_df.columns:
+            df_binned[real_col] = real_grouped
+        df_binned.index.name = fluence_col
+        df_binned = df_binned.reset_index()
+    else:
+        df_binned = temp_df
     
-    if real_col in df.columns:
-        real_data = df[[real_col, deliv_fluence_col]].dropna()
-        if not real_data.empty:
-            ax.scatter(real_data[deliv_fluence_col], real_data[real_col], 
-                       color='red', s=1, label='Real Leakage Current')
+    fig, ax = plt.subplots(figsize=(8, 6))
     
-    if sim_col in df.columns:
-        sim_data = df[[sim_col, deliv_fluence_col]].dropna()
-        if not sim_data.empty:
-            ax.scatter(sim_data[deliv_fluence_col], sim_data[sim_col], 
-                       color='blue', s=1, label='Simulated Leakage Current')
+    # Determine whether to use lines based on parameter or global config
+    use_line_plot = USE_LINES_FOR_SIMULATION if use_lines is None else use_lines
+    show_err = SHOW_ERROR_BANDS if show_error_band is None else show_error_band
     
-    # Add parameter info box
+    # Plot real data
+    # Sort dataframe by fluence for better line plots
+    df_binned = df_binned.sort_values(by=fluence_col)
+    
+    if real_col in df_binned.columns and df_binned[real_col].notna().any():
+        df_real = df_binned[[real_col, fluence_col]].dropna()
+        ax.scatter(df_real[fluence_col], df_real[real_col], color=REAL_DATA_COLOR, s=SCATTER_MARKER_SIZE, label='Real Data')
+    
+    # Plot simulated data
+    if sim_col in df_binned.columns and df_binned[sim_col].notna().any():
+        df_sim = df_binned[[sim_col, fluence_col]].dropna()
+        
+        # First add error band if requested
+        if show_err and use_line_plot:
+            error_value = df_sim[sim_col] * (ERROR_PERCENTAGE / 100)
+            ax.fill_between(
+                df_sim[fluence_col], 
+                df_sim[sim_col] - error_value, 
+                df_sim[sim_col] + error_value, 
+                color=ERROR_BAND_COLOR, 
+                alpha=ERROR_BAND_ALPHA, 
+                label=f'{ERROR_PERCENTAGE}% Error Band'
+            )
+        
+        # Then plot data on top
+        if use_line_plot:
+            ax.plot(df_sim[fluence_col], df_sim[sim_col], color=SIMULATED_DATA_COLOR, linewidth=LINE_WIDTH, label='Simulated Data')
+        else:
+            ax.scatter(df_sim[fluence_col], df_sim[sim_col], color=SIMULATED_DATA_COLOR, s=SCATTER_MARKER_SIZE, label='Simulated Data')
+    
     add_parameter_info(ax)
-    
-    ax.set_xlabel('Delivered Fluence (n/cm²)')
+    ax.set_xlabel('Fluence (n/cm²)')
     ax.set_ylabel('Leakage Current (mA)')
-    ax.set_title(f'Leakage Current vs Delivered Fluence for Sensor {sensor_name}')
+    ax.set_title(f'Leakage Current vs Cumulative Fluence for Sensor {sensor_name}')
     ax.grid(True)
     ax.legend()
     
     if output_path:
         plt.savefig(output_path)
+        
     plt.show()
     plt.close()
 
@@ -343,33 +502,81 @@ def plot_integrated_luminosity(df: pd.DataFrame, output_path: str = None):
         print(f"Error creating integrated luminosity plot: {e}")
 
 
-def plot_currents_vs_integrated_luminosity(df: pd.DataFrame, sensor_name: str, output_path: str = None):
-    """Plot both simulated and real currents against integrated luminosity."""
+def plot_currents_vs_integrated_luminosity(df: pd.DataFrame, sensor_name: str, output_path: str = None,
+                                    use_lines: bool = None, show_error_band: bool = None):
+    """
+    Plot both simulated and real currents against integrated luminosity.
+    """
     sim_col = f"current_{sensor_name}"
     real_col = f"real_current_{sensor_name}"
     lumi_col = "integrated_luminosity"
     
-    if lumi_col not in df.columns:
-        print("No integrated luminosity data found")
+    if lumi_col not in df.columns or (sim_col not in df.columns and real_col not in df.columns):
+        print(f"Missing data for plotting {sensor_name} currents vs integrated luminosity")
         return
     
-    fig, ax = plt.subplots(figsize=(12, 8))
+    # Resample data if specified
+    temp_df = df.copy()
+    if PLOT_RESAMPLING_PERIOD:
+        # Need to group by luminosity bins for proper resampling
+        # Create bins for luminosity
+        bin_size = 0.1  # adjust as needed
+        temp_df['lumi_bin'] = (temp_df[lumi_col] / bin_size).astype(int) * bin_size
+        
+        # Group by luminosity bins and average the currents
+        if sim_col in temp_df.columns:
+            sim_grouped = temp_df.groupby('lumi_bin')[sim_col].mean()
+        if real_col in temp_df.columns:
+            real_grouped = temp_df.groupby('lumi_bin')[real_col].mean()
+        
+        # Create new dataframe with binned data
+        df_binned = pd.DataFrame()
+        if sim_col in temp_df.columns:
+            df_binned[sim_col] = sim_grouped
+        if real_col in temp_df.columns:
+            df_binned[real_col] = real_grouped
+        df_binned.index.name = lumi_col
+        df_binned = df_binned.reset_index()
+    else:
+        df_binned = temp_df
     
-    if sim_col in df.columns:
-        sim_data = df[[sim_col, lumi_col]].dropna()
-        if not sim_data.empty:
-            ax.scatter(sim_data[lumi_col], sim_data[sim_col], 
-                      color='blue', s=2, alpha=0.7, label='Simulated')
+    fig, ax = plt.subplots(figsize=(8, 6))
     
-    if real_col in df.columns:
-        real_data = df[[real_col, lumi_col]].dropna()
-        if not real_data.empty:
-            ax.scatter(real_data[lumi_col], real_data[real_col], 
-                      color='red', s=2, alpha=0.7, label='Real')
+    # Determine whether to use lines based on parameter or global config
+    use_line_plot = USE_LINES_FOR_SIMULATION if use_lines is None else use_lines
+    show_err = SHOW_ERROR_BANDS if show_error_band is None else show_error_band
     
-    # Add parameter info box
+    # Sort dataframe by luminosity for better line plots
+    df_binned = df_binned.sort_values(by=lumi_col)
+    
+    # Plot real data
+    if real_col in df_binned.columns and df_binned[real_col].notna().any():
+        df_real = df_binned[[real_col, lumi_col]].dropna()
+        ax.scatter(df_real[lumi_col], df_real[real_col], color=REAL_DATA_COLOR, s=SCATTER_MARKER_SIZE, label='Real Data')
+    
+    # Plot simulated data
+    if sim_col in df_binned.columns and df_binned[sim_col].notna().any():
+        df_sim = df_binned[[sim_col, lumi_col]].dropna()
+        
+        # First add error band if requested
+        if show_err and use_line_plot:
+            error_value = df_sim[sim_col] * (ERROR_PERCENTAGE / 100)
+            ax.fill_between(
+                df_sim[lumi_col], 
+                df_sim[sim_col] - error_value, 
+                df_sim[sim_col] + error_value, 
+                color=ERROR_BAND_COLOR, 
+                alpha=ERROR_BAND_ALPHA, 
+                label=f'{ERROR_PERCENTAGE}% Error Band'
+            )
+        
+        # Then plot data on top
+        if use_line_plot:
+            ax.plot(df_sim[lumi_col], df_sim[sim_col], color=SIMULATED_DATA_COLOR, linewidth=LINE_WIDTH, label='Simulated Data')
+        else:
+            ax.scatter(df_sim[lumi_col], df_sim[sim_col], color=SIMULATED_DATA_COLOR, s=SCATTER_MARKER_SIZE, label='Simulated Data')
+    
     add_parameter_info(ax)
-    
     ax.set_xlabel('Integrated Luminosity (fb$^{-1}$)')
     ax.set_ylabel('Leakage Current (mA)')
     ax.set_title(f'Leakage Current vs Integrated Luminosity for Sensor {sensor_name}')
@@ -378,6 +585,7 @@ def plot_currents_vs_integrated_luminosity(df: pd.DataFrame, sensor_name: str, o
     
     if output_path:
         plt.savefig(output_path)
+        
     plt.show()
     plt.close()
 

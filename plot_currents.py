@@ -6,7 +6,8 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import plot_utils
 
-from config import Paths, CURRENT_TEMP_MODE, TARGET_LUMINOSITIES
+from config import Paths, TARGET_LUMINOSITIES
+from config_plot import CURRENT_TEMP_MODE, PLOT_RESAMPLING_PERIOD
 from params import Parameters
 params = Parameters()
 import current_preparation_lib as cpl
@@ -64,6 +65,7 @@ def process_and_plot_data(result_df, sensors_to_use, args):
         plot_utils.plot_simulated_vs_real(result_df, sensor)
         plot_utils.plot_leakage_current(result_df, sensor)
         plot_utils.plot_currents_vs_integrated_luminosity(result_df, sensor)
+        plot_utils.plot_currents_vs_cumulative_fluence(result_df, sensor)
     else:
         print(f"Creating plots for all {len(sensors_to_use)} sensors")
         plot_utils.plot_all_sensors(result_df, sensors_to_use)
@@ -73,6 +75,12 @@ def main():
     args = parse_arguments()
     paths = Paths()
     simulated_path = paths.get_output_file(args.simulated_file)
+    
+    # Wyświetl informacje o konfiguracji wykresów z config_plot.py
+    print(f"Plot configuration from config_plot.py:")
+    print(f" - Temperature adjustment mode: {CURRENT_TEMP_MODE}")
+    print(f" - Resampling period: {PLOT_RESAMPLING_PERIOD if PLOT_RESAMPLING_PERIOD else 'None'}")
+    print(f" - All plot settings can be modified in config_plot.py")
     
     # List sensors if requested
     if args.list_sensors:
