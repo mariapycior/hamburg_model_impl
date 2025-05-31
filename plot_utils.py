@@ -62,7 +62,7 @@ def plot_leakage_current(df: pd.DataFrame, sensor_name: str,
     if end_date is None:
         end_date = df.index.max()
 
-    plt.figure(figsize=(12, 16))
+    plt.figure(figsize=(6, 8))
     
     plt.subplot(4, 1, 1)
     plt.scatter(df.index, df[sim_col], color='blue', s=1, label='Leakage Current Simulated')
@@ -129,7 +129,7 @@ def plot_simulated_vs_real(df, sensor_name, output_path=None, start_date=None, e
     if weekly_average:
         df = df.rolling('7d', min_periods=1).mean()
 
-    fig, ax = plt.subplots(figsize=(12, 8))
+    fig, ax = plt.subplots(figsize=(6, 8))
     
     if start_date is not None and end_date is not None:
         plt.xlim(pd.to_datetime(start_date), pd.to_datetime(end_date))
@@ -151,7 +151,9 @@ def plot_simulated_vs_real(df, sensor_name, output_path=None, start_date=None, e
     
     ax.set_ylabel('Leakage Current (mA)')
     ax.set_xlabel('Time')
-    ax.set_title(f'Comparison of Real vs Simulated Leakage Current for Sensor {sensor_name}')
+    ax.set_title(f'Real vs Simulated Leakage Current for {sensor_name}')
+
+    #ax.set_title(f'Comparison of Real vs Simulated Leakage Current for Sensor {sensor_name}')
     ax.grid(True)
     ax.legend()
     plt.tight_layout()
@@ -166,7 +168,7 @@ def plot_all_sensors(df, sensors, output_dir=None, start_date=None, end_date=Non
     import os
     
     # Plot of simulated current for all sensors
-    fig, ax = plt.subplots(figsize=(12, 12))
+    fig, ax = plt.subplots(figsize=(8,6))
     sim_columns = []
     
     for sensor in sensors:
@@ -202,7 +204,7 @@ def plot_all_sensors(df, sensors, output_dir=None, start_date=None, end_date=Non
     plt.close()
     
     # Plot of real currents
-    fig, ax = plt.subplots(figsize=(12, 12))
+    fig, ax = plt.subplots(figsize=(8,6))
     real_columns = []
     
     for sensor in sensors:
@@ -243,7 +245,7 @@ def plot_temperature_only(result_df: pd.DataFrame, output_path: str = None, star
         start_date = result_df.index.min()
     if end_date is None:
         end_date = result_df.index.max()
-    plt.figure(figsize=(12, 8))
+    plt.figure(figsize=(8,6))
     plt.scatter(result_df.index, result_df['temperature'], color='magenta', s=1, label='Temperature')
     plt.xlim(start_date, end_date)
     plt.ylabel('Temperature (K)')
@@ -266,7 +268,7 @@ def plot_currents_vs_cumulative_fluence(df: pd.DataFrame, sensor_name: str, outp
         print(f"No delivered fluence data found for sensor {sensor_name}")
         return
         
-    fig, ax = plt.subplots(figsize=(12, 8))
+    fig, ax = plt.subplots(figsize=(8,6))
     
     if real_col in df.columns:
         real_data = df[[real_col, deliv_fluence_col]].dropna()
@@ -302,7 +304,7 @@ def plot_all_currents_vs_luminosity(df, sensors, output_dir=None):
         return
         
     # Plot of simulated currents vs luminosity
-    fig, ax = plt.subplots(figsize=(12, 12))
+    fig, ax = plt.subplots(figsize=(8,6))
     sim_columns = []
     
     for sensor in sensors:
@@ -330,7 +332,7 @@ def plot_all_currents_vs_luminosity(df, sensors, output_dir=None):
     plt.close()
     
     # Plot of real currents vs luminosity
-    fig, ax = plt.subplots(figsize=(12, 12))
+    fig, ax = plt.subplots(figsize=(8,6))
     real_columns = []
     
     for sensor in sensors:
@@ -361,7 +363,7 @@ def plot_all_currents_vs_luminosity(df, sensors, output_dir=None):
 def plot_integrated_luminosity(df: pd.DataFrame, output_path: str = None):
     """Plot integrated luminosity over time."""
     try:
-        plt.figure(figsize=(10, 6))
+        plt.figure(figsize=(8,6))
         df['integrated_luminosity'].plot()
         plt.title('Integrated Luminosity vs Time')
         plt.xlabel('Time')
@@ -423,7 +425,7 @@ def plot_currents_vs_position(summary_df: pd.DataFrame, target_luminosities: lis
         target_luminosities: List of target luminosity values used for the plot
         output_path: Optional path to save the plot
     """
-    fig, ax = plt.subplots(figsize=(14, 8))
+    fig, ax = plt.subplots(figsize=(8,6))
     
     markers = ['o', '^', 's', 'D']
     colors = ['blue', 'red', 'green', 'purple']

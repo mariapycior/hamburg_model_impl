@@ -205,7 +205,7 @@ def adjust_simulated_current_with_temperature(df: pd.DataFrame, params, sensors:
         E_eff = params.E_eff
         kB = params.kb
         R_Tref = (T / T_ref) ** 2 * np.exp(-(E_eff / (2 * kB)) * (1/T - 1/T_ref))
-        out[sim_col] = out[sim_col].values * R_Tref
+        out[sim_col] = (out[sim_col].values) * R_Tref #+ 0.0509
     return out
 
 

@@ -32,7 +32,7 @@ def run_all_sensors(selected_years):
     
     simulated_df, sensors = current_simulation_lib.run_leakage_current_pipeline(
         fluence_file, temp_files, params, available_sensors=available_sensors,
-        real_df=real_df
+        real_df=real_df, selected_years=selected_years
     )
     
     simulated_df = current_simulation_lib.add_luminosity_from_lumi_df(simulated_df, lumi_file)
@@ -64,7 +64,7 @@ def run_single_sensor(selected_years, sensor_name):
     
     simulated_df, sensors = current_simulation_lib.run_leakage_current_pipeline(
         fluence_file, temp_files, params, sensor_name=sensor_name,
-        real_df=real_df
+        real_df=real_df, selected_years=selected_years
     )
     simulated_df = current_simulation_lib.add_luminosity_from_lumi_df(simulated_df, lumi_file)
 

@@ -290,24 +290,32 @@ def load_real_current_data(paths):
     return real_all_df
 
 
-def run_leakage_current_pipeline(fluence_file, temp_files, params, sensor_name=None, available_sensors=None, real_df=None):
+def run_leakage_current_pipeline(fluence_file, temp_files, params, sensor_name=None, available_sensors=None, real_df=None, selected_years=None):
     fluence_df, temp_df = load_data(fluence_file, temp_files)
-    
+
+    # --- FILTROWANIE PO LATACH ---
+    if selected_years is not None:
+        years = list(selected_years)
+        if hasattr(fluence_df.index, 'year'):
+            fluence_df = fluence_df[fluence_df.index.year.isin(years)]
+        if hasattr(temp_df.index, 'year'):
+            temp_df = temp_df[temp_df.index.year.isin(years)]
+
     # Select sensors based on mode
     sensors_to_process = [sensor_name] if sensor_name else available_sensors
-    
+
     if not sensors_to_process:
         logger.info("No sensors available for processing")
         return None, []
-    
+
     # Process all sensors
     simulated_df = process_all_sensors(fluence_df, temp_df, params, sensors_to_process)
     if simulated_df is None:
         return None, []
-    
+
     # Get processed sensors from column names
     processed_sensors = [col.replace('current_', '') for col in simulated_df.columns if col.startswith('current_')]
-    
+
     if real_df is not None:
         aggregated_real_df = aggregate_real_current_data(simulated_df, real_df, processed_sensors)
         if aggregated_real_df is not None and not aggregated_real_df.empty:
@@ -315,7 +323,7 @@ def run_leakage_current_pipeline(fluence_file, temp_files, params, sensor_name=N
             return pd.concat([simulated_df, aggregated_real_df], axis=1), processed_sensors
         else:
             logger.warning(f"Real current data was provided but could not be aggregated.")
-    
+
     logger.info(f"Simulation completed for {len(processed_sensors)} sensors. No real current data added.")
     return simulated_df, processed_sensors
 
