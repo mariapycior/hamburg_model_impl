@@ -38,8 +38,16 @@ def add_parameter_info(ax, loc='upper left'):
             verticalalignment='top', horizontalalignment='left', bbox=props)
 
 
-def setup_subplot(ax, x_data, y_data, color, label, title, ylabel, xlim, ylim=None):
-    ax.scatter(x_data, y_data, color=color, s=1, label=label)
+def setup_subplot(ax, x_data, y_data, color, label, title, ylabel, xlim, ylim=None, use_line=False):
+    if use_line:
+        # For simulated data, use a line plot
+        y_data_series = pd.Series(y_data, index=x_data)
+        y_data_series = y_data_series.sort_index()  # Sort by time index
+        ax.plot(y_data_series.index, y_data_series.values, color=color, linewidth=1, label=label)
+    else:
+        # For real data or other data types, use scatter
+        ax.scatter(x_data, y_data, color=color, s=1, label=label)
+    
     ax.set_xlim(xlim)
     if ylim:
         ax.set_ylim(ylim)
@@ -65,12 +73,12 @@ def plot_leakage_current(df: pd.DataFrame, sensor_name: str,
 
     fig, axes = plt.subplots(4, 1, figsize=(6, 8))
     
-    # Plot simulated current
+    # Plot simulated current as line
     setup_subplot(axes[0], df.index, df[sim_col], 'blue', 'Leakage Current Simulated', 
                  f'Simulated Leakage Current for Sensor {sensor_name}', 'Leakage Current (mA)', 
-                 (start_date, end_date), (0, 0.3))
+                 (start_date, end_date), (0, 0.3), use_line=True)
     
-    # Plot real current if available
+    # Plot real current if available (as scatter)
     if real_col in df.columns:
         setup_subplot(axes[1], df.index, df[real_col], 'red', 'Leakage Current (Real Data)', 
                      f'Real Leakage Current for Sensor {sensor_name}', 'Leakage Current (mA)', 
@@ -112,15 +120,19 @@ def plot_simulated_vs_real(df: pd.DataFrame, sensor_name: str, output_path: str 
     else:
         ax.set_xlim(df.index.min(), df.index.max())
 
+    # Plot real data as scatter points
     if real_col in df.columns:
         real_data = df[real_col].dropna()
         if not real_data.empty:
             ax.scatter(real_data.index, real_data, color='red', s=1, label='Real Leakage Current')
     
+    # Plot simulated data as a line
     if sim_col in df.columns:
         sim_data = df[sim_col].dropna()
         if not sim_data.empty:
-            ax.scatter(sim_data.index, sim_data, color='blue', s=1, label='Simulated Leakage Current')
+            # Sort data by index to ensure proper line connection
+            sim_data = sim_data.sort_index()
+            ax.plot(sim_data.index, sim_data, color='blue', linewidth=1, label='Simulated Leakage Current')
 
     add_parameter_info(ax)
     
@@ -149,7 +161,12 @@ def plot_sensors_data(df: pd.DataFrame, sensors: list, column_prefix: str, title
             y = df[col_name]
             y_clean = y.dropna()
             if not y_clean.empty:
-                ax.scatter(y_clean.index, y_clean.values, s=1, label=sensor)
+                # Use scatter for real data, line for simulated data
+                if column_prefix == "real_current":
+                    ax.scatter(y_clean.index, y_clean.values, s=1, label=sensor)
+                else:  # For simulated data
+                    y_sorted = y_clean.sort_index()  # Ensure data is sorted by time
+                    ax.plot(y_sorted.index, y_sorted.values, linewidth=1, label=sensor)
     
     # Calculate mean with condition on number of non-NaN values
     if columns:
@@ -157,6 +174,8 @@ def plot_sensors_data(df: pd.DataFrame, sensors: list, column_prefix: str, title
         valid_count = data_df.notna().sum(axis=1)
         mean_data = data_df.mean(axis=1)
         mean_data[valid_count <= (len(columns) // 2)] = float('nan')
+        # Sort mean data by index for proper line
+        mean_data = mean_data.sort_index()
         ax.plot(mean_data.index, mean_data.values, color='black', linewidth=3, 
                 label=f'Mean ({"real" if column_prefix == "real_current" else "simulated"})')
     
