@@ -30,11 +30,7 @@ def parse_arguments():
 def list_available_sensors(simulated_path):
     try:
         df = pd.read_csv(simulated_path, index_col=0, parse_dates=True, nrows=1)
-        sensors = set()
-        for col in df.columns:
-            if col.startswith('current_'):
-                sensor = col.replace('current_', '')
-                sensors.add(sensor)
+        sensors = {col.replace('current_', '') for col in df.columns if col.startswith('current_')}
         return sorted(list(sensors))
     except Exception as e:
         print(f"Error reading data file: {e}")
@@ -45,19 +41,40 @@ def load_simulated_data(simulated_path):
         sensors = list_available_sensors(simulated_path)
         if not sensors:
             return None
-        all_data = cpl.load_and_prepare_simulated_df(sensors, simulated_path)
-        return all_data
+        return cpl.load_and_prepare_simulated_df(sensors, simulated_path)
     except Exception as e:
         print(f"Error loading simulated data: {e}")
         return None
 
 
 
+def process_and_plot_data(result_df, sensors_to_use, args):
+    # Prepare data for analysis (temperature adjustments, etc.)
+    result_df = cpl.prepare_data_for_analysis(result_df, params, sensors_to_use, args.start_date)
+    
+    # Generate position plots if requested
+    if args.plot_currents_vs_position or args.all_sensors:
+        curr_vs_pos_df = cpl.current_for_lumi(result_df)
+        plot_utils.plot_currents_vs_position(curr_vs_pos_df, TARGET_LUMINOSITIES)
+    
+    # Generate single or multi-sensor plots
+    if not args.all_sensors:
+        sensor = args.sensor
+        print(f"Creating plots for sensor {sensor}")
+        plot_utils.plot_simulated_vs_real(result_df, sensor)
+        plot_utils.plot_leakage_current(result_df, sensor)
+        plot_utils.plot_currents_vs_integrated_luminosity(result_df, sensor)
+    else:
+        print(f"Creating plots for all {len(sensors_to_use)} sensors")
+        plot_utils.plot_all_sensors(result_df, sensors_to_use)
+        plot_utils.plot_all_currents_vs_luminosity(result_df, sensors_to_use)
+
 def main():
     args = parse_arguments()
     paths = Paths()
     simulated_path = paths.get_output_file(args.simulated_file)
     
+    # List sensors if requested
     if args.list_sensors:
         sensors = list_available_sensors(simulated_path)
         if sensors:
@@ -82,29 +99,13 @@ def main():
             
         print(f"Data loaded from {simulated_path}")
         
-        # Prepare data for analysis (temperature adjustments, etc.)
-        result_df = cpl.prepare_data_for_analysis(result_df, params, sensors_to_use, args.start_date)
-        
-        # Generate plots based on options
-        if args.plot_currents_vs_position or args.all_sensors:
-            curr_vs_pos_df = cpl.current_for_lumi(result_df)  # Uses TARGET_LUMINOSITIES from config
-            plot_utils.plot_currents_vs_position(curr_vs_pos_df, TARGET_LUMINOSITIES)
-        
-        if not args.all_sensors:
-            # Single sensor mode - create detailed plots for the selected sensor
-            sensor = args.sensor
-            print(f"Creating plots for sensor {sensor}")
-            plot_utils.plot_simulated_vs_real(result_df, sensor)
-            plot_utils.plot_leakage_current(result_df, sensor)
-            plot_utils.plot_currents_vs_integrated_luminosity(result_df, sensor)
-        else:
-            # Multi-sensor mode
-            print(f"Creating plots for all {len(sensors_to_use)} sensors")
-            plot_utils.plot_all_sensors(result_df, sensors_to_use)
-            plot_utils.plot_all_currents_vs_luminosity(result_df, sensors_to_use)
+        # Process and plot data
+        process_and_plot_data(result_df, sensors_to_use, args)
             
     except Exception as e:
         print(f"Failed to process data: {e}")
+        import traceback
+        traceback.print_exc()
         return
 
 
