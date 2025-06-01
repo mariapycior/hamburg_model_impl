@@ -7,14 +7,11 @@ from config import SIMULATION_PERIOD, TEMPERATURE_CORRECTION_ENABLED, TEMPERATUR
 from config_plot import (
     CURRENT_TEMP_MODE, REFERENCE_TEMPERATURE,
     USE_LINES_FOR_SIMULATION, SHOW_ERROR_BANDS, ERROR_PERCENTAGE, PLOT_RESAMPLING_PERIOD,
-    SCATTER_MARKER_SIZE, LINE_WIDTH, ERROR_BAND_ALPHA, REAL_DATA_COLOR, SIMULATED_DATA_COLOR, ERROR_BAND_COLOR
+    SCATTER_MARKER_SIZE, LINE_WIDTH, ERROR_BAND_ALPHA, REAL_DATA_COLOR, SIMULATED_DATA_COLOR, ERROR_BAND_COLOR,
+    DEFAULT_FIGURE_SIZE, MULTI_SUBPLOT_FIGURE_SIZE, ERROR_BAND_ZORDER, DATA_ZORDER
 )
 
-# Stałe dla przejrzystości kodu
-DEFAULT_FIGURE_SIZE = (8, 6)
-MULTI_SUBPLOT_FIGURE_SIZE = (6, 8)
-ERROR_BAND_ZORDER = -10
-DATA_ZORDER = 10
+# Komentarze do parametrów wykresów
 
 def add_parameter_info(ax, loc='upper left'):
     params = Parameters()
@@ -31,11 +28,11 @@ def add_parameter_info(ax, loc='upper left'):
     )
     
     if CURRENT_TEMP_MODE == 'adjust_real':
-        temp_text = "\nAdjusted real to sim. temperature"
+        temp_text = "\n$\\mathbf{Adjusted\\ real\\ to\\ sim.\\ temperature}$"
     elif CURRENT_TEMP_MODE == 'adjust_sim':
-        temp_text = "\nAdjusted sim. to real temperature"
+        temp_text = "\n$\\mathbf{Adjusted\\ sim.\\ to\\ real\\ temperature}$"
     elif CURRENT_TEMP_MODE == 'adjust_both':
-        temp_text = f"\nAdjusted both to {REFERENCE_TEMPERATURE:.2f} K"
+        temp_text = f"\n$\\mathbf{{Adjusted\\ both\\ to\\ }}\\mathbf{{\\color{{red}}{{{REFERENCE_TEMPERATURE:.2f}}}}}\\ \\mathbf{{K}}$"
     else:
         temp_text = ""
     
@@ -51,8 +48,11 @@ def add_parameter_info(ax, loc='upper left'):
 
 def resample_data(data, period):
     """Resample data based on specified period."""
-    if period and isinstance(data, pd.Series) and not data.empty:
-        return data.resample(period).mean()
+    if period and not data.empty:
+        if isinstance(data, pd.Series):
+            return data.resample(period).mean()
+        elif isinstance(data, pd.DataFrame):
+            return data.resample(period).mean()
     return data
 
 def setup_subplot(ax, x_data, y_data, color, label, title, ylabel, xlim, ylim=None, use_line=None, show_error_band=None, is_current_plot=False, force_no_error=False):
@@ -128,17 +128,16 @@ def plot_leakage_current(df: pd.DataFrame, sensor_name: str,
     
     if fluence_col in df.columns:
         setup_subplot(axes[2], df.index, df[fluence_col], 'green', 'Fluence', 
-                     'Fluence', 'Fluence (n/cm²)', (start_date, end_date))
+                     'Fluence', 'Fluence (n/cm²)', (start_date, end_date), use_line=False)
     
     if temp_col in df.columns:
         setup_subplot(axes[3], df.index, df[temp_col], 'magenta', 'Temperature', 
-                     'Temperature', 'Temperature (K)', (start_date, end_date))
+                     'Temperature', 'Temperature (K)', (start_date, end_date), use_line=False)
 
     plt.tight_layout()
     if output_path:
         plt.savefig(output_path)
-    plt.show()
-    plt.close()
+    # Wykres gotowy do wyświetlenia
 
 
 def plot_simulated_vs_real(df: pd.DataFrame, sensor_name: str, output_path: str = None, 
@@ -159,7 +158,7 @@ def plot_simulated_vs_real(df: pd.DataFrame, sensor_name: str, output_path: str 
     elif custom_period:
         temp_df = temp_df.resample(custom_period).mean()
 
-    fig, ax = plt.subplots(figsize=MULTI_SUBPLOT_FIGURE_SIZE)
+    fig, ax = plt.subplots(figsize=DEFAULT_FIGURE_SIZE)
     
     if start_date is not None and end_date is not None:
         ax.set_xlim(pd.to_datetime(start_date), pd.to_datetime(end_date))
@@ -209,21 +208,20 @@ def plot_simulated_vs_real(df: pd.DataFrame, sensor_name: str, output_path: str 
     
     if output_path:
         plt.savefig(output_path)
-    plt.show()
-    plt.close()
+    # Wykres gotowy do wyświetlenia
 
 
 def plot_sensors_data(df: pd.DataFrame, sensors: list, column_prefix: str, title: str, 
                      output_path: str = None, start_date: pd.Timestamp = None, end_date: pd.Timestamp = None,
                      use_lines: bool = None, show_error_band: bool = None, resampling_period: str = None,
-                     force_no_error: bool = False):
+                     force_no_error: bool = False, y_range: tuple = None):
     fig, ax = plt.subplots(figsize=DEFAULT_FIGURE_SIZE)
     columns = []
     
     temp_df = df.copy()
     custom_period = resampling_period or PLOT_RESAMPLING_PERIOD
     if custom_period:
-        temp_df = temp_df.resample(custom_period).mean()
+        temp_df = resample_data(temp_df, period=custom_period)
     
     for sensor in sensors:
         col_name = f"{column_prefix}_{sensor}"
@@ -276,6 +274,8 @@ def plot_sensors_data(df: pd.DataFrame, sensors: list, column_prefix: str, title
     
     add_parameter_info(ax)
     ax.set_xlim(start_date, end_date)
+    if y_range is not None:
+        ax.set_ylim(y_range)
     ax.set_ylabel('Leakage Current (mA)')
     ax.set_title(title)
     ax.grid(True)
@@ -284,22 +284,62 @@ def plot_sensors_data(df: pd.DataFrame, sensors: list, column_prefix: str, title
     
     if output_path:
         plt.savefig(output_path)
-    plt.show()
-    plt.close()
+    # Wykres gotowy do wyświetlenia
 
 def plot_all_sensors(df: pd.DataFrame, sensors: list, output_dir: str = None, 
                     start_date: pd.Timestamp = None, end_date: pd.Timestamp = None,
                     use_lines: bool = None, show_error_band: bool = None, resampling_period: str = None):
+    # Najpierw przygotuj dane i znajdź globalny zakres osi Y dla obu wykresów
+    temp_df = df.copy()
+    custom_period = resampling_period or PLOT_RESAMPLING_PERIOD
+    if custom_period:
+        temp_df = resample_data(temp_df, period=custom_period)
+    
+    # Oblicz globalny zakres osi Y
+    min_val = float('inf')
+    max_val = float('-inf')
+    
+    # Zbierz wszystkie kolumny z danymi (symulowanymi i rzeczywistymi)
+    all_columns = []
+    
+    for sensor in sensors:
+        sim_col = f"current_{sensor}"
+        real_col = f"real_current_{sensor}"
+        
+        if sim_col in temp_df.columns:
+            all_columns.append(sim_col)
+        if real_col in temp_df.columns:
+            all_columns.append(real_col)
+    
+    # Oblicz min i max dla wszystkich danych
+    if all_columns:
+        data_subset = temp_df[all_columns].dropna(how='all')
+        if not data_subset.empty:
+            # Dodaj 10% marginesu
+            curr_min = data_subset.min().min()
+            curr_max = data_subset.max().max()
+            
+            if not (pd.isna(curr_min) or pd.isna(curr_max)):
+                min_val = min(min_val, curr_min)
+                max_val = max(max_val, curr_max)
+    
+    # Ustaw wspólny zakres osi Y z 10% marginesem
+    if min_val != float('inf') and max_val != float('-inf'):
+        y_range_margin = (max_val - min_val) * 0.1
+        y_range = (max(0, min_val - y_range_margin), max_val + y_range_margin)
+    else:
+        y_range = None
+    
     # Plot simulated current for all sensors (no error bands when plotting all sensors)
     sim_output = None if output_dir is None else os.path.join(output_dir, 'all_sensors_simulated.png')
     plot_sensors_data(df, sensors, 'current', 'Simulated Leakage Current for All Sensors', 
                      sim_output, start_date, end_date, use_lines, show_error_band, resampling_period,
-                     force_no_error=True)  # Force no error band for all sensors plot
+                     force_no_error=True, y_range=y_range)  # Force no error band for all sensors plot
     
     # Plot real current for all sensors (if available)
     real_output = None if output_dir is None else os.path.join(output_dir, 'all_sensors_real.png')
     plot_sensors_data(df, sensors, 'real_current', 'Real Leakage Current for All Sensors', 
-                     real_output, start_date, end_date, False, False, resampling_period)
+                     real_output, start_date, end_date, False, False, resampling_period, y_range=y_range)
 
 
 
@@ -379,8 +419,7 @@ def plot_currents_vs_parameter(df: pd.DataFrame, sensor_name: str, param_type: s
     if output_path:
         plt.savefig(output_path)
     
-    plt.show()
-    plt.close()
+    # Wykres gotowy do wyświetlenia
 
 
 def plot_currents_vs_cumulative_fluence(df: pd.DataFrame, sensor_name: str, output_path: str = None,
@@ -397,6 +436,11 @@ def plot_all_currents_vs_luminosity(df: pd.DataFrame, sensors: list, output_dir:
     if 'integrated_luminosity' not in df.columns:
         print("No integrated luminosity data found")
         return
+    
+    # Resample data if configured
+    temp_df = df.copy()
+    if PLOT_RESAMPLING_PERIOD:
+        temp_df = resample_data(temp_df, period=PLOT_RESAMPLING_PERIOD)
         
     fig, ax = plt.subplots(figsize=DEFAULT_FIGURE_SIZE)
     sim_columns = []
@@ -404,9 +448,9 @@ def plot_all_currents_vs_luminosity(df: pd.DataFrame, sensors: list, output_dir:
     for sensor in sensors:
         sim_col = f"current_{sensor}"
         
-        if sim_col in df.columns:
+        if sim_col in temp_df.columns:
             sim_columns.append(sim_col)
-            sim_data = df[[sim_col, 'integrated_luminosity']].dropna()
+            sim_data = temp_df[[sim_col, 'integrated_luminosity']].dropna()
             if not sim_data.empty:
                 ax.scatter(sim_data['integrated_luminosity'], sim_data[sim_col], 
                           s=SCATTER_MARKER_SIZE, label=sensor, zorder=DATA_ZORDER)
@@ -421,8 +465,7 @@ def plot_all_currents_vs_luminosity(df: pd.DataFrame, sensors: list, output_dir:
     ax.legend(loc='center left', bbox_to_anchor=(1.01, 0.5), title='Sensors', fontsize='small')
     if output_dir is not None:
         plt.savefig(os.path.join(output_dir, "all_simulated_vs_luminosity.png"), bbox_inches='tight')
-    plt.show()
-    plt.close()
+    # Wykres gotowy do wyświetlenia
     
     fig, ax = plt.subplots(figsize=DEFAULT_FIGURE_SIZE)
     real_columns = []
@@ -430,9 +473,9 @@ def plot_all_currents_vs_luminosity(df: pd.DataFrame, sensors: list, output_dir:
     for sensor in sensors:
         real_col = f"real_current_{sensor}"
         
-        if real_col in df.columns:
+        if real_col in temp_df.columns:
             real_columns.append(real_col)
-            real_data = df[[real_col, 'integrated_luminosity']].dropna()
+            real_data = temp_df[[real_col, 'integrated_luminosity']].dropna()
             if not real_data.empty:
                 ax.scatter(real_data['integrated_luminosity'], real_data[real_col], 
                           s=SCATTER_MARKER_SIZE, label=sensor, zorder=DATA_ZORDER)
@@ -447,8 +490,7 @@ def plot_all_currents_vs_luminosity(df: pd.DataFrame, sensors: list, output_dir:
     ax.legend(loc='center left', bbox_to_anchor=(1.01, 0.5), title='Sensors', fontsize='small')
     if output_dir is not None:
         plt.savefig(os.path.join(output_dir, "all_real_vs_luminosity.png"), bbox_inches='tight')
-    plt.show()
-    plt.close()
+    # Wykres gotowy do wyświetlenia
 
 
 def plot_integrated_luminosity(df: pd.DataFrame, output_path: str = None):
@@ -462,20 +504,11 @@ def plot_integrated_luminosity(df: pd.DataFrame, output_path: str = None):
         plt.grid(True)
         if output_path:
             plt.savefig(output_path)
-        plt.show()
-        plt.close()
+        # Wykres gotowy do wyświetlenia
         print("Created integrated luminosity plot")
     except Exception as e:
         print(f"Error creating integrated luminosity plot: {e}")
 
-
-def plot_currents_vs_integrated_luminosity(df: pd.DataFrame, sensor_name: str, output_path: str = None,
-                                    use_lines: bool = None, show_error_band: bool = None):
-    """
-    Plot both simulated and real currents against integrated luminosity.
-    """
-    return plot_currents_vs_parameter(df, sensor_name, param_type='luminosity', output_path=output_path,
-                                     use_lines=use_lines, show_error_band=show_error_band)
 
 
 def plot_currents_vs_position(summary_df: pd.DataFrame, target_luminosities: list, output_path: str = None):
@@ -529,5 +562,4 @@ def plot_currents_vs_position(summary_df: pd.DataFrame, target_luminosities: lis
     
     if output_path:
         plt.savefig(output_path)
-    plt.show()
-    plt.close()
+    # Wykres gotowy do wyświetlenia

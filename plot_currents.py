@@ -99,22 +99,25 @@ def main():
         
         sensors_to_use = all_sensors if args.all_sensors else [args.sensor]
         
-        # Load data for selected sensors
-        result_df = cpl.load_and_prepare_simulated_df(sensors_to_use, simulated_path)
-        if result_df is None or result_df.empty:
-            print(f"No data found for sensors: {', '.join(sensors_to_use)}")
+        # Load simulated data
+        print(f"Data loaded from {simulated_path}")
+        result_df = load_simulated_data(simulated_path)
+        if result_df is None:
+            print("Failed to load data")
             return
             
-        print(f"Data loaded from {simulated_path}")
-        
-        # Process and plot data
-        process_and_plot_data(result_df, sensors_to_use, args)
-            
+        # Process data and create plots
+        try:
+            process_and_plot_data(result_df, sensors_to_use, args)
+            # Wyświetl wszystkie wykresy na raz na końcu
+            print("Showing all plots...")
+            plt.show()
+        except Exception as e:
+            print(f"Failed to process data: {e}")
+            raise e
+    
     except Exception as e:
-        print(f"Failed to process data: {e}")
-        import traceback
-        traceback.print_exc()
-        return
+        print(f"Error: {e}")
 
 
 if __name__ == "__main__":

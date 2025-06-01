@@ -40,6 +40,18 @@ REAL_DATA_COLOR = 'red'
 SIMULATED_DATA_COLOR = 'blue'
 ERROR_BAND_COLOR = 'lightblue'
 
+# --- Figure Settings ---
+# Default figure size for single plots
+DEFAULT_FIGURE_SIZE = (8, 6)
+
+# Figure size for multi-subplot plots
+MULTI_SUBPLOT_FIGURE_SIZE = (6, 8)
+
+# --- Layer Order (zorder) Settings ---
+# Lower zorder values appear behind higher values
+ERROR_BAND_ZORDER = -10  # Error bands should be behind data
+DATA_ZORDER = 10          # Data points and lines should be in front
+
 # --- Plot Types to Generate ---
 # Set to True to enable, False to disable
 GENERATE_SINGLE_SENSOR_PLOTS = True
