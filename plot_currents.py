@@ -53,10 +53,12 @@ def process_and_plot_data(result_df, sensors_to_use, args):
     # Prepare data for analysis (temperature adjustments, etc.)
     result_df = cpl.prepare_data_for_analysis(result_df, params, sensors_to_use, args.start_date)
     
-    # Generate position plots if requested
-    if args.plot_currents_vs_position or args.all_sensors:
-        curr_vs_pos_df = cpl.current_for_lumi(result_df)
-        plot_utils.plot_currents_vs_position(curr_vs_pos_df, TARGET_LUMINOSITIES)
+    # Zawsze generuj wykres zależności prądu od luminosity
+    curr_vs_pos_df = cpl.current_for_lumi(result_df)
+    plot_utils.plot_currents_vs_position(curr_vs_pos_df, TARGET_LUMINOSITIES)
+    
+    # Zawsze generuj wykres zintegrowanej luminosity
+    plot_utils.plot_integrated_luminosity(result_df)
     
     # Generate single or multi-sensor plots
     if not args.all_sensors:

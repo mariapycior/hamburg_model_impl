@@ -11,7 +11,6 @@ from config_plot import (
     DEFAULT_FIGURE_SIZE, MULTI_SUBPLOT_FIGURE_SIZE, ERROR_BAND_ZORDER, DATA_ZORDER
 )
 
-# Komentarze do parametrów wykresów
 
 def add_parameter_info(ax, loc='upper left'):
     params = Parameters()
@@ -27,19 +26,23 @@ def add_parameter_info(ax, loc='upper left'):
         f"Timestep: {timestep:.1f} h"
     )
     
+    temp_info = ""
     if CURRENT_TEMP_MODE == 'adjust_real':
-        temp_text = "\n$\\mathbf{Adjusted\\ real\\ to\\ sim.\\ temperature}$"
+        temp_info = "Adjusted real to sim. temperature"
     elif CURRENT_TEMP_MODE == 'adjust_sim':
-        temp_text = "\n$\\mathbf{Adjusted\\ sim.\\ to\\ real\\ temperature}$"
+        temp_info = "Adjusted sim. to real temperature"
     elif CURRENT_TEMP_MODE == 'adjust_both':
-        temp_text = f"\n$\\mathbf{{Adjusted\\ both\\ to\\ }}\\mathbf{{\\color{{red}}{{{REFERENCE_TEMPERATURE:.2f}}}}}\\ \\mathbf{{K}}$"
-    else:
-        temp_text = ""
+        temp_info = f"Adjusted both to {REFERENCE_TEMPERATURE:.2f} K"
     
+    if temp_info:
+        # Formatujemy tekst z jawnie dodanymi spacjami w LaTeX
+        if CURRENT_TEMP_MODE == 'adjust_both':
+            param_text += f"\n$\\mathbf{{Adjusted\\ both\\ to\\ {REFERENCE_TEMPERATURE:.2f}\\ K}}$"
+        else:
+            param_text += f"\n$\\mathbf{{{temp_info.replace(' ', '\\ ')}}}$"
+        
     if TEMPERATURE_CORRECTION_ENABLED:
-        temp_text += f"\nTemp. correction: +{TEMPERATURE_CORRECTION_DELTA} K"
-    
-    param_text += temp_text
+        param_text += f"\nTemp. correction: +{TEMPERATURE_CORRECTION_DELTA} K"
     
     props = dict(boxstyle='round', facecolor='white', alpha=0.7)
     ax.text(0.02, 0.98, param_text, transform=ax.transAxes, fontsize=8,
@@ -562,4 +565,3 @@ def plot_currents_vs_position(summary_df: pd.DataFrame, target_luminosities: lis
     
     if output_path:
         plt.savefig(output_path)
-    # Wykres gotowy do wyświetlenia
