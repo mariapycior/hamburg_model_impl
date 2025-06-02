@@ -58,3 +58,8 @@ GENERATE_SINGLE_SENSOR_PLOTS = True
 GENERATE_ALL_SENSORS_PLOT = False
 GENERATE_TEMPERATURE_PLOTS = True
 GENERATE_FLUENCE_PLOTS = True
+
+# --- Fit Quality Metrics ---
+# Available metrics: 'mse', 'rmse', 'mae', 'r2', 'pearson', 'spearman', 'all'
+# Use 'all' to calculate all metrics, or list specific metrics to calculate
+FIT_QUALITY_METRICS = 'all'  # Can be a string ('all') or a list of specific metrics, e.g. ['mse', 'pearson']

@@ -26,6 +26,21 @@ def add_parameter_info(ax, loc='upper left'):
         f"Timestep: {timestep:.1f} h"
     )
     
+    # Add resampling period information
+    if PLOT_RESAMPLING_PERIOD:
+        # Convert shorthand period to more readable format
+        period_display = PLOT_RESAMPLING_PERIOD
+        if period_display == '1W':
+            period_display = '1 week'
+        elif period_display.endswith('W'):
+            period_display = period_display.replace('W', ' weeks')
+        elif period_display == '1D':
+            period_display = '1 day'
+        elif period_display.endswith('D'):
+            period_display = period_display.replace('D', ' days')
+        
+        param_text += f"\nData averaged over {period_display}"
+    
     temp_info = ""
     if CURRENT_TEMP_MODE == 'adjust_real':
         temp_info = "Adjusted real to sim. temperature"
@@ -120,13 +135,13 @@ def plot_leakage_current(df: pd.DataFrame, sensor_name: str,
     
     setup_subplot(axes[0], df.index, df[sim_col], SIMULATED_DATA_COLOR, 'Leakage Current Simulated', 
                  f'Simulated Leakage Current for Sensor {sensor_name}', 'Leakage Current (mA)', 
-                 (start_date, end_date), (0, 0.3), use_line=use_lines, show_error_band=show_error_band,
+                 (start_date, end_date), use_line=use_lines, show_error_band=show_error_band,
                  is_current_plot=True)
     
     if real_col in df.columns:
         setup_subplot(axes[1], df.index, df[real_col], REAL_DATA_COLOR, 'Leakage Current (Real Data)', 
                      f'Real Leakage Current for Sensor {sensor_name}', 'Leakage Current (mA)', 
-                     (start_date, end_date), (0, 0.3), use_line=False,
+                     (start_date, end_date), use_line=False,
                      is_current_plot=True)
     
     if fluence_col in df.columns:
@@ -434,8 +449,111 @@ def plot_currents_vs_cumulative_fluence(df: pd.DataFrame, sensor_name: str, outp
                                      use_lines=use_lines, show_error_band=show_error_band)
 
 
+def plot_all_currents_vs_fluence(df: pd.DataFrame, sensors: list, output_dir: str = None):
+    """Plot all sensors currents against fluence in two separate plots using continuous lines.
+    Both plots use the same axis scales for better comparison."""
+    # Check if any sensors have fluence data
+    has_fluence_data = False
+    for sensor in sensors:
+        fluence_col = f"delivered_fluence_{sensor}"
+        if fluence_col in df.columns:
+            has_fluence_data = True
+            break
+            
+    if not has_fluence_data:
+        print("No fluence data found for any sensors")
+        return
+    
+    # Resample data if configured
+    temp_df = df.copy()
+    if PLOT_RESAMPLING_PERIOD:
+        temp_df = resample_data(temp_df, period=PLOT_RESAMPLING_PERIOD)
+    
+    # First, collect all data to determine common axis limits
+    all_fluence_values = []
+    all_current_values = []
+    sim_data_by_sensor = {}
+    real_data_by_sensor = {}
+    
+    # Collect simulated data
+    for sensor in sensors:
+        sim_col = f"current_{sensor}"
+        fluence_col = f"delivered_fluence_{sensor}"
+        if sim_col in temp_df.columns and fluence_col in temp_df.columns:
+            sim_data = temp_df[[sim_col, fluence_col]].dropna()
+            if not sim_data.empty:
+                sim_data = sim_data.sort_values(fluence_col)
+                sim_data_by_sensor[sensor] = sim_data
+                all_fluence_values.extend(sim_data[fluence_col].values)
+                all_current_values.extend(sim_data[sim_col].values)
+    
+    # Collect real data
+    for sensor in sensors:
+        real_col = f"real_current_{sensor}"
+        fluence_col = f"delivered_fluence_{sensor}"
+        if real_col in temp_df.columns and fluence_col in temp_df.columns:
+            real_data = temp_df[[real_col, fluence_col]].dropna()
+            if not real_data.empty:
+                real_data = real_data.sort_values(fluence_col)
+                real_data_by_sensor[sensor] = real_data
+                all_fluence_values.extend(real_data[fluence_col].values)
+                all_current_values.extend(real_data[real_col].values)
+    
+    # Determine common axis limits
+    if all_fluence_values and all_current_values:
+        x_min = min(all_fluence_values)
+        x_max = max(all_fluence_values)
+        y_min = 0  # Start from 0 for currents
+        y_max = max(all_current_values) * 1.1  # Add 10% margin
+        
+        # Plot for simulated data
+        fig, ax = plt.subplots(figsize=DEFAULT_FIGURE_SIZE)
+        
+        for sensor, sim_data in sim_data_by_sensor.items():
+            fluence_col = f"delivered_fluence_{sensor}"
+            ax.plot(sim_data[fluence_col], sim_data[f'current_{sensor}'], 
+                   linewidth=LINE_WIDTH, label=sensor, zorder=DATA_ZORDER)
+        
+        add_parameter_info(ax)
+        
+        ax.set_xlabel('Fluence (n/cm²)')
+        ax.set_ylabel('Leakage Current (mA)')
+        ax.set_title('Simulated Leakage Current vs Fluence for All Sensors')
+        ax.set_xlim(x_min, x_max)
+        ax.set_ylim(y_min, y_max)
+        ax.grid(True)
+        plt.tight_layout()
+        ax.legend(loc='center left', bbox_to_anchor=(1.01, 0.5), title='Sensors', fontsize='small')
+        if output_dir is not None:
+            plt.savefig(os.path.join(output_dir, "all_simulated_vs_fluence.png"), bbox_inches='tight')
+        
+        # Plot for real data
+        fig, ax = plt.subplots(figsize=DEFAULT_FIGURE_SIZE)
+        
+        for sensor, real_data in real_data_by_sensor.items():
+            fluence_col = f"delivered_fluence_{sensor}"
+            ax.plot(real_data[fluence_col], real_data[f'real_current_{sensor}'], 
+                   linewidth=LINE_WIDTH, label=sensor, zorder=DATA_ZORDER)
+        
+        add_parameter_info(ax)
+        
+        ax.set_xlabel('Fluence (n/cm²)')
+        ax.set_ylabel('Leakage Current (mA)')
+        ax.set_title('Real Leakage Current vs Fluence for All Sensors')
+        ax.set_xlim(x_min, x_max)
+        ax.set_ylim(y_min, y_max)
+        ax.grid(True)
+        plt.tight_layout()
+        ax.legend(loc='center left', bbox_to_anchor=(1.01, 0.5), title='Sensors', fontsize='small')
+        if output_dir is not None:
+            plt.savefig(os.path.join(output_dir, "all_real_vs_fluence.png"), bbox_inches='tight')
+    else:
+        print("No data available for plotting currents vs fluence")
+
+
 def plot_all_currents_vs_luminosity(df: pd.DataFrame, sensors: list, output_dir: str = None):
-    """Plot all sensors currents against integrated luminosity in two separate plots."""
+    """Plot all sensors currents against integrated luminosity in two separate plots using continuous lines.
+    Both plots use the same axis scales for better comparison."""
     if 'integrated_luminosity' not in df.columns:
         print("No integrated luminosity data found")
         return
@@ -444,56 +562,83 @@ def plot_all_currents_vs_luminosity(df: pd.DataFrame, sensors: list, output_dir:
     temp_df = df.copy()
     if PLOT_RESAMPLING_PERIOD:
         temp_df = resample_data(temp_df, period=PLOT_RESAMPLING_PERIOD)
-        
-    fig, ax = plt.subplots(figsize=DEFAULT_FIGURE_SIZE)
-    sim_columns = []
     
+    # First, collect all data to determine common axis limits
+    all_lumi_values = []
+    all_current_values = []
+    sim_data_by_sensor = {}
+    real_data_by_sensor = {}
+    
+    # Collect simulated data
     for sensor in sensors:
         sim_col = f"current_{sensor}"
-        
         if sim_col in temp_df.columns:
-            sim_columns.append(sim_col)
             sim_data = temp_df[[sim_col, 'integrated_luminosity']].dropna()
             if not sim_data.empty:
-                ax.scatter(sim_data['integrated_luminosity'], sim_data[sim_col], 
-                          s=SCATTER_MARKER_SIZE, label=sensor, zorder=DATA_ZORDER)
+                sim_data = sim_data.sort_values('integrated_luminosity')
+                sim_data_by_sensor[sensor] = sim_data
+                all_lumi_values.extend(sim_data['integrated_luminosity'].values)
+                all_current_values.extend(sim_data[sim_col].values)
     
-    add_parameter_info(ax)
-    
-    ax.set_xlabel('Integrated Luminosity (fb$^{-1}$)')
-    ax.set_ylabel('Leakage Current (mA)')
-    ax.set_title('Simulated Leakage Current vs Integrated Luminosity for All Sensors')
-    ax.grid(True)
-    plt.tight_layout()
-    ax.legend(loc='center left', bbox_to_anchor=(1.01, 0.5), title='Sensors', fontsize='small')
-    if output_dir is not None:
-        plt.savefig(os.path.join(output_dir, "all_simulated_vs_luminosity.png"), bbox_inches='tight')
-    # Wykres gotowy do wyświetlenia
-    
-    fig, ax = plt.subplots(figsize=DEFAULT_FIGURE_SIZE)
-    real_columns = []
-    
+    # Collect real data
     for sensor in sensors:
         real_col = f"real_current_{sensor}"
-        
         if real_col in temp_df.columns:
-            real_columns.append(real_col)
             real_data = temp_df[[real_col, 'integrated_luminosity']].dropna()
             if not real_data.empty:
-                ax.scatter(real_data['integrated_luminosity'], real_data[real_col], 
-                          s=SCATTER_MARKER_SIZE, label=sensor, zorder=DATA_ZORDER)
+                real_data = real_data.sort_values('integrated_luminosity')
+                real_data_by_sensor[sensor] = real_data
+                all_lumi_values.extend(real_data['integrated_luminosity'].values)
+                all_current_values.extend(real_data[real_col].values)
     
-    add_parameter_info(ax)
-    
-    ax.set_xlabel('Integrated Luminosity (fb$^{-1}$)')
-    ax.set_ylabel('Leakage Current (mA)')
-    ax.set_title('Real Leakage Current vs Integrated Luminosity for All Sensors')
-    ax.grid(True)
-    plt.tight_layout()
-    ax.legend(loc='center left', bbox_to_anchor=(1.01, 0.5), title='Sensors', fontsize='small')
-    if output_dir is not None:
-        plt.savefig(os.path.join(output_dir, "all_real_vs_luminosity.png"), bbox_inches='tight')
-    # Wykres gotowy do wyświetlenia
+    # Determine common axis limits
+    if all_lumi_values and all_current_values:
+        x_min = min(all_lumi_values)
+        x_max = max(all_lumi_values)
+        y_min = 0  # Start from 0 for currents
+        y_max = max(all_current_values) * 1.1  # Add 10% margin
+        
+        # Plot for simulated data
+        fig, ax = plt.subplots(figsize=DEFAULT_FIGURE_SIZE)
+        
+        for sensor, sim_data in sim_data_by_sensor.items():
+            ax.plot(sim_data['integrated_luminosity'], sim_data[f'current_{sensor}'], 
+                   linewidth=LINE_WIDTH, label=sensor, zorder=DATA_ZORDER)
+        
+        add_parameter_info(ax)
+        
+        ax.set_xlabel('Integrated Luminosity (fb$^{-1}$)')
+        ax.set_ylabel('Leakage Current (mA)')
+        ax.set_title('Simulated Leakage Current vs Integrated Luminosity for All Sensors')
+        ax.set_xlim(x_min, x_max)
+        ax.set_ylim(y_min, y_max)
+        ax.grid(True)
+        plt.tight_layout()
+        ax.legend(loc='center left', bbox_to_anchor=(1.01, 0.5), title='Sensors', fontsize='small')
+        if output_dir is not None:
+            plt.savefig(os.path.join(output_dir, "all_simulated_vs_luminosity.png"), bbox_inches='tight')
+        
+        # Plot for real data
+        fig, ax = plt.subplots(figsize=DEFAULT_FIGURE_SIZE)
+        
+        for sensor, real_data in real_data_by_sensor.items():
+            ax.plot(real_data['integrated_luminosity'], real_data[f'real_current_{sensor}'], 
+                   linewidth=LINE_WIDTH, label=sensor, zorder=DATA_ZORDER)
+        
+        add_parameter_info(ax)
+        
+        ax.set_xlabel('Integrated Luminosity (fb$^{-1}$)')
+        ax.set_ylabel('Leakage Current (mA)')
+        ax.set_title('Real Leakage Current vs Integrated Luminosity for All Sensors')
+        ax.set_xlim(x_min, x_max)
+        ax.set_ylim(y_min, y_max)
+        ax.grid(True)
+        plt.tight_layout()
+        ax.legend(loc='center left', bbox_to_anchor=(1.01, 0.5), title='Sensors', fontsize='small')
+        if output_dir is not None:
+            plt.savefig(os.path.join(output_dir, "all_real_vs_luminosity.png"), bbox_inches='tight')
+    else:
+        print("No data available for plotting currents vs luminosity")
 
 
 def plot_integrated_luminosity(df: pd.DataFrame, output_path: str = None):
