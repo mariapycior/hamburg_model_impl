@@ -61,8 +61,23 @@ def add_parameter_info(ax, loc='upper left'):
         param_text += f"\nTemp. correction: +{TEMPERATURE_CORRECTION_DELTA} K"
     
     props = dict(boxstyle='round', facecolor='white', alpha=0.7)
-    ax.text(0.02, 0.98, param_text, transform=ax.transAxes, fontsize=8,
-            verticalalignment='top', horizontalalignment='left', bbox=props)
+    
+    # Ustaw pozycję na podstawie parametru loc
+    x, y = 0.02, 0.98  # domyślnie upper left
+    halign, valign = 'left', 'top'
+    
+    if loc == 'upper right':
+        x, y = 0.98, 0.98
+        halign = 'right'
+    elif loc == 'lower left':
+        x, y = 0.02, 0.02
+        valign = 'bottom'
+    elif loc == 'lower right':
+        x, y = 0.98, 0.02
+        halign, valign = 'right', 'bottom'
+    
+    ax.text(x, y, param_text, transform=ax.transAxes, fontsize=8,
+            verticalalignment=valign, horizontalalignment=halign, bbox=props)
 
 
 def get_sensor_number(sensor_code):
@@ -464,12 +479,12 @@ def plot_currents_vs_parameter(df: pd.DataFrame, sensor_name: str, param_type: s
 
 
 def plot_currents_vs_cumulative_fluence(df: pd.DataFrame, sensor_name: str, output_path: str = None,
-                                  use_lines: bool = None, show_error_band: bool = None):
+                                       show_error_band: bool = None):
     """
     Plot both simulated and real currents against delivered fluence.
     """
     return plot_currents_vs_parameter(df, sensor_name, param_type='fluence', output_path=output_path,
-                                     use_lines=use_lines, show_error_band=show_error_band)
+                                      show_error_band=show_error_band, use_lines=True)
 
 
 def plot_all_currents_vs_fluence(df: pd.DataFrame, sensors: list, output_dir: str = None):
@@ -558,7 +573,7 @@ def plot_all_currents_vs_fluence(df: pd.DataFrame, sensors: list, output_dir: st
             sensor_number = get_sensor_number(sensor)
             fluence_col = f"delivered_fluence_{sensor}"
             real_col = f"real_current_{sensor}"
-            ax.scatter(real_data[fluence_col], real_data[real_col], s=SCATTER_MARKER_SIZE, label=f"Sensor {sensor_number}", zorder=DATA_ZORDER)
+            ax.plot(real_data[fluence_col], real_data[real_col], linewidth=LINE_WIDTH, label=f"Sensor {sensor_number}", zorder=DATA_ZORDER)
         
         add_parameter_info(ax)
         
@@ -650,7 +665,7 @@ def plot_all_currents_vs_luminosity(df: pd.DataFrame, sensors: list, output_dir:
         for sensor, real_data in real_data_by_sensor.items():
             sensor_number = get_sensor_number(sensor)
             real_col = f"real_current_{sensor}"
-            ax.scatter(real_data['integrated_luminosity'], real_data[real_col], s=SCATTER_MARKER_SIZE, label=f"Sensor {sensor_number}", zorder=DATA_ZORDER)
+            ax.plot(real_data['integrated_luminosity'], real_data[real_col], linewidth=LINE_WIDTH, label=f"Sensor {sensor_number}", zorder=DATA_ZORDER)
         
         add_parameter_info(ax)
         
@@ -732,7 +747,7 @@ def plot_currents_vs_position(summary_df: pd.DataFrame, target_luminosities: lis
     ax.set_ylabel('Leakage Current (mA)')
     ax.set_title('Leakage Current vs Sensor Position at Different Luminosities')
     ax.grid(True)
-    ax.legend(fontsize=8)
+    ax.legend(fontsize=8, loc='upper left')
     plt.tight_layout()
     
     if output_path:
