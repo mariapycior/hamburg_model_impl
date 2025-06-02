@@ -5,13 +5,22 @@ import numpy as np
 import re
 from params import Parameters
 from config import SIMULATION_PERIOD, TEMPERATURE_CORRECTION_ENABLED, TEMPERATURE_CORRECTION_DELTA
+from VeloDetectorElement import VeloDetectorElement
 
-def extract_sensor_number(sensor_name):
-    """Wyciąga numer sensora z pełnej nazwy, np. '02' z 'VL02_CT'."""
-    match = re.search(r'VL(\d+)_', sensor_name)
-    if match:
-        return match.group(1)
-    return sensor_name  # Jeśli nie znaleziono wzorca, zwróć oryginalną nazwę
+def get_sensor_number(sensor_code):
+    """Get sensor number from sensor code using VeloDetectorElement."""
+    try:
+        velo_det = VeloDetectorElement()
+        # The sensor code is assumed to be in format like 'VL01_CT' or 'PU02_AB'
+        # We need to add 'HV' to match the key format in VeloDetectorElement
+        sensor_key = (sensor_code, 'HV')
+        if sensor_key in velo_det.__members__['__Velo_Det__']:
+            # Sensor number is at index 1
+            return str(velo_det.__members__['__Velo_Det__'][sensor_key][1])
+        return sensor_code  # Return original code if not found
+    except Exception as e:
+        print(f"Error getting sensor number for {sensor_code}: {e}")
+        return sensor_code  # Return original code on error
 from config_plot import (
     CURRENT_TEMP_MODE, REFERENCE_TEMPERATURE,
     USE_LINES_FOR_SIMULATION, SHOW_ERROR_BANDS, ERROR_PERCENTAGE, PLOT_RESAMPLING_PERIOD,
@@ -292,7 +301,7 @@ def plot_simulated_vs_real(df: pd.DataFrame, sensor_name, output_path: str = Non
             real_data = temp_df[real_col].dropna()
             if not real_data.empty:
                 # Użyj numeru sensora zamiast pełnej nazwy
-                sensor_num = extract_sensor_number(sensor)
+                sensor_num = get_sensor_number(sensor)
                 ax.scatter(real_data.index, real_data, 
                           color=dark_color, s=SCATTER_MARKER_SIZE, 
                           label=f'{sensor_num} (Real)', zorder=DATA_ZORDER)
@@ -337,11 +346,11 @@ def plot_simulated_vs_real(df: pd.DataFrame, sensor_name, output_path: str = Non
     
     # Ustawienie tytułu i etykiet osi z numerami sensorów
     if len(valid_sensors) == 1:
-        sensor_num = extract_sensor_number(valid_sensors[0])
+        sensor_num = get_sensor_number(valid_sensors[0])
         ax.set_title(f'Real vs Simulated Leakage Current for Sensor {sensor_num}')
     else:
         # Użyj numerów sensorów w tytule dla wielu sensorów
-        sensor_numbers = [extract_sensor_number(s) for s in valid_sensors]
+        sensor_numbers = [get_sensor_number(s) for s in valid_sensors]
         sensor_numbers_str = ', '.join(sensor_numbers)
         ax.set_title(f'Real vs Simulated Leakage Current for Sensors {sensor_numbers_str}')
     
@@ -574,7 +583,7 @@ def plot_currents_vs_parameter(df: pd.DataFrame, sensor_name, param_type: str = 
                 df_real = df_binned[[real_col, sensor_param_col]].dropna()
                 if not df_real.empty:
                     # Użyj numeru sensora zamiast pełnej nazwy
-                    sensor_num = extract_sensor_number(sensor)
+                    sensor_num = get_sensor_number(sensor)
                     ax.scatter(df_real[sensor_param_col], df_real[real_col], 
                               color=dark_color, s=SCATTER_MARKER_SIZE, 
                               label=f'{sensor_num} (Real)', zorder=DATA_ZORDER)
@@ -611,7 +620,7 @@ def plot_currents_vs_parameter(df: pd.DataFrame, sensor_name, param_type: str = 
                         )
                     
                     # Użyj numeru sensora zamiast pełnej nazwy
-                    sensor_num = extract_sensor_number(sensor)
+                    sensor_num = get_sensor_number(sensor)
                     if use_line_plot:
                         ax.plot(df_sim[sensor_param_col], df_sim[sim_col], 
                                color=medium_color, linewidth=LINE_WIDTH, 
@@ -627,12 +636,12 @@ def plot_currents_vs_parameter(df: pd.DataFrame, sensor_name, param_type: str = 
     # Tytuł z numerami sensorów
     if isinstance(sensor_name, list):
         # Użyj numerów sensorów w tytule dla wielu sensorów
-        sensor_numbers = [extract_sensor_number(s) for s in sensor_name]
+        sensor_numbers = [get_sensor_number(s) for s in sensor_name]
         sensor_numbers_str = ', '.join(sensor_numbers)
         ax.set_title(f'Leakage Current vs {title_param} for Sensors {sensor_numbers_str}')
     else:
         # Dla pojedynczego sensora
-        sensor_num = extract_sensor_number(sensor_name)
+        sensor_num = get_sensor_number(sensor_name)
         ax.set_title(f'Leakage Current vs {title_param} for Sensor {sensor_num}')
     ax.grid(True)
     ax.legend()
