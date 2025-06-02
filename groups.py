@@ -147,7 +147,6 @@ vl02_ct_sensors = ['VL02_CT']
 all_sensors = sensors_side_a + sensors_side_c
 
 # Dictionary mapping group variables to legend texts
-# This can be used directly in plotting functions
 legend_texts = {
     'sensors_r_side_a': "R-type, A-side",
     'sensors_r_side_c': "R-type, C-side",
@@ -169,4 +168,50 @@ legend_texts = {
     'sensors_z_500_700': "z = [500cm,700cm]",
     'sensors_z_ge_700': "z ≥ 700cm",
     'vl02_ct_sensors': "VL02_CT"
+}
+
+# Grouping mode definitions
+# For each grouping mode, we define:
+# - title: Title for the legend
+# - groups: List of tuples (sensor_list, group_label, index_for_color)
+group_modes = {
+    'side': {
+        'title': "Sensors by Side",
+        'groups': [
+            (sensors_side_a, "Side A", 0),
+            (sensors_side_c, "Side C", 1)
+        ]
+    },
+    'type': {
+        'title': "Sensors by Type",
+        'groups': [
+            (sensors_r, "R-type", 0),
+            (sensors_phi, "Phi-type", 1)
+        ]
+    },
+    'tb': {
+        'title': "Sensors by Position (Top/Bottom)",
+        'groups': [
+            (sensors_type_t, "Top (T)", 0),
+            (sensors_type_b, "Bottom (B)", 1)
+        ]
+    },
+    'z_position': {
+        'title': "Sensors by Z Position",
+        'groups': [
+            (sensors_z_lt_m200, "z < -200cm", 0),
+            (sensors_z_m200_m100, "z = [-200cm,-100cm]", 1),
+            (sensors_z_m100_0, "z = [-100cm,0cm]", 2),
+            (sensors_z_0_100, "z = [0cm,100cm]", 3),
+            (sensors_z_100_200, "z = [100cm,200cm]", 4),
+            (sensors_z_200_300, "z = [200cm,300cm]", 5),
+            (sensors_z_300_500, "z = [300cm,500cm]", 6),
+            (sensors_z_500_700, "z = [500cm,700cm]", 7),
+            (sensors_z_ge_700, "z ≥ 700cm", 8)
+        ]
+    },
+    'none': {
+        'title': "All Sensors",
+        'groups': []
+    }
 }

@@ -52,6 +52,10 @@ def load_simulated_data(simulated_path):
 def process_and_plot_data(result_df, sensors_to_use, args):
 
     result_df = cpl.prepare_data_for_analysis(result_df, params, sensors_to_use, args.start_date)
+    
+    # Apply resampling before plotting
+    from config_plot import PLOT_RESAMPLING_PERIOD
+    result_df = cpl.resample_dataframe(result_df, PLOT_RESAMPLING_PERIOD)
 
     # Calculate fit quality metrics for each sensor and store in variable
     fit_metrics = cpl.calculate_fit_quality(result_df, sensors_to_use)
@@ -72,7 +76,7 @@ def process_and_plot_data(result_df, sensors_to_use, args):
         print(f"Creating plots for all {len(sensors_to_use)} sensors")
         plot_utils.plot_currents_vs_position(curr_vs_pos_df, TARGET_LUMINOSITIES)
         plot_utils.plot_all_sensors(result_df, sensors_to_use)
-        #plot_utils.plot_all_currents_vs_luminosity(result_df, sensors_to_use)
+        plot_utils.plot_all_currents_vs_luminosity(result_df, sensors_to_use)
         #plot_utils.plot_all_currents_vs_fluence(result_df, sensors_to_use)
 
 def main():

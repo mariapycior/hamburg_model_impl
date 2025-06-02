@@ -260,6 +260,12 @@ def current_for_lumi(df: pd.DataFrame, target_luminosities: list = None) -> pd.D
     return summary.sort_values('position')
 
 
+def resample_dataframe(df: pd.DataFrame, period: str = None) -> pd.DataFrame:
+    if not period or df.empty:
+        return df
+    return df.resample(period).mean()
+
+
 def calculate_fit_quality(df: pd.DataFrame, sensors: list, metric: str = None) -> dict:
     """
     Calculate the quality of fit between simulated and real current data.
