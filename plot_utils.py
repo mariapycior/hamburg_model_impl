@@ -430,8 +430,9 @@ def plot_sensors_data(df: pd.DataFrame, sensors: list, column_prefix: str, title
     from collections import OrderedDict
     handles, labels = ax.get_legend_handles_labels()
     by_label = OrderedDict(zip(labels, handles))
-    ax.legend(by_label.values(), by_label.keys(), loc='center left', 
-             bbox_to_anchor=(1.01, 0.5), title='Sensor Groups', fontsize='small')
+    ax.legend(by_label.values(), by_label.keys(), loc='best', 
+            title='Sensor Groups', fontsize='small')
+
     
     if output_path:
         plt.savefig(output_path)
