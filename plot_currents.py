@@ -6,7 +6,8 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import plot_utils
 
-from config import Paths, CURRENT_TEMP_MODE, TARGET_LUMINOSITIES
+from config import Paths, TARGET_LUMINOSITIES
+from config_plot import CURRENT_TEMP_MODE, PLOT_RESAMPLING_PERIOD
 from params import Parameters
 params = Parameters()
 import current_preparation_lib as cpl
@@ -52,10 +53,12 @@ def process_and_plot_data(result_df, sensors_to_use, args):
     # Prepare data for analysis (temperature adjustments, etc.)
     result_df = cpl.prepare_data_for_analysis(result_df, params, sensors_to_use, args.start_date)
     
-    # Generate position plots if requested
-    if args.plot_currents_vs_position or args.all_sensors:
-        curr_vs_pos_df = cpl.current_for_lumi(result_df)
-        plot_utils.plot_currents_vs_position(curr_vs_pos_df, TARGET_LUMINOSITIES)
+    # Zawsze generuj wykres zależności prądu od luminosity
+    curr_vs_pos_df = cpl.current_for_lumi(result_df)
+    plot_utils.plot_currents_vs_position(curr_vs_pos_df, TARGET_LUMINOSITIES)
+    
+    # Zawsze generuj wykres zintegrowanej luminosity
+    plot_utils.plot_integrated_luminosity(result_df)
     
     # Generate single or multi-sensor plots
     if not args.all_sensors:
@@ -63,7 +66,8 @@ def process_and_plot_data(result_df, sensors_to_use, args):
         print(f"Creating plots for sensor {sensor}")
         plot_utils.plot_simulated_vs_real(result_df, sensor)
         plot_utils.plot_leakage_current(result_df, sensor)
-        plot_utils.plot_currents_vs_integrated_luminosity(result_df, sensor)
+        plot_utils.plot_currents_vs_parameter(result_df, sensor, param_type='luminosity')
+        plot_utils.plot_currents_vs_parameter(result_df, sensor, param_type='fluence')
     else:
         print(f"Creating plots for all {len(sensors_to_use)} sensors")
         plot_utils.plot_all_sensors(result_df, sensors_to_use)
@@ -73,6 +77,12 @@ def main():
     args = parse_arguments()
     paths = Paths()
     simulated_path = paths.get_output_file(args.simulated_file)
+    
+    # Wyświetl informacje o konfiguracji wykresów z config_plot.py
+    print(f"Plot configuration from config_plot.py:")
+    print(f" - Temperature adjustment mode: {CURRENT_TEMP_MODE}")
+    print(f" - Resampling period: {PLOT_RESAMPLING_PERIOD if PLOT_RESAMPLING_PERIOD else 'None'}")
+    print(f" - All plot settings can be modified in config_plot.py")
     
     # List sensors if requested
     if args.list_sensors:
@@ -91,22 +101,25 @@ def main():
         
         sensors_to_use = all_sensors if args.all_sensors else [args.sensor]
         
-        # Load data for selected sensors
-        result_df = cpl.load_and_prepare_simulated_df(sensors_to_use, simulated_path)
-        if result_df is None or result_df.empty:
-            print(f"No data found for sensors: {', '.join(sensors_to_use)}")
+        # Load simulated data
+        print(f"Data loaded from {simulated_path}")
+        result_df = load_simulated_data(simulated_path)
+        if result_df is None:
+            print("Failed to load data")
             return
             
-        print(f"Data loaded from {simulated_path}")
-        
-        # Process and plot data
-        process_and_plot_data(result_df, sensors_to_use, args)
-            
+        # Process data and create plots
+        try:
+            process_and_plot_data(result_df, sensors_to_use, args)
+            # Wyświetl wszystkie wykresy na raz na końcu
+            print("Showing all plots...")
+            plt.show()
+        except Exception as e:
+            print(f"Failed to process data: {e}")
+            raise e
+    
     except Exception as e:
-        print(f"Failed to process data: {e}")
-        import traceback
-        traceback.print_exc()
-        return
+        print(f"Error: {e}")
 
 
 if __name__ == "__main__":
