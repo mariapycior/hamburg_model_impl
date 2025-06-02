@@ -227,13 +227,9 @@ def plot_simulated_vs_real(df: pd.DataFrame, sensor_name: str):
     ax.legend()
     plt.tight_layout()
     
-    
-        
-    # Wykres gotowy do wyświetlenia
 
 
-def plot_sensors_data(df: pd.DataFrame, sensors: list, column_prefix: str, title: str, 
-                     force_no_error: bool = False, use_lines: bool = None, show_error_band: bool = None, y_range: tuple = None):
+def plot_sensors_data(df: pd.DataFrame, sensors: list, column_prefix: str, title: str, y_range: tuple = None):
     fig, ax = plt.subplots(figsize=DEFAULT_FIGURE_SIZE)
     columns = []
     
@@ -249,26 +245,6 @@ def plot_sensors_data(df: pd.DataFrame, sensors: list, column_prefix: str, title
             y = temp_df[col_name]
             y_clean = y.dropna()
             if not y_clean.empty:
-                use_line_plot = USE_LINES_FOR_SIMULATION if use_lines is None else use_lines
-                show_error = SHOW_ERROR_BANDS if show_error_band is None else show_error_band
-                
-                if force_no_error:
-                    show_error = False
-                
-                is_current_plot = column_prefix == "current" or column_prefix == "real_current"
-                
-                if column_prefix != "real_current" and use_line_plot and show_error and is_current_plot:
-                    y_sorted = y_clean.sort_index()
-                    error_value = y_sorted * (ERROR_PERCENTAGE / 100)
-                    ax.fill_between(
-                        y_sorted.index, 
-                        y_sorted - error_value, 
-                        y_sorted + error_value, 
-                        color=ERROR_BAND_COLOR, 
-                        alpha=ERROR_BAND_ALPHA,
-                        zorder=ERROR_BAND_ZORDER
-                    )
-                
                 # Use the group_modes structure from groups.py for sensor grouping
                 from groups import group_modes
                 
@@ -321,29 +297,17 @@ def plot_sensors_data(df: pd.DataFrame, sensors: list, column_prefix: str, title
                     plot_sensors_data.sensor_groups[sensor_group]['columns'].append(col_name)
                 
                 # Rysuj sensor z odpowiednim kolorem i etykietą grupy
-                if column_prefix == "real_current":
-                    if sensor_color is None:
-                        ax.scatter(y_clean.index, y_clean.values, s=SCATTER_MARKER_SIZE, 
-                                  label=sensor_group, zorder=DATA_ZORDER)
-                    else:
-                        ax.scatter(y_clean.index, y_clean.values, s=SCATTER_MARKER_SIZE, 
-                                  color=sensor_color, label=sensor_group, zorder=DATA_ZORDER)
-                else:
+                if column_prefix == "current":
                     y_sorted = y_clean.sort_index()
-                    if use_line_plot:
-                        if sensor_color is None:
-                            ax.plot(y_sorted.index, y_sorted.values, linewidth=LINE_WIDTH, 
-                                   label=sensor_group, zorder=DATA_ZORDER)
-                        else:
-                            ax.plot(y_sorted.index, y_sorted.values, linewidth=LINE_WIDTH, 
-                                   color=sensor_color, label=sensor_group, zorder=DATA_ZORDER)
+                    if sensor_color is None:
+                        ax.plot(y_sorted.index, y_sorted.values, linewidth=LINE_WIDTH, label=sensor_group, zorder=DATA_ZORDER)
                     else:
-                        if sensor_color is None:
-                            ax.scatter(y_sorted.index, y_sorted.values, s=SCATTER_MARKER_SIZE, 
-                                     label=sensor_group, zorder=DATA_ZORDER)
-                        else:
-                            ax.scatter(y_sorted.index, y_sorted.values, s=SCATTER_MARKER_SIZE, 
-                                     color=sensor_color, label=sensor_group, zorder=DATA_ZORDER)
+                        ax.plot(y_sorted.index, y_sorted.values, linewidth=LINE_WIDTH, color=sensor_color, label=sensor_group, zorder=DATA_ZORDER)
+                elif column_prefix == "real_current":
+                    if sensor_color is None:
+                        ax.scatter(y_clean.index, y_clean.values, s=SCATTER_MARKER_SIZE, label=sensor_group, zorder=DATA_ZORDER)
+                    else:
+                        ax.scatter(y_clean.index, y_clean.values, s=SCATTER_MARKER_SIZE, color=sensor_color, label=sensor_group, zorder=DATA_ZORDER)
     
     # Calculate average for each sensor group instead of one global average
     if hasattr(plot_sensors_data, 'sensor_groups'):
@@ -473,12 +437,10 @@ def plot_all_sensors(df: pd.DataFrame, sensors: list):
         y_range = None
     
     # Plot simulated current for all sensors (no error bands when plotting all sensors)
-    plot_sensors_data(df, sensors, 'current', 'Simulated Leakage Current for All Sensors', 
-                 force_no_error=True, y_range=y_range)  # Force no error band for all sensors plot
+    plot_sensors_data(df, sensors, 'current', 'Simulated Leakage Current for All Sensors', y_range=y_range)
     
     # Plot real current for all sensors (if available)
-    plot_sensors_data(df, sensors, 'real_current', 'Real Leakage Current for All Sensors', 
-                 use_lines=False, show_error_band=False, y_range=y_range)
+    plot_sensors_data(df, sensors, 'real_current', 'Real Leakage Current for All Sensors', y_range=y_range)
 
 
 
@@ -553,18 +515,6 @@ def plot_currents_vs_parameter(df: pd.DataFrame, sensor_name: str, param_type: s
     ax.grid(True)
     ax.legend()
     
-    
-        
-    
-    # Wykres gotowy do wyświetlenia
-
-
-def plot_currents_vs_cumulative_fluence(df: pd.DataFrame, sensor_name: str):
-    """
-    Plot both simulated and real currents against delivered fluence.
-    """
-    return plot_currents_vs_parameter(df, sensor_name, param_type='fluence')
-
 
 def plot_all_currents_vs_fluence(df: pd.DataFrame, sensors: list, output_dir: str = None):
     """Plot all sensors currents against fluence in two separate plots using continuous lines.
