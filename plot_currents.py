@@ -50,14 +50,10 @@ def load_simulated_data(simulated_path):
 
 
 def process_and_plot_data(result_df, sensors_to_use, args):
-    # Prepare data for analysis (temperature adjustments, etc.)
+
     result_df = cpl.prepare_data_for_analysis(result_df, params, sensors_to_use, args.start_date)
-    
-    # Zawsze generuj wykres zależności prądu od luminosity
+
     curr_vs_pos_df = cpl.current_for_lumi(result_df)
-    plot_utils.plot_currents_vs_position(curr_vs_pos_df, TARGET_LUMINOSITIES)
-    
-    # Zawsze generuj wykres zintegrowanej luminosity
     plot_utils.plot_integrated_luminosity(result_df)
     
     # Generate single or multi-sensor plots
@@ -70,15 +66,16 @@ def process_and_plot_data(result_df, sensors_to_use, args):
         plot_utils.plot_currents_vs_parameter(result_df, sensor, param_type='fluence')
     else:
         print(f"Creating plots for all {len(sensors_to_use)} sensors")
+        plot_utils.plot_currents_vs_position(curr_vs_pos_df, TARGET_LUMINOSITIES)
         plot_utils.plot_all_sensors(result_df, sensors_to_use)
         plot_utils.plot_all_currents_vs_luminosity(result_df, sensors_to_use)
+        plot_utils.plot_all_currents_vs_fluence(result_df, sensors_to_use)
 
 def main():
     args = parse_arguments()
     paths = Paths()
     simulated_path = paths.get_output_file(args.simulated_file)
-    
-    # Wyświetl informacje o konfiguracji wykresów z config_plot.py
+
     print(f"Plot configuration from config_plot.py:")
     print(f" - Temperature adjustment mode: {CURRENT_TEMP_MODE}")
     print(f" - Resampling period: {PLOT_RESAMPLING_PERIOD if PLOT_RESAMPLING_PERIOD else 'None'}")
