@@ -55,7 +55,7 @@ def process_and_plot_data(result_df, sensors_to_use, args):
 
     # Calculate fit quality metrics for each sensor and store in variable
     fit_metrics = cpl.calculate_fit_quality(result_df, sensors_to_use)
-
+    
     curr_vs_pos_df = cpl.current_for_lumi(result_df)
     #plot_utils.plot_integrated_luminosity(result_df)
     
@@ -63,6 +63,7 @@ def process_and_plot_data(result_df, sensors_to_use, args):
     if not args.all_sensors:
         sensor = args.sensor
         print(f"Creating plots for sensor {sensor}")
+        print(fit_metrics)
         plot_utils.plot_simulated_vs_real(result_df, sensor)
         plot_utils.plot_leakage_current(result_df, sensor)
         plot_utils.plot_currents_vs_parameter(result_df, sensor, param_type='luminosity')
