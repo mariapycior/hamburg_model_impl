@@ -2,13 +2,21 @@ import os
 import matplotlib.pyplot as plt
 import pandas as pd
 import numpy as np
+import re
 from params import Parameters
 from config import SIMULATION_PERIOD, TEMPERATURE_CORRECTION_ENABLED, TEMPERATURE_CORRECTION_DELTA
+
+def extract_sensor_number(sensor_name):
+    """Wyciąga numer sensora z pełnej nazwy, np. '02' z 'VL02_CT'."""
+    match = re.search(r'VL(\d+)_', sensor_name)
+    if match:
+        return match.group(1)
+    return sensor_name  # Jeśli nie znaleziono wzorca, zwróć oryginalną nazwę
 from config_plot import (
     CURRENT_TEMP_MODE, REFERENCE_TEMPERATURE,
     USE_LINES_FOR_SIMULATION, SHOW_ERROR_BANDS, ERROR_PERCENTAGE, PLOT_RESAMPLING_PERIOD,
     SCATTER_MARKER_SIZE, LINE_WIDTH, ERROR_BAND_ALPHA, REAL_DATA_COLOR, SIMULATED_DATA_COLOR, ERROR_BAND_COLOR,
-    DEFAULT_FIGURE_SIZE, MULTI_SUBPLOT_FIGURE_SIZE, ERROR_BAND_ZORDER, DATA_ZORDER
+    COLOR_PALETTES, DEFAULT_FIGURE_SIZE, MULTI_SUBPLOT_FIGURE_SIZE, ERROR_BAND_ZORDER, DATA_ZORDER
 )
 
 
@@ -115,16 +123,25 @@ def setup_subplot(ax, x_data, y_data, color, label, title, ylabel, xlim, ylim=No
     ax.grid(True)
     ax.legend()
 
-def plot_leakage_current(df: pd.DataFrame, sensor_name: str, 
+def plot_leakage_current(df: pd.DataFrame, sensor_name, 
                         output_path: str = None, start_date: pd.Timestamp = None, end_date: pd.Timestamp = None,
                         use_lines: bool = None, show_error_band: bool = None, resampling_period: str = None):
-    sim_col = f"current_{sensor_name}"
-    real_col = f"real_current_{sensor_name}"
-    temp_col = f"temperature_{sensor_name}"
-    fluence_col = f"fluence_{sensor_name}"
+    # Sprawdź czy sensor_name jest stringiem lub listą
+    if isinstance(sensor_name, str):
+        sensors = [sensor_name]
+    else:
+        # Jeśli podano listę, ogranicz do maks. 5 sensorów
+        sensors = sensor_name[:5]
     
-    if sim_col not in df.columns:
-        raise ValueError(f"Simulated current column not found for sensor {sensor_name}")
+    # Sprawdź, czy są dostępne dane dla sensorów
+    valid_sensors = []
+    for sensor in sensors:
+        sim_col = f"current_{sensor}"
+        if sim_col in df.columns:
+            valid_sensors.append(sensor)
+    
+    if not valid_sensors:
+        raise ValueError(f"Simulated current column not found for any of the sensors: {', '.join(sensors)}")
 
     if start_date is None:
         start_date = df.index.min()
@@ -133,24 +150,88 @@ def plot_leakage_current(df: pd.DataFrame, sensor_name: str,
 
     fig, axes = plt.subplots(4, 1, figsize=MULTI_SUBPLOT_FIGURE_SIZE)
     
-    setup_subplot(axes[0], df.index, df[sim_col], SIMULATED_DATA_COLOR, 'Leakage Current Simulated', 
-                 f'Simulated Leakage Current for Sensor {sensor_name}', 'Leakage Current (mA)', 
-                 (start_date, end_date), use_line=use_lines, show_error_band=show_error_band,
-                 is_current_plot=True)
+    # Ustal kolory dla wykresów
+    import matplotlib.cm as cm
+    sim_colors = cm.Blues(np.linspace(0.6, 0.9, len(valid_sensors)))
+    real_colors = cm.Reds(np.linspace(0.6, 0.9, len(valid_sensors)))
     
-    if real_col in df.columns:
-        setup_subplot(axes[1], df.index, df[real_col], REAL_DATA_COLOR, 'Leakage Current (Real Data)', 
-                     f'Real Leakage Current for Sensor {sensor_name}', 'Leakage Current (mA)', 
-                     (start_date, end_date), use_line=False,
-                     is_current_plot=True)
+    # Pierwszy subplot - symulowane prądy
+    ax = axes[0]
+    for i, sensor in enumerate(valid_sensors):
+        sim_col = f"current_{sensor}"
+        if sim_col in df.columns:
+            use_line_plot = USE_LINES_FOR_SIMULATION if use_lines is None else use_lines
+            show_err = SHOW_ERROR_BANDS if show_error_band is None else show_error_band
+            
+            if use_line_plot:
+                # Pokaż pasmo błędu tylko dla pojedynczego sensora
+                if show_err and len(valid_sensors) == 1:
+                    error_value = df[sim_col] * (ERROR_PERCENTAGE / 100)
+                    ax.fill_between(
+                        df.index, 
+                        df[sim_col] - error_value, 
+                        df[sim_col] + error_value, 
+                        color=ERROR_BAND_COLOR, 
+                        alpha=ERROR_BAND_ALPHA, 
+                        label=f'{ERROR_PERCENTAGE}% Error Band',
+                        zorder=ERROR_BAND_ZORDER
+                    )
+                
+                ax.plot(df.index, df[sim_col], 
+                        color=sim_colors[i], linewidth=LINE_WIDTH, 
+                        label=f'{sensor} (Sim)', zorder=DATA_ZORDER)
+            else:
+                ax.scatter(df.index, df[sim_col], 
+                          color=sim_colors[i], s=SCATTER_MARKER_SIZE, 
+                          label=f'{sensor} (Sim)', zorder=DATA_ZORDER)
     
-    if fluence_col in df.columns:
-        setup_subplot(axes[2], df.index, df[fluence_col], 'green', 'Fluence', 
-                     'Fluence', 'Fluence (n/cm²)', (start_date, end_date), use_line=False)
+    # Formatowanie pierwszego subplotu
+    if len(valid_sensors) == 1:
+        ax.set_title(f'Simulated Leakage Current for Sensor {valid_sensors[0]}')
+    else:
+        ax.set_title('Simulated Leakage Current for Multiple Sensors')
+    ax.set_ylabel('Leakage Current (mA)')
+    ax.set_xlim(start_date, end_date)
+    add_parameter_info(ax)
+    ax.grid(True)
+    ax.legend()
     
-    if temp_col in df.columns:
-        setup_subplot(axes[3], df.index, df[temp_col], 'magenta', 'Temperature', 
-                     'Temperature', 'Temperature (K)', (start_date, end_date), use_line=False)
+    # Drugi subplot - rzeczywiste prądy
+    ax = axes[1]
+    real_plot_created = False
+    for i, sensor in enumerate(valid_sensors):
+        real_col = f"real_current_{sensor}"
+        if real_col in df.columns and df[real_col].notna().any():
+            ax.scatter(df.index, df[real_col], 
+                      color=real_colors[i], s=SCATTER_MARKER_SIZE, 
+                      label=f'{sensor} (Real)', zorder=DATA_ZORDER)
+            real_plot_created = True
+    
+    # Formatowanie drugiego subplotu
+    if real_plot_created:
+        if len(valid_sensors) == 1:
+            ax.set_title(f'Real Leakage Current for Sensor {valid_sensors[0]}')
+        else:
+            ax.set_title('Real Leakage Current for Multiple Sensors')
+        ax.set_ylabel('Leakage Current (mA)')
+        ax.set_xlim(start_date, end_date)
+        add_parameter_info(ax)
+        ax.grid(True)
+        ax.legend()
+    
+    # Trzeci subplot - fluencja (użyj pierwszego sensora jako przykład)
+    if valid_sensors:
+        fluence_col = f"fluence_{valid_sensors[0]}"
+        if fluence_col in df.columns:
+            setup_subplot(axes[2], df.index, df[fluence_col], 'green', 'Fluence', 
+                        'Fluence', 'Fluence (n/cm²)', (start_date, end_date), use_line=False)
+    
+    # Czwarty subplot - temperatura (użyj pierwszego sensora jako przykład)
+    if valid_sensors:
+        temp_col = f"temperature_{valid_sensors[0]}"
+        if temp_col in df.columns:
+            setup_subplot(axes[3], df.index, df[temp_col], 'magenta', 'Temperature', 
+                        'Temperature', 'Temperature (K)', (start_date, end_date), use_line=False)
 
     plt.tight_layout()
     if output_path:
@@ -158,14 +239,26 @@ def plot_leakage_current(df: pd.DataFrame, sensor_name: str,
     # Wykres gotowy do wyświetlenia
 
 
-def plot_simulated_vs_real(df: pd.DataFrame, sensor_name: str, output_path: str = None, 
+def plot_simulated_vs_real(df: pd.DataFrame, sensor_name, output_path: str = None, 
                          start_date: pd.Timestamp = None, end_date: pd.Timestamp = None, weekly_average: bool = False,
                          use_lines: bool = None, show_error_band: bool = None, resampling_period: str = None):
-    sim_col = f"current_{sensor_name}"
-    real_col = f"real_current_{sensor_name}"
+    # Sprawdź czy sensor_name jest stringiem lub listą
+    if isinstance(sensor_name, str):
+        sensors = [sensor_name]
+    else:
+        # Jeśli podano listę, ogranicz do maks. 5 sensorów
+        sensors = sensor_name[:5]
     
-    if sim_col not in df.columns and real_col not in df.columns:
-        print(f"No data found for sensor {sensor_name}")
+    # Sprawdzenie czy dane istnieją
+    valid_sensors = []
+    for sensor in sensors:
+        sim_col = f"current_{sensor}"
+        real_col = f"real_current_{sensor}"
+        if sim_col in df.columns or real_col in df.columns:
+            valid_sensors.append(sensor)
+    
+    if not valid_sensors:
+        print(f"No data found for sensor(s) {', '.join(sensors)}")
         return
 
     temp_df = df.copy()
@@ -183,45 +276,77 @@ def plot_simulated_vs_real(df: pd.DataFrame, sensor_name: str, output_path: str 
     else:
         ax.set_xlim(df.index.min(), df.index.max())
 
-    if real_col in temp_df.columns:
-        real_data = temp_df[real_col].dropna()
-        if not real_data.empty:
-            ax.scatter(real_data.index, real_data, color=REAL_DATA_COLOR, s=SCATTER_MARKER_SIZE, 
-                      label='Real Leakage Current', zorder=DATA_ZORDER)
-    
-    if sim_col in temp_df.columns:
-        sim_data = temp_df[sim_col].dropna()
-        if not sim_data.empty:
-            sim_data = sim_data.sort_index()
-            use_line_plot = USE_LINES_FOR_SIMULATION if use_lines is None else use_lines
-            show_error = SHOW_ERROR_BANDS if show_error_band is None else show_error_band
-            
-            if use_line_plot:
-                if show_error:
+    # Rysuj wykresy dla każdego sensora
+    for i, sensor in enumerate(valid_sensors):
+        # Pobierz kolory z palety dla danego sensora (maksymalnie 5 sensorów)
+        sensor_idx = min(i, 4)  # Ograniczamy indeks do 4 (5 dostępnych palet)
+        dark_color = COLOR_PALETTES[sensor_idx][0]   # Kolor dla punktów (dane rzeczywiste)
+        medium_color = COLOR_PALETTES[sensor_idx][1]  # Kolor dla linii (dane symulowane)
+        light_color = COLOR_PALETTES[sensor_idx][2]   # Kolor dla paska błędu
+        
+        sim_col = f"current_{sensor}"
+        real_col = f"real_current_{sensor}"
+        
+        # Rysuj dane rzeczywiste
+        if real_col in temp_df.columns:
+            real_data = temp_df[real_col].dropna()
+            if not real_data.empty:
+                # Użyj numeru sensora zamiast pełnej nazwy
+                sensor_num = extract_sensor_number(sensor)
+                ax.scatter(real_data.index, real_data, 
+                          color=dark_color, s=SCATTER_MARKER_SIZE, 
+                          label=f'{sensor_num} (Real)', zorder=DATA_ZORDER)
+        
+        # Rysuj dane symulowane
+        if sim_col in temp_df.columns:
+            sim_data = temp_df[sim_col].dropna()
+            if not sim_data.empty:
+                sim_data = sim_data.sort_index()
+                use_line_plot = USE_LINES_FOR_SIMULATION if use_lines is None else use_lines
+                show_error = SHOW_ERROR_BANDS if show_error_band is None else show_error_band
+                
+                if use_line_plot and show_error:
+                    # Pokaż pasmo błędu dla każdego sensora
                     error_value = sim_data * (ERROR_PERCENTAGE / 100)
                     ax.fill_between(
                         sim_data.index, 
                         sim_data - error_value, 
                         sim_data + error_value, 
-                        color=ERROR_BAND_COLOR, 
+                        color=light_color, 
                         alpha=ERROR_BAND_ALPHA, 
-                        label=f'{ERROR_PERCENTAGE}% Error Band',
+                        label=f'{ERROR_PERCENTAGE}% Error Band' if i == 0 else None,  # Etykieta tylko dla pierwszego
                         zorder=ERROR_BAND_ZORDER
                     )
                 
-                ax.plot(sim_data.index, sim_data, color=SIMULATED_DATA_COLOR, linewidth=LINE_WIDTH, 
-                        label='Simulated Leakage Current', zorder=DATA_ZORDER)
-            else:
-                ax.scatter(sim_data.index, sim_data, color=SIMULATED_DATA_COLOR, s=SCATTER_MARKER_SIZE, 
-                          label='Simulated Leakage Current', zorder=DATA_ZORDER)
+                # Numer sensora jest już wyciągnięty wcześniej
+                if use_line_plot:
+                    ax.plot(sim_data.index, sim_data, 
+                       color=medium_color, 
+                       linewidth=LINE_WIDTH, 
+                       label=f'{sensor_num} (Sim)', zorder=DATA_ZORDER)
+                else:
+                    ax.scatter(sim_data.index, sim_data, 
+                              color=medium_color, 
+                              s=SCATTER_MARKER_SIZE, 
+                              label=f'{sensor_num} (Sim)', zorder=DATA_ZORDER)
 
     add_parameter_info(ax)
     
     ax.set_ylabel('Leakage Current (mA)')
     ax.set_xlabel('Time')
-    ax.set_title(f'Real vs Simulated Leakage Current for {sensor_name}')
+    
+    # Ustawienie tytułu i etykiet osi z numerami sensorów
+    if len(valid_sensors) == 1:
+        sensor_num = extract_sensor_number(valid_sensors[0])
+        ax.set_title(f'Real vs Simulated Leakage Current for Sensor {sensor_num}')
+    else:
+        # Użyj numerów sensorów w tytule dla wielu sensorów
+        sensor_numbers = [extract_sensor_number(s) for s in valid_sensors]
+        sensor_numbers_str = ', '.join(sensor_numbers)
+        ax.set_title(f'Real vs Simulated Leakage Current for Sensors {sensor_numbers_str}')
+    
     ax.grid(True)
-    ax.legend()
+    ax.legend(loc='best', fontsize='small')
     plt.tight_layout()
     
     if output_path:
@@ -361,76 +486,154 @@ def plot_all_sensors(df: pd.DataFrame, sensors: list, output_dir: str = None,
 
 
 
-def plot_currents_vs_parameter(df: pd.DataFrame, sensor_name: str, param_type: str = 'luminosity', 
-                               output_path: str = None, use_lines: bool = None, show_error_band: bool = None):
+def plot_currents_vs_parameter(df: pd.DataFrame, sensor_name, param_type: str = 'luminosity', 
+                                output_path: str = None, use_lines: bool = None, show_error_band: bool = None):
     """
     Plot both simulated and real currents against a chosen parameter (integrated luminosity or cumulative fluence).
+    Supports single sensor (string) or multiple sensors (list, max 5).
     """
-    sim_col = f"current_{sensor_name}"
-    real_col = f"real_current_{sensor_name}"
+    # Sprawdź czy sensor_name jest stringiem lub listą
+    if isinstance(sensor_name, str):
+        sensors = [sensor_name]
+    else:
+        # Jeśli podano listę, ogranicz do maks. 5 sensorów
+        sensors = sensor_name[:5]
     
+    # Sprawdzanie parametru dla wykresów
     if param_type == 'luminosity':
         param_col = "integrated_luminosity"
         x_label = 'Integrated Luminosity (fb$^{-1}$)'
         title_param = 'Integrated Luminosity'
     else:  # fluence
-        delivered_fluence_col = f"delivered_fluence_{sensor_name}"
-        if delivered_fluence_col not in df.columns:
+        # Dla wielu sensorów musimy sprawdzić, które mają dane fluence
+        valid_sensors = []
+        for sensor in sensors:
+            delivered_fluence_col = f"delivered_fluence_{sensor}"
+            if delivered_fluence_col in df.columns:
+                valid_sensors.append(sensor)
+        
+        if not valid_sensors:
+            print(f"No fluence data found for sensors: {', '.join(sensors)}")
             return
-        param_col = delivered_fluence_col
+        
+        # Dla fluence będziemy używać tylko sensorów z dostępnymi danymi fluence
+        sensors = valid_sensors
+        param_col = f"delivered_fluence_{sensors[0]}"  # Użyj pierwszego sensora jako bazowego dla osi X
         x_label = 'Fluence (n/cm²)'
         title_param = 'Cumulative Fluence'
     
-    if param_col not in df.columns or (sim_col not in df.columns and real_col not in df.columns):
+    if param_col not in df.columns:
+        print(f"Parameter column {param_col} not found in DataFrame")
         return
     
+    # Sprawdź czy są dostępne jakiekolwiek dane dla wybranych sensorów
+    valid_sim_cols = []
+    valid_real_cols = []
+    for sensor in sensors:
+        sim_col = f"current_{sensor}"
+        real_col = f"real_current_{sensor}"
+        
+        if sim_col in df.columns and df[sim_col].notna().any():
+            valid_sim_cols.append(sim_col)
+        if real_col in df.columns and df[real_col].notna().any():
+            valid_real_cols.append(real_col)
+    
+    if not valid_sim_cols and not valid_real_cols:
+        print(f"No data found for sensors: {', '.join(sensors)}")
+        return
+    
+    # Przygotuj dane
     temp_df = df.copy()
     if PLOT_RESAMPLING_PERIOD:
         temp_df = resample_data(temp_df, period=PLOT_RESAMPLING_PERIOD)
     
-    df_binned = temp_df
+    df_binned = temp_df.sort_values(by=param_col)
     
+    # Ustawienia wykresu
     fig, ax = plt.subplots(figsize=DEFAULT_FIGURE_SIZE)
-    
     use_line_plot = USE_LINES_FOR_SIMULATION if use_lines is None else use_lines
     show_err = SHOW_ERROR_BANDS if show_error_band is None else show_error_band
     
-    df_binned = df_binned.sort_values(by=param_col)
+    # Kolory są pobierane z COLOR_PALETTES dla każdego sensora
     
-    if real_col in df_binned.columns and df_binned[real_col].notna().any():
-        df_real = df_binned[[real_col, param_col]].dropna()
-        ax.scatter(df_real[param_col], df_real[real_col], 
-                  color=REAL_DATA_COLOR, s=SCATTER_MARKER_SIZE, 
-                  label='Real Data', zorder=DATA_ZORDER)
+    # Rysowanie danych rzeczywistych
+    for i, sensor in enumerate(sensors):
+        # Pobierz kolory z palety dla danego sensora (maksymalnie 5 sensorów)
+        sensor_idx = min(i, 4)  # Ograniczamy indeks do 4 (5 dostępnych palet)
+        dark_color = COLOR_PALETTES[sensor_idx][0]   # Kolor dla punktów (dane rzeczywiste)
+        
+        real_col = f"real_current_{sensor}"
+        if real_col in df_binned.columns and df_binned[real_col].notna().any():
+            # Jeśli to wykres fluence, używamy fluence dla danego sensora
+            if param_type == 'fluence':
+                sensor_param_col = f"delivered_fluence_{sensor}"
+            else:
+                sensor_param_col = param_col
+                
+            if sensor_param_col in df_binned.columns:
+                df_real = df_binned[[real_col, sensor_param_col]].dropna()
+                if not df_real.empty:
+                    # Użyj numeru sensora zamiast pełnej nazwy
+                    sensor_num = extract_sensor_number(sensor)
+                    ax.scatter(df_real[sensor_param_col], df_real[real_col], 
+                              color=dark_color, s=SCATTER_MARKER_SIZE, 
+                              label=f'{sensor_num} (Real)', zorder=DATA_ZORDER)
     
-    if sim_col in df_binned.columns and df_binned[sim_col].notna().any():
-        df_sim = df_binned[[sim_col, param_col]].dropna()
+    # Rysowanie danych symulowanych
+    for i, sensor in enumerate(sensors):
+        # Pobierz kolory z palety dla danego sensora (maksymalnie 5 sensorów)
+        sensor_idx = min(i, 4)  # Ograniczamy indeks do 4 (5 dostępnych palet)
+        medium_color = COLOR_PALETTES[sensor_idx][1]  # Kolor dla linii (dane symulowane)
+        light_color = COLOR_PALETTES[sensor_idx][2]   # Kolor dla paska błędu
         
-        if show_err and use_line_plot:
-            error_value = df_sim[sim_col] * (ERROR_PERCENTAGE / 100)
-            ax.fill_between(
-                df_sim[param_col], 
-                df_sim[sim_col] - error_value, 
-                df_sim[sim_col] + error_value, 
-                color=ERROR_BAND_COLOR, 
-                alpha=ERROR_BAND_ALPHA, 
-                label=f'{ERROR_PERCENTAGE}% Error Band',
-                zorder=ERROR_BAND_ZORDER
-            )
-        
-        if use_line_plot:
-            ax.plot(df_sim[param_col], df_sim[sim_col], 
-                   color=SIMULATED_DATA_COLOR, linewidth=LINE_WIDTH, 
-                   label='Simulated Data', zorder=DATA_ZORDER)
-        else:
-            ax.scatter(df_sim[param_col], df_sim[sim_col], 
-                      color=SIMULATED_DATA_COLOR, s=SCATTER_MARKER_SIZE, 
-                      label='Simulated Data', zorder=DATA_ZORDER)
+        sim_col = f"current_{sensor}"
+        if sim_col in df_binned.columns and df_binned[sim_col].notna().any():
+            # Jeśli to wykres fluence, używamy fluence dla danego sensora
+            if param_type == 'fluence':
+                sensor_param_col = f"delivered_fluence_{sensor}"
+            else:
+                sensor_param_col = param_col
+                
+            if sensor_param_col in df_binned.columns:
+                df_sim = df_binned[[sim_col, sensor_param_col]].dropna()
+                if not df_sim.empty:
+                    # Pokaż pasmo błędu dla każdego sensora
+                    if show_err and use_line_plot:
+                        error_value = df_sim[sim_col] * (ERROR_PERCENTAGE / 100)
+                        ax.fill_between(
+                            df_sim[sensor_param_col], 
+                            df_sim[sim_col] - error_value, 
+                            df_sim[sim_col] + error_value, 
+                            color=light_color, 
+                            alpha=ERROR_BAND_ALPHA, 
+                            label=f'{ERROR_PERCENTAGE}% Error Band' if i == 0 else None,  # Etykieta tylko dla pierwszego
+                            zorder=ERROR_BAND_ZORDER
+                        )
+                    
+                    # Użyj numeru sensora zamiast pełnej nazwy
+                    sensor_num = extract_sensor_number(sensor)
+                    if use_line_plot:
+                        ax.plot(df_sim[sensor_param_col], df_sim[sim_col], 
+                               color=medium_color, linewidth=LINE_WIDTH, 
+                               label=f'{sensor_num} (Sim)', zorder=DATA_ZORDER)
+                    else:
+                        ax.scatter(df_sim[sensor_param_col], df_sim[sim_col], 
+                                  color=medium_color, s=SCATTER_MARKER_SIZE, 
+                                  label=f'{sensor_num} (Sim)', zorder=DATA_ZORDER)
     
     add_parameter_info(ax)
     ax.set_xlabel(x_label)
     ax.set_ylabel('Leakage Current (mA)')
-    ax.set_title(f'Leakage Current vs {title_param} for Sensor {sensor_name}')
+    # Tytuł z numerami sensorów
+    if isinstance(sensor_name, list):
+        # Użyj numerów sensorów w tytule dla wielu sensorów
+        sensor_numbers = [extract_sensor_number(s) for s in sensor_name]
+        sensor_numbers_str = ', '.join(sensor_numbers)
+        ax.set_title(f'Leakage Current vs {title_param} for Sensors {sensor_numbers_str}')
+    else:
+        # Dla pojedynczego sensora
+        sensor_num = extract_sensor_number(sensor_name)
+        ax.set_title(f'Leakage Current vs {title_param} for Sensor {sensor_num}')
     ax.grid(True)
     ax.legend()
     

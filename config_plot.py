@@ -29,6 +29,17 @@ PLOT_RESAMPLING_PERIOD = '1W'
 # Marker size for scatter plots
 SCATTER_MARKER_SIZE = 1
 
+# --- Color Settings ---
+# Paleta kolorów dla 5 sensorów z trzema odcieniami dla każdego
+# Format: [light (punkty), medium (symulacja), light_alpha (pasek błędu)]
+COLOR_PALETTES = {
+    0: ['#32CD32', '#006400', '#CCFFCC'],  # Zielony: jasny, średni, bardzo jasny
+    1: ['#1E90FF', '#0066CC', '#CCECFF'],  # Niebieski: jasny, średni, bardzo jasny
+    2: ['#9370DB', '#6A359C', '#E6E6FA'],  # Fioletowy: jasny, średni, bardzo jasny
+    3: ['#FFA500', '#CC8400', '#FFE5B4'],  # Pomarańczowy: jasny, średni, bardzo jasny
+    4: ['#FF4500', '#CC3700', '#FFCCCC'],   # Czerwony: jasny, średni, bardzo jasny
+}
+
 # Line width for line plots
 LINE_WIDTH = 1
 

@@ -14,8 +14,8 @@ import current_preparation_lib as cpl
 
 def parse_arguments():
     parser = argparse.ArgumentParser(description='Load and process simulated and real current data')
-    parser.add_argument('--sensor', type=str, default='VL02_CT', 
-                        help='Sensor name to process (default: VL02_CT)')
+    parser.add_argument('--sensor', type=str, default='VL02_CT', nargs='+',
+                        help='Sensor name(s) to process. Can provide multiple sensors (max 5) separated by space, e.g. "--sensor VL02_CT VL03_CT"')
     parser.add_argument('--simulated-file', type=str, default='simulated_df.csv',
                         help='Filename of the simulated data')
     parser.add_argument('--start-date', type=str, default=None,
@@ -50,24 +50,62 @@ def load_simulated_data(simulated_path):
 
 
 def process_and_plot_data(result_df, sensors_to_use, args):
-
-    result_df = cpl.prepare_data_for_analysis(result_df, params, sensors_to_use, args.start_date)
+    # Get sensors to plot
+    if not args.all_sensors:
+        sensors_to_plot = args.sensor
+        
+        # Ogranicz liczbę sensorów do 5, jeśli podano więcej
+        if isinstance(sensors_to_plot, list) and len(sensors_to_plot) > 5:
+            print(f"Warning: Too many sensors specified. Limiting to first 5 sensors.")
+            sensors_to_plot = sensors_to_plot[:5]
+        
+        # Upewnij się, że pracujemy na liście
+        if not isinstance(sensors_to_plot, list):
+            sensors_to_plot = [sensors_to_plot]
+    else:
+        sensors_to_plot = sensors_to_use
+    
+    # Przygotuj dane tylko dla sensorów, które będą rysowane
+    result_df = cpl.prepare_data_for_analysis(result_df, params, sensors_to_plot, args.start_date)
 
     # Calculate fit quality metrics for each sensor and store in variable
-    fit_metrics = cpl.calculate_fit_quality(result_df, sensors_to_use)
+    fit_metrics = cpl.calculate_fit_quality(result_df, sensors_to_plot)
     
     curr_vs_pos_df = cpl.current_for_lumi(result_df)
     #plot_utils.plot_integrated_luminosity(result_df)
     
     # Generate single or multi-sensor plots
     if not args.all_sensors:
-        sensor = args.sensor
-        print(f"Creating plots for sensor {sensor}")
-        print(fit_metrics)
-        plot_utils.plot_simulated_vs_real(result_df, sensor)
-        plot_utils.plot_leakage_current(result_df, sensor)
-        plot_utils.plot_currents_vs_parameter(result_df, sensor, param_type='luminosity')
-        plot_utils.plot_currents_vs_parameter(result_df, sensor, param_type='fluence')
+        if len(sensors_to_plot) > 1:
+            print(f"Creating plots for {len(sensors_to_plot)} sensors: {', '.join(sensors_to_plot)}")
+            
+            # Dla wielu sensorów - rysuj na wspólnym wykresie dla simulated_vs_real i currents_vs_parameter
+            plot_utils.plot_simulated_vs_real(result_df, sensors_to_plot)
+            plot_utils.plot_currents_vs_parameter(result_df, sensors_to_plot, param_type='luminosity')
+            plot_utils.plot_currents_vs_parameter(result_df, sensors_to_plot, param_type='fluence')
+            
+            # Dla leakage_current - wywołaj oddzielnie dla każdego sensora
+            #for sensor in sensors_to_plot:
+               # plot_utils.plot_leakage_current(result_df, sensor)
+                
+            # Wyświetl metryki dopasowania dla wszystkich sensorów
+            for sensor in sensors_to_plot:
+                if sensor in fit_metrics:
+                    print(f"\nFit metrics for sensor {sensor}:")
+                    for metric, value in fit_metrics[sensor].items():
+                        print(f"  {metric}: {value}")
+                        
+        else:
+            sensor = sensors_to_plot[0]
+                
+            print(f"Creating plots for sensor {sensor}")
+            if sensor in fit_metrics:
+                print(fit_metrics[sensor])
+                
+            plot_utils.plot_simulated_vs_real(result_df, sensor)
+            plot_utils.plot_leakage_current(result_df, sensor)
+            plot_utils.plot_currents_vs_parameter(result_df, sensor, param_type='luminosity')
+            plot_utils.plot_currents_vs_parameter(result_df, sensor, param_type='fluence')
     else:
         print(f"Creating plots for all {len(sensors_to_use)} sensors")
         plot_utils.plot_currents_vs_position(curr_vs_pos_df, TARGET_LUMINOSITIES)
