@@ -8,7 +8,8 @@ from config_plot import (
     CURRENT_TEMP_MODE, REFERENCE_TEMPERATURE,
     USE_LINES_FOR_SIMULATION, SHOW_ERROR_BANDS, ERROR_PERCENTAGE, PLOT_RESAMPLING_PERIOD,
     SCATTER_MARKER_SIZE, LINE_WIDTH, ERROR_BAND_ALPHA, REAL_DATA_COLOR, SIMULATED_DATA_COLOR, ERROR_BAND_COLOR,
-    DEFAULT_FIGURE_SIZE, MULTI_SUBPLOT_FIGURE_SIZE, ERROR_BAND_ZORDER, DATA_ZORDER
+    DEFAULT_FIGURE_SIZE, MULTI_SUBPLOT_FIGURE_SIZE, ERROR_BAND_ZORDER, DATA_ZORDER,
+    SENSOR_GROUPING_MODE, GROUP_COLORS
 )
 from VeloDetectorElement import VeloDetectorElement
 
@@ -303,19 +304,109 @@ def plot_sensors_data(df: pd.DataFrame, sensors: list, column_prefix: str, title
                         zorder=ERROR_BAND_ZORDER
                     )
                 
-                if column_prefix == "real_current":
+                # Import grup sensorów według trybu grupowania z konfiguracji
+                from groups import legend_texts
+                
+                # Określ kolor i grupę na podstawie wybranego trybu grupowania
+                if SENSOR_GROUPING_MODE == 'side':
+                    from groups import sensors_side_a, sensors_side_c
+                    
+                    if sensor in sensors_side_a:
+                        sensor_color = GROUP_COLORS['side'][0]  # kolor dla strony A
+                        sensor_group = 'Side A'
+                    elif sensor in sensors_side_c:
+                        sensor_color = GROUP_COLORS['side'][1]  # kolor dla strony C
+                        sensor_group = 'Side C'
+                    else:
+                        sensor_color = 'gray'
+                        sensor_group = 'Other'
+                        
+                elif SENSOR_GROUPING_MODE == 'type':
+                    from groups import sensors_r, sensors_phi
+                    
+                    if sensor in sensors_r:
+                        sensor_color = GROUP_COLORS['type'][0]  # kolor dla typu R
+                        sensor_group = 'R-type'
+                    elif sensor in sensors_phi:
+                        sensor_color = GROUP_COLORS['type'][1]  # kolor dla typu Phi
+                        sensor_group = 'Phi-type'
+                    else:
+                        sensor_color = 'gray'
+                        sensor_group = 'Other'
+                        
+                elif SENSOR_GROUPING_MODE == 'tb':
+                    from groups import sensors_type_t, sensors_type_b
+                    
+                    if sensor in sensors_type_t:
+                        sensor_color = GROUP_COLORS['tb'][0]  # kolor dla Top
+                        sensor_group = 'Top (T)'
+                    elif sensor in sensors_type_b:
+                        sensor_color = GROUP_COLORS['tb'][1]  # kolor dla Bottom
+                        sensor_group = 'Bottom (B)'
+                    else:
+                        sensor_color = 'gray'
+                        sensor_group = 'Other'
+                        
+                elif SENSOR_GROUPING_MODE == 'z_position':
+                    # Grupowanie wg pozycji Z
+                    from groups import (sensors_z_lt_m200, sensors_z_m200_m100, sensors_z_m100_0,
+                                      sensors_z_0_100, sensors_z_100_200, sensors_z_200_300,
+                                      sensors_z_300_500, sensors_z_500_700, sensors_z_ge_700)
+                    
+                    z_groups = [
+                        (sensors_z_lt_m200, 'z < -200cm', 0),
+                        (sensors_z_m200_m100, 'z = [-200cm,-100cm]', 1),
+                        (sensors_z_m100_0, 'z = [-100cm,0cm]', 2),
+                        (sensors_z_0_100, 'z = [0cm,100cm]', 3),
+                        (sensors_z_100_200, 'z = [100cm,200cm]', 4),
+                        (sensors_z_200_300, 'z = [200cm,300cm]', 5),
+                        (sensors_z_300_500, 'z = [300cm,500cm]', 6),
+                        (sensors_z_500_700, 'z = [500cm,700cm]', 7),
+                        (sensors_z_ge_700, 'z ≥ 700cm', 8)
+                    ]
+                    
+                    found = False
+                    for z_group, z_label, idx in z_groups:
+                        if sensor in z_group:
+                            sensor_color = GROUP_COLORS['z_position'][idx % len(GROUP_COLORS['z_position'])]
+                            sensor_group = z_label
+                            found = True
+                            break
+                    
+                    if not found:
+                        sensor_color = 'gray'
+                        sensor_group = 'Other'
+                        
+                else:  # Domyślnie, jeśli nie ma zdefiniowanego trybu
+                    # Używaj domyślnego koloru i numeru sensora
                     sensor_number = get_sensor_number(sensor)
-                    ax.scatter(y_clean.index, y_clean.values, s=SCATTER_MARKER_SIZE, 
-                              label=f"Sensor {sensor_number}", zorder=DATA_ZORDER)
+                    sensor_color = None  # Użyj domyślnych kolorów matplotlib
+                    sensor_group = f"Sensor {sensor_number}"
+                
+                # Rysuj sensor z odpowiednim kolorem i etykietą grupy
+                if column_prefix == "real_current":
+                    if sensor_color is None:
+                        ax.scatter(y_clean.index, y_clean.values, s=SCATTER_MARKER_SIZE, 
+                                  label=sensor_group, zorder=DATA_ZORDER)
+                    else:
+                        ax.scatter(y_clean.index, y_clean.values, s=SCATTER_MARKER_SIZE, 
+                                  color=sensor_color, label=sensor_group, zorder=DATA_ZORDER)
                 else:
                     y_sorted = y_clean.sort_index()
-                    sensor_number = get_sensor_number(sensor)
                     if use_line_plot:
-                        ax.plot(y_sorted.index, y_sorted.values, linewidth=LINE_WIDTH, 
-                               label=f"Sensor {sensor_number}", zorder=DATA_ZORDER)
+                        if sensor_color is None:
+                            ax.plot(y_sorted.index, y_sorted.values, linewidth=LINE_WIDTH, 
+                                   label=sensor_group, zorder=DATA_ZORDER)
+                        else:
+                            ax.plot(y_sorted.index, y_sorted.values, linewidth=LINE_WIDTH, 
+                                   color=sensor_color, label=sensor_group, zorder=DATA_ZORDER)
                     else:
-                        ax.scatter(y_sorted.index, y_sorted.values, s=SCATTER_MARKER_SIZE, 
-                                  label=f"Sensor {sensor_number}", zorder=DATA_ZORDER)
+                        if sensor_color is None:
+                            ax.scatter(y_sorted.index, y_sorted.values, s=SCATTER_MARKER_SIZE, 
+                                     label=sensor_group, zorder=DATA_ZORDER)
+                        else:
+                            ax.scatter(y_sorted.index, y_sorted.values, s=SCATTER_MARKER_SIZE, 
+                                     color=sensor_color, label=sensor_group, zorder=DATA_ZORDER)
     
     if columns:
         data_df = df[columns]
@@ -335,7 +426,12 @@ def plot_sensors_data(df: pd.DataFrame, sensors: list, column_prefix: str, title
     ax.set_title(title)
     ax.grid(True)
     plt.tight_layout()
-    ax.legend(loc='center left', bbox_to_anchor=(1.01, 0.5), title='Sensors', fontsize='small')
+    # Usuń duplikaty w legendzie (aby uniknąć powtarzania tych samych grup)
+    from collections import OrderedDict
+    handles, labels = ax.get_legend_handles_labels()
+    by_label = OrderedDict(zip(labels, handles))
+    ax.legend(by_label.values(), by_label.keys(), loc='center left', 
+             bbox_to_anchor=(1.01, 0.5), title='Sensor Groups', fontsize='small')
     
     if output_path:
         plt.savefig(output_path)

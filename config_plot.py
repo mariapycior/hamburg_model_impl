@@ -59,6 +59,19 @@ GENERATE_ALL_SENSORS_PLOT = False
 GENERATE_TEMPERATURE_PLOTS = True
 GENERATE_FLUENCE_PLOTS = True
 
+# --- Sensor Grouping Settings ---
+# Grouping mode: 'none', 'side', 'type', 'z_position', 'tb'
+SENSOR_GROUPING_MODE = 'tb'
+
+# Colors for different groups
+GROUP_COLORS = {
+    'side': ['#1f77b4', '#ff7f0e'],  # A (blue), C (orange)
+    'type': ['#2ca02c', '#d62728'],    # R (green), Phi (red)
+    'tb': ['#9467bd', '#8c564b'],      # T (purple), B (brown)
+    'z_position': ['#8c564b', '#e377c2', '#7f7f7f', '#bcbd22', '#17becf', '#1f77b4', 
+                 '#ff7f0e', '#2ca02c', '#d62728']
+}
+
 # --- Fit Quality Metrics ---
 # Available metrics: 'mse', 'rmse', 'mae', 'r2', 'pearson', 'spearman', 'all'
 # Use 'all' to calculate all metrics, or list specific metrics to calculate
