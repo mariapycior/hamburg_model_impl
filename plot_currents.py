@@ -53,8 +53,11 @@ def process_and_plot_data(result_df, sensors_to_use, args):
 
     result_df = cpl.prepare_data_for_analysis(result_df, params, sensors_to_use, args.start_date)
 
+    # Calculate fit quality metrics for each sensor and store in variable
+    fit_metrics = cpl.calculate_fit_quality(result_df, sensors_to_use)
+
     curr_vs_pos_df = cpl.current_for_lumi(result_df)
-    plot_utils.plot_integrated_luminosity(result_df)
+    #plot_utils.plot_integrated_luminosity(result_df)
     
     # Generate single or multi-sensor plots
     if not args.all_sensors:

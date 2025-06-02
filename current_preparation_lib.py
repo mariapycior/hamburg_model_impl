@@ -1,7 +1,8 @@
 import numpy as np
 import pandas as pd
+from scipy import stats
 from config import SIMULATION_PERIOD, OUTPUT_SIMULATED_DF_PATH, TARGET_LUMINOSITIES
-from config_plot import CURRENT_TEMP_MODE, REFERENCE_TEMPERATURE
+from config_plot import CURRENT_TEMP_MODE, REFERENCE_TEMPERATURE, FIT_QUALITY_METRICS, ERROR_PERCENTAGE
 
 import os
 
@@ -258,3 +259,160 @@ def current_for_lumi(df: pd.DataFrame, target_luminosities: list = None) -> pd.D
             
     return summary.sort_values('position')
 
+
+def calculate_fit_quality(df: pd.DataFrame, sensors: list, metric: str = None) -> dict:
+    """
+    Calculate the quality of fit between simulated and real current data.
+    
+    Args:
+        df: DataFrame containing the processed current data
+        sensors: List of sensor names to calculate metrics for
+        metric: The metric to use for fit quality assessment
+               If None, uses the FIT_QUALITY_METRICS from config_plot.py
+               Supported metrics: 'mse' (Mean Squared Error),
+                                 'rmse' (Root Mean Squared Error),
+                                 'mae' (Mean Absolute Error),
+                                 'r2' (R-squared),
+                                 'pearson' (Pearson correlation coefficient),
+                                 'spearman' (Spearman rank correlation coefficient),
+                                 'points_within_error' (Percentage of points within ERROR_PERCENTAGE% of simulated value),
+                                 'all' (Returns all metrics in a dictionary)
+    
+    Returns:
+        Dictionary with sensor names as keys and fit quality metrics as values
+    """
+    # Use configured metrics if none specified
+    if metric is None:
+        metric = FIT_QUALITY_METRICS
+    results = {}
+    
+    for sensor in sensors:
+        sim_col = f"current_{sensor}"
+        real_col = f"real_current_{sensor}"
+        
+        # Skip if either column is missing
+        if sim_col not in df.columns or real_col not in df.columns:
+            continue
+        
+        # Get aligned data points (where both sim and real values exist)
+        valid_data = df[[sim_col, real_col]].dropna()
+        
+        # Skip if not enough data points
+        if len(valid_data) < 3:  # Need at least a few points for meaningful metrics
+            if metric.lower() == 'all':
+                results[sensor] = {
+                    'mse': None, 'rmse': None, 'mae': None, 'r2': None,
+                    'pearson': None, 'spearman': None,
+                    'data_points': 0
+                }
+            else:
+                results[sensor] = {'metric': metric, 'value': None, 'data_points': 0}
+            continue
+        
+        sim_values = valid_data[sim_col].values
+        real_values = valid_data[real_col].values
+        
+        # Calculate all metrics if requested
+        if metric.lower() == 'all':
+            # Calculate all metrics
+            mse_value = np.mean((real_values - sim_values) ** 2)
+            rmse_value = np.sqrt(mse_value)
+            mae_value = np.mean(np.abs(real_values - sim_values))
+            
+            # R-squared
+            if np.var(real_values) == 0:
+                r2_value = None
+            else:
+                ss_res = np.sum((real_values - sim_values) ** 2)
+                ss_tot = np.sum((real_values - np.mean(real_values)) ** 2)
+                r2_value = 1 - (ss_res / ss_tot)
+            
+            # Pearson correlation
+            pearson_corr, pearson_p = stats.pearsonr(real_values, sim_values)
+            
+            # Spearman correlation
+            spearman_corr, spearman_p = stats.spearmanr(real_values, sim_values)
+            
+            # Points within error percentage threshold
+            relative_error = np.abs(real_values - sim_values) / np.abs(sim_values) * 100
+            points_within = np.sum(relative_error <= ERROR_PERCENTAGE)
+            points_within_pct = (points_within / len(valid_data)) * 100
+            
+            results[sensor] = {
+                'mse': mse_value,
+                'rmse': rmse_value,
+                'mae': mae_value,
+                'r2': r2_value,
+                'pearson': pearson_corr,
+                'pearson_p': pearson_p,
+                'spearman': spearman_corr,
+                'spearman_p': spearman_p,
+                'points_within_error': points_within_pct,
+                'error_threshold': ERROR_PERCENTAGE,
+                'data_points': len(valid_data)
+            }
+            continue
+        
+        # Calculate selected metric
+        if metric.lower() == 'mse':
+            # Mean Squared Error
+            value = np.mean((real_values - sim_values) ** 2)
+        elif metric.lower() == 'rmse':
+            # Root Mean Squared Error
+            value = np.sqrt(np.mean((real_values - sim_values) ** 2))
+        elif metric.lower() == 'mae':
+            # Mean Absolute Error
+            value = np.mean(np.abs(real_values - sim_values))
+        elif metric.lower() == 'r2':
+            # R-squared (coefficient of determination)
+            if np.var(real_values) == 0:
+                value = None  # Cannot calculate R² when variance is zero
+            else:
+                ss_res = np.sum((real_values - sim_values) ** 2)
+                ss_tot = np.sum((real_values - np.mean(real_values)) ** 2)
+                value = 1 - (ss_res / ss_tot)
+        elif metric.lower() == 'pearson':
+            # Pearson correlation coefficient
+            value, p_value = stats.pearsonr(real_values, sim_values)
+            results[sensor] = {
+                'metric': metric,
+                'value': value,
+                'p_value': p_value,
+                'data_points': len(valid_data)
+            }
+            continue
+        elif metric.lower() == 'spearman':
+            # Spearman rank correlation coefficient
+            value, p_value = stats.spearmanr(real_values, sim_values)
+            results[sensor] = {
+                'metric': metric,
+                'value': value,
+                'p_value': p_value,
+                'data_points': len(valid_data)
+            }
+            continue
+        elif metric.lower() == 'points_within_error':
+            # Percentage of points within ERROR_PERCENTAGE% of simulated value
+            # Calculate relative error percentage for each point
+            relative_error = np.abs(real_values - sim_values) / np.abs(sim_values) * 100
+            # Count points within the error threshold
+            points_within = np.sum(relative_error <= ERROR_PERCENTAGE)
+            # Calculate percentage
+            value = (points_within / len(valid_data)) * 100
+            results[sensor] = {
+                'metric': metric,
+                'value': value,
+                'threshold': ERROR_PERCENTAGE,
+                'data_points': len(valid_data)
+            }
+            continue
+        else:
+            raise ValueError(f"Unsupported metric: {metric}. Supported: 'mse', 'rmse', 'mae', 'r2', 'pearson', 'spearman', 'points_within_error', 'all'")
+        
+        results[sensor] = {
+            'metric': metric,
+            'value': value,
+            'data_points': len(valid_data)
+        }
+    
+    return results
