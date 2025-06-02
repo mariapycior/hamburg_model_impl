@@ -61,7 +61,7 @@ GENERATE_FLUENCE_PLOTS = True
 
 # --- Sensor Grouping Settings ---
 # Grouping mode: 'none', 'side', 'type', 'z_position', 'tb'
-SENSOR_GROUPING_MODE = 'tb'
+SENSOR_GROUPING_MODE = 'z_position'
 
 # Colors for different groups
 GROUP_COLORS = {

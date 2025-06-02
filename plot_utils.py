@@ -383,6 +383,25 @@ def plot_sensors_data(df: pd.DataFrame, sensors: list, column_prefix: str, title
                     sensor_color = None  # Użyj domyślnych kolorów matplotlib
                     sensor_group = f"Sensor {sensor_number}"
                 
+                # Zapisz informacje o sensorze, grupie i kolorze do użycia później przy obliczaniu średniej
+                if not hasattr(plot_sensors_data, 'sensor_groups'):
+                    plot_sensors_data.sensor_groups = {}
+                
+                if sensor_group not in plot_sensors_data.sensor_groups:
+                    plot_sensors_data.sensor_groups[sensor_group] = {
+                        'sensors': [],
+                        'color': sensor_color,
+                        'label': sensor_group,
+                        'columns': []
+                    }
+                
+                if sensor not in plot_sensors_data.sensor_groups[sensor_group]['sensors']:
+                    plot_sensors_data.sensor_groups[sensor_group]['sensors'].append(sensor)
+                
+                col_name = f"{column_prefix}_{sensor}"
+                if col_name not in plot_sensors_data.sensor_groups[sensor_group]['columns']:
+                    plot_sensors_data.sensor_groups[sensor_group]['columns'].append(col_name)
+                
                 # Rysuj sensor z odpowiednim kolorem i etykietą grupy
                 if column_prefix == "real_current":
                     if sensor_color is None:
@@ -408,7 +427,44 @@ def plot_sensors_data(df: pd.DataFrame, sensors: list, column_prefix: str, title
                             ax.scatter(y_sorted.index, y_sorted.values, s=SCATTER_MARKER_SIZE, 
                                      color=sensor_color, label=sensor_group, zorder=DATA_ZORDER)
     
-    if columns:
+    # Zamiast jednej globalnej średniej, obliczamy średnią dla każdej grupy sensorów
+    if hasattr(plot_sensors_data, 'sensor_groups'):
+        # Oblicz i narysuj średnią dla każdej grupy osobno
+        for group_name, group_info in plot_sensors_data.sensor_groups.items():
+            group_columns = group_info['columns']
+            if not group_columns:
+                continue  # Pomijamy grupy bez danych
+                
+            # Oblicz średnią dla grupy
+            data_df = df[group_columns]
+            valid_count = data_df.notna().sum(axis=1)
+            mean_data = data_df.mean(axis=1)
+            
+            # Ignoruj punkty, gdzie mamy zbyt mało danych
+            mean_data[valid_count <= (len(group_columns) // 2)] = float('nan')
+            mean_data = mean_data.sort_index()
+            
+            # Ustal kolor - ciemniejszy odcień koloru grupy
+            base_color = group_info['color']
+            if base_color == 'gray' or base_color is None:
+                mean_color = 'black'  # Domyślny kolor dla grup bez sprecyzowanego koloru
+            else:
+                # Konwertuj kolor na RGB i przyciemnij
+                from matplotlib.colors import to_rgb, to_hex
+                r, g, b = to_rgb(base_color)
+                # Przyciemniamy kolor mnożąc przez 0.6
+                mean_color = to_hex((r*0.6, g*0.6, b*0.6))
+            
+            # Narysuj średnią dla grupy (bez etykiety - dodamy jedną wspólną informację o średnich później)
+            ax.plot(mean_data.index, mean_data.values, color=mean_color, linewidth=3, 
+                    label=None,  # Nie dodajemy osobnej etykiety dla każdej średniej
+                    zorder=DATA_ZORDER+1)  # Linia średniej powinna być nad indywidualnymi danymi
+        
+        # Czyścimy słownik grup na koniec funkcji 
+        plot_sensors_data.sensor_groups = {}
+    
+    # Jeśli nie ma grup, oblicz globalną średnią
+    elif columns:
         data_df = df[columns]
         valid_count = data_df.notna().sum(axis=1)
         mean_data = data_df.mean(axis=1)
@@ -416,7 +472,7 @@ def plot_sensors_data(df: pd.DataFrame, sensors: list, column_prefix: str, title
         mean_data = mean_data.sort_index()
         ax.plot(mean_data.index, mean_data.values, color='black', linewidth=3, 
                 label=f'Mean ({"real" if column_prefix == "real_current" else "simulated"})', 
-                zorder=DATA_ZORDER+1)  # Mean line should be above individual data
+                zorder=DATA_ZORDER+1)  # Linia średniej powinna być nad indywidualnymi danymi
     
     add_parameter_info(ax)
     ax.set_xlim(start_date, end_date)
@@ -429,6 +485,14 @@ def plot_sensors_data(df: pd.DataFrame, sensors: list, column_prefix: str, title
     # Usuń duplikaty w legendzie (aby uniknąć powtarzania tych samych grup)
     from collections import OrderedDict
     handles, labels = ax.get_legend_handles_labels()
+    
+    # Dodaj informację o średnich do legendy
+    if hasattr(plot_sensors_data, 'sensor_groups'):
+        from matplotlib.lines import Line2D
+        mean_line = Line2D([0], [0], color='black', linewidth=3, label='Bold lines: Group averages')
+        handles.append(mean_line)
+        labels.append('Bold lines: Group averages')
+    
     by_label = OrderedDict(zip(labels, handles))
     ax.legend(by_label.values(), by_label.keys(), loc='best', 
             title='Sensor Groups', fontsize='small')
