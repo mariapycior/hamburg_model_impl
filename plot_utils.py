@@ -10,6 +10,7 @@ from config_plot import (
     SCATTER_MARKER_SIZE, LINE_WIDTH, ERROR_BAND_ALPHA, REAL_DATA_COLOR, SIMULATED_DATA_COLOR, ERROR_BAND_COLOR,
     DEFAULT_FIGURE_SIZE, MULTI_SUBPLOT_FIGURE_SIZE, ERROR_BAND_ZORDER, DATA_ZORDER
 )
+from VeloDetectorElement import VeloDetectorElement
 
 
 def add_parameter_info(ax, loc='upper left'):
@@ -63,6 +64,21 @@ def add_parameter_info(ax, loc='upper left'):
     ax.text(0.02, 0.98, param_text, transform=ax.transAxes, fontsize=8,
             verticalalignment='top', horizontalalignment='left', bbox=props)
 
+
+def get_sensor_number(sensor_code):
+    """Get sensor number from sensor code using VeloDetectorElement."""
+    try:
+        velo_det = VeloDetectorElement()
+        # The sensor code is assumed to be in format like 'VL01_CT' or 'PU02_AB'
+        # We need to add 'HV' to match the key format in VeloDetectorElement
+        sensor_key = (sensor_code, 'HV')
+        if sensor_key in velo_det.__members__['__Velo_Det__']:
+            # Sensor number is at index 1
+            return velo_det.__members__['__Velo_Det__'][sensor_key][1]
+        return sensor_code  # Return original code if not found
+    except Exception as e:
+        print(f"Error getting sensor number for {sensor_code}: {e}")
+        return sensor_code  # Return original code on error
 
 def resample_data(data, period):
     """Resample data based on specified period."""
@@ -133,14 +149,16 @@ def plot_leakage_current(df: pd.DataFrame, sensor_name: str,
 
     fig, axes = plt.subplots(4, 1, figsize=MULTI_SUBPLOT_FIGURE_SIZE)
     
+    sensor_number = get_sensor_number(sensor_name)
+    
     setup_subplot(axes[0], df.index, df[sim_col], SIMULATED_DATA_COLOR, 'Leakage Current Simulated', 
-                 f'Simulated Leakage Current for Sensor {sensor_name}', 'Leakage Current (mA)', 
+                 f'Simulated Leakage Current for Sensor {sensor_number}', 'Leakage Current (mA)', 
                  (start_date, end_date), use_line=use_lines, show_error_band=show_error_band,
                  is_current_plot=True)
     
     if real_col in df.columns:
         setup_subplot(axes[1], df.index, df[real_col], REAL_DATA_COLOR, 'Leakage Current (Real Data)', 
-                     f'Real Leakage Current for Sensor {sensor_name}', 'Leakage Current (mA)', 
+                     f'Real Leakage Current for Sensor {sensor_number}', 'Leakage Current (mA)', 
                      (start_date, end_date), use_line=False,
                      is_current_plot=True)
     
@@ -167,6 +185,8 @@ def plot_simulated_vs_real(df: pd.DataFrame, sensor_name: str, output_path: str 
     if sim_col not in df.columns and real_col not in df.columns:
         print(f"No data found for sensor {sensor_name}")
         return
+        
+    sensor_number = get_sensor_number(sensor_name)
 
     temp_df = df.copy()
     custom_period = resampling_period or PLOT_RESAMPLING_PERIOD
@@ -219,7 +239,7 @@ def plot_simulated_vs_real(df: pd.DataFrame, sensor_name: str, output_path: str 
     
     ax.set_ylabel('Leakage Current (mA)')
     ax.set_xlabel('Time')
-    ax.set_title(f'Real vs Simulated Leakage Current for {sensor_name}')
+    ax.set_title(f'Real vs Simulated Leakage Current for Sensor {sensor_number}')
     ax.grid(True)
     ax.legend()
     plt.tight_layout()
@@ -269,16 +289,18 @@ def plot_sensors_data(df: pd.DataFrame, sensors: list, column_prefix: str, title
                     )
                 
                 if column_prefix == "real_current":
+                    sensor_number = get_sensor_number(sensor)
                     ax.scatter(y_clean.index, y_clean.values, s=SCATTER_MARKER_SIZE, 
-                              label=sensor, zorder=DATA_ZORDER)
+                              label=f"Sensor {sensor_number}", zorder=DATA_ZORDER)
                 else:
                     y_sorted = y_clean.sort_index()
+                    sensor_number = get_sensor_number(sensor)
                     if use_line_plot:
                         ax.plot(y_sorted.index, y_sorted.values, linewidth=LINE_WIDTH, 
-                               label=sensor, zorder=DATA_ZORDER)
+                               label=f"Sensor {sensor_number}", zorder=DATA_ZORDER)
                     else:
                         ax.scatter(y_sorted.index, y_sorted.values, s=SCATTER_MARKER_SIZE, 
-                                  label=sensor, zorder=DATA_ZORDER)
+                                  label=f"Sensor {sensor_number}", zorder=DATA_ZORDER)
     
     if columns:
         data_df = df[columns]
@@ -363,6 +385,7 @@ def plot_all_sensors(df: pd.DataFrame, sensors: list, output_dir: str = None,
 
 def plot_currents_vs_parameter(df: pd.DataFrame, sensor_name: str, param_type: str = 'luminosity', 
                                output_path: str = None, use_lines: bool = None, show_error_band: bool = None):
+    sensor_number = get_sensor_number(sensor_name)
     """
     Plot both simulated and real currents against a chosen parameter (integrated luminosity or cumulative fluence).
     """
@@ -430,7 +453,7 @@ def plot_currents_vs_parameter(df: pd.DataFrame, sensor_name: str, param_type: s
     add_parameter_info(ax)
     ax.set_xlabel(x_label)
     ax.set_ylabel('Leakage Current (mA)')
-    ax.set_title(f'Leakage Current vs {title_param} for Sensor {sensor_name}')
+    ax.set_title(f'Leakage Current vs {title_param} for Sensor {sensor_number}')
     ax.grid(True)
     ax.legend()
     
@@ -510,9 +533,10 @@ def plot_all_currents_vs_fluence(df: pd.DataFrame, sensors: list, output_dir: st
         fig, ax = plt.subplots(figsize=DEFAULT_FIGURE_SIZE)
         
         for sensor, sim_data in sim_data_by_sensor.items():
+            sensor_number = get_sensor_number(sensor)
             fluence_col = f"delivered_fluence_{sensor}"
-            ax.plot(sim_data[fluence_col], sim_data[f'current_{sensor}'], 
-                   linewidth=LINE_WIDTH, label=sensor, zorder=DATA_ZORDER)
+            sim_col = f"current_{sensor}"
+            ax.plot(sim_data[fluence_col], sim_data[sim_col], linewidth=LINE_WIDTH, label=f"Sensor {sensor_number}", zorder=DATA_ZORDER)
         
         add_parameter_info(ax)
         
@@ -531,9 +555,10 @@ def plot_all_currents_vs_fluence(df: pd.DataFrame, sensors: list, output_dir: st
         fig, ax = plt.subplots(figsize=DEFAULT_FIGURE_SIZE)
         
         for sensor, real_data in real_data_by_sensor.items():
+            sensor_number = get_sensor_number(sensor)
             fluence_col = f"delivered_fluence_{sensor}"
-            ax.plot(real_data[fluence_col], real_data[f'real_current_{sensor}'], 
-                   linewidth=LINE_WIDTH, label=sensor, zorder=DATA_ZORDER)
+            real_col = f"real_current_{sensor}"
+            ax.scatter(real_data[fluence_col], real_data[real_col], s=SCATTER_MARKER_SIZE, label=f"Sensor {sensor_number}", zorder=DATA_ZORDER)
         
         add_parameter_info(ax)
         
@@ -602,8 +627,9 @@ def plot_all_currents_vs_luminosity(df: pd.DataFrame, sensors: list, output_dir:
         fig, ax = plt.subplots(figsize=DEFAULT_FIGURE_SIZE)
         
         for sensor, sim_data in sim_data_by_sensor.items():
-            ax.plot(sim_data['integrated_luminosity'], sim_data[f'current_{sensor}'], 
-                   linewidth=LINE_WIDTH, label=sensor, zorder=DATA_ZORDER)
+            sensor_number = get_sensor_number(sensor)
+            sim_col = f"current_{sensor}"
+            ax.plot(sim_data['integrated_luminosity'], sim_data[sim_col], linewidth=LINE_WIDTH, label=f"Sensor {sensor_number}", zorder=DATA_ZORDER)
         
         add_parameter_info(ax)
         
@@ -622,8 +648,9 @@ def plot_all_currents_vs_luminosity(df: pd.DataFrame, sensors: list, output_dir:
         fig, ax = plt.subplots(figsize=DEFAULT_FIGURE_SIZE)
         
         for sensor, real_data in real_data_by_sensor.items():
-            ax.plot(real_data['integrated_luminosity'], real_data[f'real_current_{sensor}'], 
-                   linewidth=LINE_WIDTH, label=sensor, zorder=DATA_ZORDER)
+            sensor_number = get_sensor_number(sensor)
+            real_col = f"real_current_{sensor}"
+            ax.scatter(real_data['integrated_luminosity'], real_data[real_col], s=SCATTER_MARKER_SIZE, label=f"Sensor {sensor_number}", zorder=DATA_ZORDER)
         
         add_parameter_info(ax)
         
