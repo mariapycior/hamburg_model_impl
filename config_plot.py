@@ -65,12 +65,15 @@ SENSOR_GROUPING_MODE = 'tb'
 
 # Colors for different groups
 GROUP_COLORS = {
-    'side': ['#1f77b4', '#ff7f0e'],  # A (blue), C (orange)
-    'type': ['#2ca02c', '#d62728'],    # R (green), Phi (red)
-    'tb': ['#9467bd', '#8c564b'],      # T (purple), B (brown)
-    'z_position': ['#8c564b', '#e377c2', '#7f7f7f', '#bcbd22', '#17becf', '#1f77b4', 
-                 '#ff7f0e', '#2ca02c', '#d62728']
+    'side': ['#0000FF', '#FF0000'],  # A (blue), C (red)
+    'type': ['#00FF00', '#FF00FF'],  # R (green), Phi (magenta)
+    'tb': ['#00FFFF', '#FF8000'],    # T (cyan), B (orange)
+    'z_position': ['#FF0000', '#00FF00', '#0000FF', '#FF00FF', '#00FFFF', '#FF8000', 
+                 '#800080', '#008080', '#808000']
 }
+
+# Target luminosity values for current vs position plots (in fb^-1)
+TARGET_LUMINOSITIES = [0.8, 3.1, 6.5]
 
 # --- Fit Quality Metrics ---
 # Available metrics: 'mse', 'rmse', 'mae', 'r2', 'pearson', 'spearman', 'all'

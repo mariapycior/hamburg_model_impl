@@ -192,8 +192,8 @@ group_modes = {
     'tb': {
         'title': "Sensors by Position (Top/Bottom)",
         'groups': [
-            (sensors_type_t, "Top (T)", 0),
-            (sensors_type_b, "Bottom (B)", 1)
+            (sensors_type_t, "- (T)", 0),
+            (sensors_type_b, "- (B)", 1)
         ]
     },
     'z_position': {
