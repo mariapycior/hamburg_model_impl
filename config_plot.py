@@ -42,7 +42,7 @@ ERROR_BAND_COLOR = 'lightblue'
 
 # --- Figure Settings ---
 # Default figure size for single plots
-DEFAULT_FIGURE_SIZE = (8, 6)
+DEFAULT_FIGURE_SIZE = (7, 5)
 
 # Figure size for multi-subplot plots
 MULTI_SUBPLOT_FIGURE_SIZE = (6, 8)
@@ -58,6 +58,11 @@ GENERATE_SINGLE_SENSOR_PLOTS = True
 GENERATE_ALL_SENSORS_PLOT = False
 GENERATE_TEMPERATURE_PLOTS = True
 GENERATE_FLUENCE_PLOTS = True
+
+# --- Ratio Plot Settings ---
+# Show ratio between simulated and real data for single sensor plots
+SHOW_RATIO_FOR_SINGLE_SENSOR = True  # Set to True to enable ratio subplot
+RATIO_PLOT_HEIGHT = 0.2  # Height ratio of the ratio subplot (relative to main plot)
 
 # --- Fit Quality Metrics ---
 # Available metrics: 'mse', 'rmse', 'mae', 'r2', 'pearson', 'spearman', 'all'
