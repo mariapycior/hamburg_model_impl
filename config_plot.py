@@ -84,3 +84,7 @@ GROUP_COLORS = {
 # Available metrics: 'mse', 'rmse', 'mae', 'r2', 'pearson', 'spearman', 'all'
 # Use 'all' to calculate all metrics, or list specific metrics to calculate
 FIT_QUALITY_METRICS = 'all'  # Can be a string ('all') or a list of specific metrics, e.g. ['mse', 'pearson']
+
+# --- Target Luminosity Values ---
+# Target luminosity points for which currents vs position plots are generated
+TARGET_LUMINOSITIES = [0.8, 3.1, 6.5]  # Default target luminosities in fb^-1

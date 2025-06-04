@@ -9,8 +9,7 @@ from config_plot import (
     USE_LINES_FOR_SIMULATION, SHOW_ERROR_BANDS, ERROR_PERCENTAGE, PLOT_RESAMPLING_PERIOD,
     SCATTER_MARKER_SIZE, LINE_WIDTH, ERROR_BAND_ALPHA, REAL_DATA_COLOR, SIMULATED_DATA_COLOR, ERROR_BAND_COLOR,
     DEFAULT_FIGURE_SIZE, MULTI_SUBPLOT_FIGURE_SIZE, ERROR_BAND_ZORDER, DATA_ZORDER,
-    SHOW_RATIO_FOR_SINGLE_SENSOR, RATIO_PLOT_HEIGHT
-    SENSOR_GROUPING_MODE, GROUP_COLORS
+    SHOW_RATIO_FOR_SINGLE_SENSOR, RATIO_PLOT_HEIGHT, SENSOR_GROUPING_MODE, GROUP_COLORS
 )
 from VeloDetectorElement import VeloDetectorElement
 import matplotlib.gridspec as gridspec
@@ -22,8 +21,11 @@ def plot_group_averages(df_group_averages):
     df_group_averages: DataFrame with columns sim_* and real_* (index: time)
     """
     import matplotlib.pyplot as plt
+    import matplotlib.gridspec as gridspec
+    import numpy as np
     from config_plot import (
-        SIMULATED_DATA_COLOR, REAL_DATA_COLOR, DEFAULT_FIGURE_SIZE, LINE_WIDTH, SCATTER_MARKER_SIZE, SENSOR_GROUPING_MODE
+        SIMULATED_DATA_COLOR, REAL_DATA_COLOR, DEFAULT_FIGURE_SIZE, LINE_WIDTH, 
+        SCATTER_MARKER_SIZE, SENSOR_GROUPING_MODE, RATIO_PLOT_HEIGHT, SHOW_RATIO_FOR_SINGLE_SENSOR
     )
     import groups
     # Extract group names
@@ -40,14 +42,6 @@ def plot_group_averages(df_group_averages):
     grouping_mode = SENSOR_GROUPING_MODE if hasattr(groups, 'group_modes') and SENSOR_GROUPING_MODE in groups.group_modes else 'none'
     suptitle = groups.group_modes[grouping_mode]['title'] if grouping_mode in groups.group_modes else 'Average Leakage Current per Group'
 
-    # Subplot layout: 2 columns, n rows
-    ncols = n_groups
-    nrows = 1
-    fig, axes = plt.subplots(nrows=nrows, ncols=ncols, figsize=(DEFAULT_FIGURE_SIZE[0], DEFAULT_FIGURE_SIZE[1]))
-    if n_groups == 1:
-        axes = [axes]
-    else:
-        axes = axes.flatten()
     # Find common x/y limits
     x_min, x_max = df_group_averages.index.min(), df_group_averages.index.max()
     y_min = float('inf')
@@ -64,33 +58,147 @@ def plot_group_averages(df_group_averages):
     # Fallback if no data
     if y_min == float('inf') or y_max == float('-inf'):
         y_min, y_max = 0, 1
-    for i, group in enumerate(group_names):
-        ax = axes[i]
+    
+    # Use original figure size
+    # Fix width for all group counts, avoid making it too wide
+    if n_groups > 2:
+        fig_width = DEFAULT_FIGURE_SIZE[0] * 1.5
+    else:
+        fig_width = DEFAULT_FIGURE_SIZE[0]
+    fig_height = DEFAULT_FIGURE_SIZE[1]
+    fig = plt.figure(figsize=(fig_width, fig_height))
+    
+    # Create a GridSpec for each group (2 rows if ratio enabled, 1 row otherwise)
+    if SHOW_RATIO_FOR_SINGLE_SENSOR:
+        fig_gs = gridspec.GridSpec(2, n_groups, height_ratios=[1-RATIO_PLOT_HEIGHT, RATIO_PLOT_HEIGHT])
+    else:
+        fig_gs = gridspec.GridSpec(1, n_groups)
+    
+    # Store all axes for later reference
+    main_axes = []
+    ratio_axes = []
+    
+    # Calculate global ratio range for all groups
+    all_ratio_values = []
+    for group in group_names:
         sim_col = f"sim_{group}"
         real_col = f"real_{group}"
+        
+        if sim_col in df_group_averages and real_col in df_group_averages:
+            sim_data = df_group_averages[sim_col]
+            real_data = df_group_averages[real_col]
+            common_index = sim_data.index.intersection(real_data.index)
+            
+            for idx in common_index:
+                sim_val = sim_data.loc[idx]
+                real_val = real_data.loc[idx]
+                if not np.isnan(sim_val) and not np.isnan(real_val) and real_val != 0:
+                    all_ratio_values.append(sim_val / real_val)
+    
+    for i, group in enumerate(group_names):
+        sim_col = f"sim_{group}"
+        real_col = f"real_{group}"
+        
+        # Create main axis
+        ax_main = plt.subplot(fig_gs[0, i])
+        main_axes.append(ax_main)
+        
+        # Plot data on main axis
+        sim_data = None
+        real_data = None
+        
         if sim_col in df_group_averages:
-            ax.plot(df_group_averages.index, df_group_averages[sim_col], color=SIMULATED_DATA_COLOR, linewidth=LINE_WIDTH, label='Simulated Average')
+            sim_data = df_group_averages[sim_col]
+            ax_main.plot(df_group_averages.index, sim_data, color=SIMULATED_DATA_COLOR, linewidth=LINE_WIDTH, label='Simulated Average')
+        
         if real_col in df_group_averages:
-            ax.scatter(df_group_averages.index, df_group_averages[real_col], color=REAL_DATA_COLOR, s=SCATTER_MARKER_SIZE, label='Real Average')
-        ax.set_title(f'Group: {group}')
-        # No xlabel for clean look
-        ax.set_ylabel('Average Leakage Current (mA)')
-        ax.set_xlim(x_min, x_max)
-        ax.set_ylim(y_min, y_max)
-        ax.grid(True)
+            real_data = df_group_averages[real_col]
+            ax_main.scatter(df_group_averages.index, real_data, color=REAL_DATA_COLOR, s=SCATTER_MARKER_SIZE, label='Real Average')
+        
+        ax_main.set_title(f'Group: {group}')
+        ax_main.set_ylabel('Average Leakage Current (mA)')
+        ax_main.set_xlim(x_min, x_max)
+        ax_main.set_ylim(y_min, y_max)
+        ax_main.grid(True)
+        
         # Double density grid on y axis
         import matplotlib.ticker as mticker
-        ax.yaxis.set_minor_locator(mticker.AutoMinorLocator(2))
-        ax.grid(which='minor', axis='y', linestyle=':', alpha=0.4)
-        ax.legend()
+        ax_main.yaxis.set_minor_locator(mticker.AutoMinorLocator(2))
+        ax_main.grid(which='minor', axis='y', linestyle=':', alpha=0.4)
+        ax_main.legend()
+        
+        # Add ratio subplot if enabled and both sim and real data exist
+        if SHOW_RATIO_FOR_SINGLE_SENSOR and sim_data is not None and real_data is not None:
+            # Hide x-labels on main plot
+            plt.setp(ax_main.get_xticklabels(), visible=False)
+            
+            # Create ratio axis
+            ax_ratio = plt.subplot(fig_gs[1, i], sharex=ax_main)
+            ratio_axes.append(ax_ratio)
+            
+            # Calculate ratio where both values exist
+            common_index = sim_data.index.intersection(real_data.index)
+            ratio_values = []
+            x_values = []
+            
+            for idx in common_index:
+                sim_val = sim_data.loc[idx]
+                real_val = real_data.loc[idx]
+                if not np.isnan(sim_val) and not np.isnan(real_val) and real_val != 0:
+                    ratio_values.append(sim_val / real_val)
+                    x_values.append(idx)
+            
+            if x_values:  # Only proceed if we have ratio data
+                # Plot ratio
+                ax_ratio.scatter(x_values, ratio_values, color='black', s=SCATTER_MARKER_SIZE, alpha=0.7)
+                ax_ratio.axhline(y=1.0, color='gray', linestyle='-', alpha=0.7)  # Solid reference line at ratio = 1
+                
+                # Set ratio plot labels and grid
+                ax_ratio.set_ylabel('Sim/Real')
+                ax_ratio.grid(True)
+                
+                # Use global ratio limits calculated earlier for consistent y-axis range across all plots
+                # The limits will be applied after all plots are created
+        else:
+            # If no ratio plot, configure x-axis on main plot
+            for label in ax_main.get_xticklabels():
+                label.set_rotation(45)
+                label.set_ha('right')
+    
+    # Configure x-axis labels on ratio plots
+    for ax in ratio_axes:
         for label in ax.get_xticklabels():
             label.set_rotation(45)
             label.set_ha('right')
-    # Hide empty axes if any
-    for j in range(i+1, len(axes)):
-        fig.delaxes(axes[j])
+    
+    # Apply consistent y-axis limits to all ratio plots if we have any ratio values
+    if all_ratio_values and ratio_axes:
+        ratio_array = np.array(all_ratio_values)
+        # Calculate global max deviation from 1.0
+        max_dev = max(abs(np.nanmin(ratio_array) - 1.0), abs(np.nanmax(ratio_array) - 1.0))
+        # Add 20% padding
+        max_dev = max_dev * 1.2
+        # Calculate limits to make 1.0 exactly in the middle
+        ylim_low = 1.0 - max_dev
+        ylim_high = 1.0 + max_dev
+        
+        # Make sure lower limit is not negative
+        if ylim_low < 0:
+            ylim_low = 0
+            # If we had to adjust the lower limit, also adjust the upper limit to keep 1.0 in the middle
+            ylim_high = 1.0 + (1.0 - ylim_low)
+            
+        # Apply the same limits to all ratio plots
+        for ax in ratio_axes:
+            ax.set_ylim(ylim_low, ylim_high)
+    
+    # Add overall title
     fig.suptitle(f'Mean values: {suptitle}', fontsize=14)
-    plt.tight_layout(rect=[0, 0.03, 1, 0.95])
+    
+    # Adjust layout
+    if ratio_axes:
+        plt.subplots_adjust(hspace=0.1)  # Reduce space between main and ratio plots
+    plt.tight_layout(rect=[0, 0.03, 1, 0.95])  # Leave space for suptitle
     plt.show()
 
 def get_group_averages(df: pd.DataFrame, sensors: list):
