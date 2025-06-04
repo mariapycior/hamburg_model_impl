@@ -9,9 +9,11 @@ from config_plot import (
     USE_LINES_FOR_SIMULATION, SHOW_ERROR_BANDS, ERROR_PERCENTAGE, PLOT_RESAMPLING_PERIOD,
     SCATTER_MARKER_SIZE, LINE_WIDTH, ERROR_BAND_ALPHA, REAL_DATA_COLOR, SIMULATED_DATA_COLOR, ERROR_BAND_COLOR,
     DEFAULT_FIGURE_SIZE, MULTI_SUBPLOT_FIGURE_SIZE, ERROR_BAND_ZORDER, DATA_ZORDER,
+    SHOW_RATIO_FOR_SINGLE_SENSOR, RATIO_PLOT_HEIGHT
     SENSOR_GROUPING_MODE, GROUP_COLORS
 )
 from VeloDetectorElement import VeloDetectorElement
+import matplotlib.gridspec as gridspec
 
 
 def plot_group_averages(df_group_averages):
@@ -273,6 +275,7 @@ def plot_leakage_current(df: pd.DataFrame, sensor_name: str):
 
 
 def plot_simulated_vs_real(df: pd.DataFrame, sensor_name: str):
+
     sim_col = f"current_{sensor_name}"
     real_col = f"real_current_{sensor_name}"
     
@@ -284,15 +287,36 @@ def plot_simulated_vs_real(df: pd.DataFrame, sensor_name: str):
 
     temp_df = df.copy()
 
-    fig, ax = plt.subplots(figsize=DEFAULT_FIGURE_SIZE)
-    ax.set_xlim(df.index.min(), df.index.max())
 
+    # Check if ratio plot should be shown
+    show_ratio = SHOW_RATIO_FOR_SINGLE_SENSOR and sim_col in temp_df.columns and real_col in temp_df.columns
+    
+    # Create appropriate figure layout
+    if show_ratio:
+        # Create figure with GridSpec for main plot and ratio subplot
+        fig = plt.figure(figsize=DEFAULT_FIGURE_SIZE)
+        gs = gridspec.GridSpec(2, 1, height_ratios=[1-RATIO_PLOT_HEIGHT, RATIO_PLOT_HEIGHT])
+        ax_main = fig.add_subplot(gs[0])
+        ax_ratio = fig.add_subplot(gs[1], sharex=ax_main)
+        ax = ax_main  # For compatibility with existing code
+    else:
+        # Standard figure with a single plot
+        fig, ax = plt.subplots(figsize=DEFAULT_FIGURE_SIZE)
+    
+    if start_date is not None and end_date is not None:
+        ax.set_xlim(pd.to_datetime(start_date), pd.to_datetime(end_date))
+    else:
+        ax.set_xlim(df.index.min(), df.index.max())
+
+
+    real_data = None
     if real_col in temp_df.columns:
         real_data = temp_df[real_col].dropna()
         if not real_data.empty:
             ax.scatter(real_data.index, real_data, color=REAL_DATA_COLOR, s=SCATTER_MARKER_SIZE, 
                       label='Real Leakage Current', zorder=DATA_ZORDER)
     
+    sim_data = None
     if sim_col in temp_df.columns:
         sim_data = temp_df[sim_col].dropna()
         if not sim_data.empty:
@@ -303,12 +327,43 @@ def plot_simulated_vs_real(df: pd.DataFrame, sensor_name: str):
     add_parameter_info(ax)
     
     ax.set_ylabel('Leakage Current (mA)')
-    ax.set_xlabel('Time')
+    if not show_ratio:
+        ax.set_xlabel('Time')  # Only add xlabel if no ratio plot
     ax.set_title(f'Real vs Simulated Leakage Current for Sensor {sensor_number}')
     ax.grid(True)
     ax.legend()
-    plt.tight_layout()
     
+    # Add ratio plot if enabled
+    if show_ratio and real_data is not None and sim_data is not None:
+        # Find common timestamps where both sim and real data exist
+        common_indices = real_data.index.intersection(sim_data.index)
+        if len(common_indices) > 0:
+            # Calculate ratio for common timestamps
+            ratio = sim_data.loc[common_indices] / real_data.loc[common_indices]
+            
+            # Plot ratio data
+            ax_ratio.scatter(common_indices, ratio, color='black', s=SCATTER_MARKER_SIZE, alpha=0.7)
+            ax_ratio.axhline(y=1.0, color='gray', linestyle='-', alpha=0.7)  # Reference line at ratio = 1
+            
+            # Set ratio plot labels and grid
+            ax_ratio.set_ylabel('Sim/Real')
+            ax_ratio.set_xlabel('Time')
+            ax_ratio.grid(True, alpha=0.3)
+            
+            # Hide x-labels on main plot
+            plt.setp(ax_main.get_xticklabels(), visible=False)
+            
+            # Set y-axis limits so that 1.0 is in the middle
+            max_dev = max(abs(np.nanmin(ratio) - 1.0), abs(np.nanmax(ratio) - 1.0))
+            # Add 20% padding
+            max_dev = max_dev * 1.2
+            ylim_low = max(0, 1.0 - max_dev)
+            ylim_high = 1.0 + max_dev
+            ax_ratio.set_ylim(ylim_low, ylim_high)
+    
+    plt.tight_layout()
+    if show_ratio:
+        plt.subplots_adjust(hspace=0.05)  # Reduce space between plots
 
 
 def plot_sensors_data(df: pd.DataFrame, sensors: list, column_prefix: str, title: str, y_range: tuple = None):
