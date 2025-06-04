@@ -68,9 +68,6 @@ CURRENT_YEAR_LIST = [
 TEMPERATURE_CORRECTION_ENABLED = True # Whether to apply temperature correction
 TEMPERATURE_CORRECTION_DELTA = 3.2     # Correction value in Kelvin
 
-# Target luminosity values for current vs position plots (in fb^-1)
-TARGET_LUMINOSITIES = [0.8, 3.1, 6.5]
-
 # Resampling period for simulation data
 # Available values: '1min', '1H', '10H', '24H', '1W'
 SIMULATION_PERIOD = '10H'

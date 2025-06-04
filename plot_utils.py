@@ -10,10 +10,117 @@ from config_plot import (
     SCATTER_MARKER_SIZE, LINE_WIDTH, ERROR_BAND_ALPHA, REAL_DATA_COLOR, SIMULATED_DATA_COLOR, ERROR_BAND_COLOR,
     DEFAULT_FIGURE_SIZE, MULTI_SUBPLOT_FIGURE_SIZE, ERROR_BAND_ZORDER, DATA_ZORDER,
     SHOW_RATIO_FOR_SINGLE_SENSOR, RATIO_PLOT_HEIGHT
+    SENSOR_GROUPING_MODE, GROUP_COLORS
 )
 from VeloDetectorElement import VeloDetectorElement
 import matplotlib.gridspec as gridspec
 
+
+def plot_group_averages(df_group_averages):
+    """
+    Plot average simulated and real leakage currents for each group on separate subplots.
+    df_group_averages: DataFrame with columns sim_* and real_* (index: time)
+    """
+    import matplotlib.pyplot as plt
+    from config_plot import (
+        SIMULATED_DATA_COLOR, REAL_DATA_COLOR, DEFAULT_FIGURE_SIZE, LINE_WIDTH, SCATTER_MARKER_SIZE, SENSOR_GROUPING_MODE
+    )
+    import groups
+    # Extract group names
+    group_names = []
+    for col in df_group_averages.columns:
+        if col.startswith('sim_'):
+            group_names.append(col[4:])
+    n_groups = len(group_names)
+    if n_groups == 0:
+        print("No data to plot group averages.")
+        return
+
+    # Get title for the grouping mode
+    grouping_mode = SENSOR_GROUPING_MODE if hasattr(groups, 'group_modes') and SENSOR_GROUPING_MODE in groups.group_modes else 'none'
+    suptitle = groups.group_modes[grouping_mode]['title'] if grouping_mode in groups.group_modes else 'Average Leakage Current per Group'
+
+    # Subplot layout: 2 columns, n rows
+    ncols = n_groups
+    nrows = 1
+    fig, axes = plt.subplots(nrows=nrows, ncols=ncols, figsize=(DEFAULT_FIGURE_SIZE[0], DEFAULT_FIGURE_SIZE[1]))
+    if n_groups == 1:
+        axes = [axes]
+    else:
+        axes = axes.flatten()
+    # Find common x/y limits
+    x_min, x_max = df_group_averages.index.min(), df_group_averages.index.max()
+    y_min = float('inf')
+    y_max = float('-inf')
+    for group in group_names:
+        sim_col = f"sim_{group}"
+        real_col = f"real_{group}"
+        for col in [sim_col, real_col]:
+            if col in df_group_averages:
+                vals = df_group_averages[col].dropna()
+                if not vals.empty:
+                    y_min = min(y_min, vals.min())
+                    y_max = max(y_max, vals.max())
+    # Fallback if no data
+    if y_min == float('inf') or y_max == float('-inf'):
+        y_min, y_max = 0, 1
+    for i, group in enumerate(group_names):
+        ax = axes[i]
+        sim_col = f"sim_{group}"
+        real_col = f"real_{group}"
+        if sim_col in df_group_averages:
+            ax.plot(df_group_averages.index, df_group_averages[sim_col], color=SIMULATED_DATA_COLOR, linewidth=LINE_WIDTH, label='Simulated Average')
+        if real_col in df_group_averages:
+            ax.scatter(df_group_averages.index, df_group_averages[real_col], color=REAL_DATA_COLOR, s=SCATTER_MARKER_SIZE, label='Real Average')
+        ax.set_title(f'Group: {group}')
+        # No xlabel for clean look
+        ax.set_ylabel('Average Leakage Current (mA)')
+        ax.set_xlim(x_min, x_max)
+        ax.set_ylim(y_min, y_max)
+        ax.grid(True)
+        # Double density grid on y axis
+        import matplotlib.ticker as mticker
+        ax.yaxis.set_minor_locator(mticker.AutoMinorLocator(2))
+        ax.grid(which='minor', axis='y', linestyle=':', alpha=0.4)
+        ax.legend()
+        for label in ax.get_xticklabels():
+            label.set_rotation(45)
+            label.set_ha('right')
+    # Hide empty axes if any
+    for j in range(i+1, len(axes)):
+        fig.delaxes(axes[j])
+    fig.suptitle(f'Mean values: {suptitle}', fontsize=14)
+    plt.tight_layout(rect=[0, 0.03, 1, 0.95])
+    plt.show()
+
+def get_group_averages(df: pd.DataFrame, sensors: list):
+    """
+    Zwraca DataFrame ze średnimi czasowymi dla każdej grupy sensorów (simulowane i real).
+    Grupy pobiera z groups.py jeśli dostępne, inaczej traktuje całość jako jedną grupę.
+    """
+    try:
+        import groups
+        grouping_mode = SENSOR_GROUPING_MODE if 'SENSOR_GROUPING_MODE' in globals() else 'none'
+        if hasattr(groups, 'group_modes') and grouping_mode in groups.group_modes:
+            group_defs = groups.group_modes[grouping_mode]['groups']
+        else:
+            group_defs = [(sensors, 'all', 0)]
+    except ImportError:
+        group_defs = [(sensors, 'all', 0)]
+
+    result = {}
+    for group_sensors, group_label, _ in group_defs:
+        sim_cols = [f"current_{s}" for s in group_sensors if f"current_{s}" in df.columns]
+        real_cols = [f"real_current_{s}" for s in group_sensors if f"real_current_{s}" in df.columns]
+        if sim_cols:
+            result[f"sim_{group_label}"] = df[sim_cols].mean(axis=1)
+        if real_cols:
+            result[f"real_{group_label}"] = df[real_cols].mean(axis=1)
+    if result:
+        out_df = pd.DataFrame(result, index=df.index)
+        return out_df
+    else:
+        return pd.DataFrame(index=df.index)
 
 def add_parameter_info(ax, loc='upper left'):
     params = Parameters()
@@ -97,32 +204,14 @@ def get_sensor_number(sensor_code):
         print(f"Error getting sensor number for {sensor_code}: {e}")
         return sensor_code  # Return original code on error
 
-def resample_data(data, period):
-    """Resample data based on specified period."""
-    if period and not data.empty:
-        if isinstance(data, pd.Series):
-            return data.resample(period).mean()
-        elif isinstance(data, pd.DataFrame):
-            return data.resample(period).mean()
-    return data
 
 def setup_subplot(ax, x_data, y_data, color, label, title, ylabel, xlim, ylim=None, use_line=None, show_error_band=None, is_current_plot=False, force_no_error=False):
     use_line = USE_LINES_FOR_SIMULATION if use_line is None else use_line
     show_error_band = SHOW_ERROR_BANDS if show_error_band is None else show_error_band
-    
     if force_no_error:
         show_error_band = False
-    
-    if PLOT_RESAMPLING_PERIOD:
-        y_data_series = pd.Series(y_data, index=x_data)
-        y_data_series = y_data_series.dropna()
-        y_data_series = resample_data(y_data_series, PLOT_RESAMPLING_PERIOD)
-        x_data = y_data_series.index
-        y_data = y_data_series.values
-    
     y_data_series = pd.Series(y_data, index=x_data)
     y_data_series = y_data_series.sort_index()
-    
     if use_line and show_error_band and is_current_plot:
         error_value = y_data_series * (ERROR_PERCENTAGE / 100)
         ax.fill_between(
@@ -134,12 +223,10 @@ def setup_subplot(ax, x_data, y_data, color, label, title, ylabel, xlim, ylim=No
             label=f'{ERROR_PERCENTAGE}% Error Band',
             zorder=ERROR_BAND_ZORDER
         )
-    
     if use_line:
-        line = ax.plot(y_data_series.index, y_data_series.values, color=color, linewidth=LINE_WIDTH, label=label, zorder=DATA_ZORDER)
+        ax.plot(y_data_series.index, y_data_series.values, color=color, linewidth=LINE_WIDTH, label=label, zorder=DATA_ZORDER)
     else:
         ax.scatter(y_data_series.index, y_data_series.values, color=color, s=SCATTER_MARKER_SIZE, label=label, zorder=DATA_ZORDER)
-    
     ax.set_xlim(xlim)
     if ylim:
         ax.set_ylim(ylim)
@@ -148,9 +235,8 @@ def setup_subplot(ax, x_data, y_data, color, label, title, ylabel, xlim, ylim=No
     ax.grid(True)
     ax.legend()
 
-def plot_leakage_current(df: pd.DataFrame, sensor_name: str, 
-                        output_path: str = None, start_date: pd.Timestamp = None, end_date: pd.Timestamp = None,
-                        use_lines: bool = None, show_error_band: bool = None, resampling_period: str = None):
+
+def plot_leakage_current(df: pd.DataFrame, sensor_name: str):
     sim_col = f"current_{sensor_name}"
     real_col = f"real_current_{sensor_name}"
     temp_col = f"temperature_{sensor_name}"
@@ -159,10 +245,9 @@ def plot_leakage_current(df: pd.DataFrame, sensor_name: str,
     if sim_col not in df.columns:
         raise ValueError(f"Simulated current column not found for sensor {sensor_name}")
 
-    if start_date is None:
-        start_date = df.index.min()
-    if end_date is None:
-        end_date = df.index.max()
+    # Zakres czasu: cały zakres dostępny w df
+    start_date = df.index.min()
+    end_date = df.index.max()
 
     fig, axes = plt.subplots(4, 1, figsize=MULTI_SUBPLOT_FIGURE_SIZE)
     
@@ -170,32 +255,27 @@ def plot_leakage_current(df: pd.DataFrame, sensor_name: str,
     
     setup_subplot(axes[0], df.index, df[sim_col], SIMULATED_DATA_COLOR, 'Leakage Current Simulated', 
                  f'Simulated Leakage Current for Sensor {sensor_number}', 'Leakage Current (mA)', 
-                 (start_date, end_date), use_line=use_lines, show_error_band=show_error_band,
-                 is_current_plot=True)
+                 (start_date, end_date), use_line=True, show_error_band=True, is_current_plot=True, force_no_error=False)
     
     if real_col in df.columns:
         setup_subplot(axes[1], df.index, df[real_col], REAL_DATA_COLOR, 'Leakage Current (Real Data)', 
                      f'Real Leakage Current for Sensor {sensor_number}', 'Leakage Current (mA)', 
-                     (start_date, end_date), use_line=False,
-                     is_current_plot=True)
+                     (start_date, end_date), use_line=False, show_error_band=False, is_current_plot=True, force_no_error=False)
     
     if fluence_col in df.columns:
         setup_subplot(axes[2], df.index, df[fluence_col], 'green', 'Fluence', 
-                     'Fluence', 'Fluence (n/cm²)', (start_date, end_date), use_line=False)
+                     'Fluence', 'Fluence (n/cm²)', (start_date, end_date), use_line=False, show_error_band=False, is_current_plot=False, force_no_error=False)
     
     if temp_col in df.columns:
         setup_subplot(axes[3], df.index, df[temp_col], 'magenta', 'Temperature', 
-                     'Temperature', 'Temperature (K)', (start_date, end_date), use_line=False)
+                     'Temperature', 'Temperature (K)', (start_date, end_date), use_line=False, show_error_band=False, is_current_plot=False, force_no_error=False)
 
     plt.tight_layout()
-    if output_path:
-        plt.savefig(output_path)
     # Wykres gotowy do wyświetlenia
 
 
-def plot_simulated_vs_real(df: pd.DataFrame, sensor_name: str, output_path: str = None, 
-                          start_date: pd.Timestamp = None, end_date: pd.Timestamp = None, weekly_average: bool = False,
-                          use_lines: bool = None, show_error_band: bool = None, resampling_period: str = None):
+def plot_simulated_vs_real(df: pd.DataFrame, sensor_name: str):
+
     sim_col = f"current_{sensor_name}"
     real_col = f"real_current_{sensor_name}"
     
@@ -206,12 +286,7 @@ def plot_simulated_vs_real(df: pd.DataFrame, sensor_name: str, output_path: str 
     sensor_number = get_sensor_number(sensor_name)
 
     temp_df = df.copy()
-    custom_period = resampling_period or PLOT_RESAMPLING_PERIOD
-    
-    if weekly_average:
-        temp_df = temp_df.rolling('7d', min_periods=1).mean()
-    elif custom_period:
-        temp_df = temp_df.resample(custom_period).mean()
+
 
     # Check if ratio plot should be shown
     show_ratio = SHOW_RATIO_FOR_SINGLE_SENSOR and sim_col in temp_df.columns and real_col in temp_df.columns
@@ -233,6 +308,7 @@ def plot_simulated_vs_real(df: pd.DataFrame, sensor_name: str, output_path: str 
     else:
         ax.set_xlim(df.index.min(), df.index.max())
 
+
     real_data = None
     if real_col in temp_df.columns:
         real_data = temp_df[real_col].dropna()
@@ -245,27 +321,8 @@ def plot_simulated_vs_real(df: pd.DataFrame, sensor_name: str, output_path: str 
         sim_data = temp_df[sim_col].dropna()
         if not sim_data.empty:
             sim_data = sim_data.sort_index()
-            use_line_plot = USE_LINES_FOR_SIMULATION if use_lines is None else use_lines
-            show_error = SHOW_ERROR_BANDS if show_error_band is None else show_error_band
-            
-            if use_line_plot:
-                if show_error:
-                    error_value = sim_data * (ERROR_PERCENTAGE / 100)
-                    ax.fill_between(
-                        sim_data.index, 
-                        sim_data - error_value, 
-                        sim_data + error_value, 
-                        color=ERROR_BAND_COLOR, 
-                        alpha=ERROR_BAND_ALPHA, 
-                        label=f'{ERROR_PERCENTAGE}% Error Band',
-                        zorder=ERROR_BAND_ZORDER
-                    )
-                
-                ax.plot(sim_data.index, sim_data, color=SIMULATED_DATA_COLOR, linewidth=LINE_WIDTH, 
-                        label='Simulated Leakage Current', zorder=DATA_ZORDER)
-            else:
-                ax.scatter(sim_data.index, sim_data, color=SIMULATED_DATA_COLOR, s=SCATTER_MARKER_SIZE, 
-                          label='Simulated Leakage Current', zorder=DATA_ZORDER)
+            ax.plot(sim_data.index, sim_data, color=SIMULATED_DATA_COLOR, linewidth=LINE_WIDTH, 
+                    label='Simulated Leakage Current', zorder=DATA_ZORDER)
 
     add_parameter_info(ax)
     
@@ -307,22 +364,16 @@ def plot_simulated_vs_real(df: pd.DataFrame, sensor_name: str, output_path: str 
     plt.tight_layout()
     if show_ratio:
         plt.subplots_adjust(hspace=0.05)  # Reduce space between plots
-    
-    if output_path:
-        plt.savefig(output_path)
 
 
-def plot_sensors_data(df: pd.DataFrame, sensors: list, column_prefix: str, title: str, 
-                     output_path: str = None, start_date: pd.Timestamp = None, end_date: pd.Timestamp = None,
-                     use_lines: bool = None, show_error_band: bool = None, resampling_period: str = None,
-                     force_no_error: bool = False, y_range: tuple = None):
+def plot_sensors_data(df: pd.DataFrame, sensors: list, column_prefix: str, title: str, y_range: tuple = None):
     fig, ax = plt.subplots(figsize=DEFAULT_FIGURE_SIZE)
     columns = []
     
     temp_df = df.copy()
-    custom_period = resampling_period or PLOT_RESAMPLING_PERIOD
-    if custom_period:
-        temp_df = resample_data(temp_df, period=custom_period)
+    # Zakres X ustawiany na podstawie danych, nie na podstawie argumentów
+    start_date = df.index.min()
+    end_date = df.index.max()
     
     for sensor in sensors:
         col_name = f"{column_prefix}_{sensor}"
@@ -331,41 +382,109 @@ def plot_sensors_data(df: pd.DataFrame, sensors: list, column_prefix: str, title
             y = temp_df[col_name]
             y_clean = y.dropna()
             if not y_clean.empty:
-                use_line_plot = USE_LINES_FOR_SIMULATION if use_lines is None else use_lines
-                show_error = SHOW_ERROR_BANDS if show_error_band is None else show_error_band
+                # Use the group_modes structure from groups.py for sensor grouping
+                from groups import group_modes
                 
-                if force_no_error:
-                    show_error = False
+                # Determine color and group based on the selected grouping mode
+                sensor_color = None
+                sensor_group = f"Sensor {get_sensor_number(sensor)}"  # Default group name
                 
-                is_current_plot = column_prefix == "current" or column_prefix == "real_current"
+                if SENSOR_GROUPING_MODE != 'none' and SENSOR_GROUPING_MODE in group_modes:
+                    # Get the groups for the selected mode
+                    mode_info = group_modes[SENSOR_GROUPING_MODE]
+                    found = False
+                    
+                    # Check each group in the selected mode
+                    for sensor_list, group_label, color_idx in mode_info['groups']:
+                        if sensor in sensor_list:
+                            # Use color from GROUP_COLORS and label from group_modes
+                            sensor_color = GROUP_COLORS[SENSOR_GROUPING_MODE][color_idx % len(GROUP_COLORS[SENSOR_GROUPING_MODE])]
+                            sensor_group = group_label
+                            found = True
+                            break
+                    
+                    # If sensor doesn't belong to any group
+                    if not found:
+                        sensor_color = 'gray'
+                        sensor_group = 'Other'
                 
-                if column_prefix != "real_current" and use_line_plot and show_error and is_current_plot:
-                    y_sorted = y_clean.sort_index()
-                    error_value = y_sorted * (ERROR_PERCENTAGE / 100)
-                    ax.fill_between(
-                        y_sorted.index, 
-                        y_sorted - error_value, 
-                        y_sorted + error_value, 
-                        color=ERROR_BAND_COLOR, 
-                        alpha=ERROR_BAND_ALPHA,
-                        zorder=ERROR_BAND_ZORDER
-                    )
-                
-                if column_prefix == "real_current":
-                    sensor_number = get_sensor_number(sensor)
-                    ax.scatter(y_clean.index, y_clean.values, s=SCATTER_MARKER_SIZE, 
-                              label=f"Sensor {sensor_number}", zorder=DATA_ZORDER)
+                # Save sensor information for later use when calculating means
+                if not hasattr(plot_sensors_data, 'sensor_groups'):
+                    plot_sensors_data.sensor_groups = {}
+                    
+                # Store the legend title for the current grouping mode
+                if SENSOR_GROUPING_MODE in group_modes:
+                    plot_sensors_data.legend_title = group_modes[SENSOR_GROUPING_MODE]['title']
                 else:
+                    plot_sensors_data.legend_title = "Sensor Groups"
+                
+                if sensor_group not in plot_sensors_data.sensor_groups:
+                    plot_sensors_data.sensor_groups[sensor_group] = {
+                        'sensors': [],
+                        'color': sensor_color,
+                        'label': sensor_group,
+                        'columns': []
+                    }
+                
+                if sensor not in plot_sensors_data.sensor_groups[sensor_group]['sensors']:
+                    plot_sensors_data.sensor_groups[sensor_group]['sensors'].append(sensor)
+                
+                col_name = f"{column_prefix}_{sensor}"
+                if col_name not in plot_sensors_data.sensor_groups[sensor_group]['columns']:
+                    plot_sensors_data.sensor_groups[sensor_group]['columns'].append(col_name)
+                
+                # Rysuj sensor z odpowiednim kolorem i etykietą grupy
+                if column_prefix == "current":
                     y_sorted = y_clean.sort_index()
-                    sensor_number = get_sensor_number(sensor)
-                    if use_line_plot:
-                        ax.plot(y_sorted.index, y_sorted.values, linewidth=LINE_WIDTH, 
-                               label=f"Sensor {sensor_number}", zorder=DATA_ZORDER)
+                    if sensor_color is None:
+                        ax.plot(y_sorted.index, y_sorted.values, linewidth=LINE_WIDTH, label=sensor_group, zorder=DATA_ZORDER)
                     else:
-                        ax.scatter(y_sorted.index, y_sorted.values, s=SCATTER_MARKER_SIZE, 
-                                  label=f"Sensor {sensor_number}", zorder=DATA_ZORDER)
+                        ax.plot(y_sorted.index, y_sorted.values, linewidth=LINE_WIDTH, color=sensor_color, label=sensor_group, zorder=DATA_ZORDER)
+                elif column_prefix == "real_current":
+                    if sensor_color is None:
+                        ax.scatter(y_clean.index, y_clean.values, s=SCATTER_MARKER_SIZE, label=sensor_group, zorder=DATA_ZORDER)
+                    else:
+                        ax.scatter(y_clean.index, y_clean.values, s=SCATTER_MARKER_SIZE, color=sensor_color, label=sensor_group, zorder=DATA_ZORDER)
     
-    if columns:
+    # Calculate average for each sensor group instead of one global average
+    if hasattr(plot_sensors_data, 'sensor_groups'):
+        # Calculate and draw average for each group separately
+        for group_name, group_info in plot_sensors_data.sensor_groups.items():
+            group_columns = group_info['columns']
+            if not group_columns:
+                continue  # Skip groups without data
+                
+            # Calculate average for the group
+            data_df = df[group_columns]
+            valid_count = data_df.notna().sum(axis=1)
+            mean_data = data_df.mean(axis=1)
+            
+            # Ignore points where we have too few data
+            mean_data[valid_count <= (len(group_columns) // 2)] = float('nan')
+            mean_data = mean_data.sort_index()
+            # Set color - darker shade of the group color
+            base_color = group_info['color']
+            if base_color == 'gray' or base_color is None:
+                mean_color = 'black'  # Default color for groups without a specified color
+            else:
+                # Convert color to RGB and darken
+                from matplotlib.colors import to_rgb, to_hex
+                r, g, b = to_rgb(base_color)
+                # Darken the color by multiplying by 0.6
+                mean_color = to_hex((r*0.6, g*0.6, b*0.6))
+            
+            # Draw the group average (without label - we'll add a single common info about averages later)
+            ax.plot(mean_data.index, mean_data.values, color=mean_color, linewidth=3, 
+                    label=None,  # No separate label for each average
+                    zorder=DATA_ZORDER+1)  # Average line should be above individual data
+        
+        # Clear the group dictionary at the end of the function
+        # We'll keep the legend title for use in the legend
+        legend_title = getattr(plot_sensors_data, 'legend_title', "Sensor Groups")
+        plot_sensors_data.sensor_groups = {}
+    
+    # If there are no groups, calculate global average
+    elif columns:
         data_df = df[columns]
         valid_count = data_df.notna().sum(axis=1)
         mean_data = data_df.mean(axis=1)
@@ -373,7 +492,7 @@ def plot_sensors_data(df: pd.DataFrame, sensors: list, column_prefix: str, title
         mean_data = mean_data.sort_index()
         ax.plot(mean_data.index, mean_data.values, color='black', linewidth=3, 
                 label=f'Mean ({"real" if column_prefix == "real_current" else "simulated"})', 
-                zorder=DATA_ZORDER+1)  # Mean line should be above individual data
+                zorder=DATA_ZORDER+1)  # Average line should be above individual data
     
     add_parameter_info(ax)
     ax.set_xlim(start_date, end_date)
@@ -383,20 +502,41 @@ def plot_sensors_data(df: pd.DataFrame, sensors: list, column_prefix: str, title
     ax.set_title(title)
     ax.grid(True)
     plt.tight_layout()
-    ax.legend(loc='center left', bbox_to_anchor=(1.01, 0.5), title='Sensors', fontsize='small')
+    # Show legend with unique entries and appropriate title based on grouping mode
+    from collections import OrderedDict
     
-    if output_path:
-        plt.savefig(output_path)
+    # Get legend elements (handles and labels)
+    handles, labels = ax.get_legend_handles_labels()
+    
+    # Remove duplicates while preserving order
+    by_label = OrderedDict(zip(labels, handles))
+    unique_handles = list(by_label.values())
+    unique_labels = list(by_label.keys())
+    
+    # Add information about averages to the legend
+    if SENSOR_GROUPING_MODE != 'none':
+        # If grouping is enabled, add a single entry for all mean lines
+        from matplotlib.lines import Line2D
+        mean_line = Line2D([0], [0], color='black', linewidth=3)
+        unique_handles.append(mean_line)
+        unique_labels.append("Bold lines: Group averages")
+    
+    # Get the legend title based on the current grouping mode
+    legend_title = getattr(plot_sensors_data, 'legend_title', "Sensor Groups")
+    
+    # Add legend only if we have unique labels
+    if unique_labels:
+        legend = ax.legend(unique_handles, unique_labels, loc='best', framealpha=0.7, title=legend_title)
+        # Make the legend title bold
+        plt.setp(legend.get_title(), fontweight='bold')
+    
+    
+        
     # Wykres gotowy do wyświetlenia
 
-def plot_all_sensors(df: pd.DataFrame, sensors: list, output_dir: str = None, 
-                    start_date: pd.Timestamp = None, end_date: pd.Timestamp = None,
-                    use_lines: bool = None, show_error_band: bool = None, resampling_period: str = None):
+def plot_all_sensors(df: pd.DataFrame, sensors: list):
     # Najpierw przygotuj dane i znajdź globalny zakres osi Y dla obu wykresów
     temp_df = df.copy()
-    custom_period = resampling_period or PLOT_RESAMPLING_PERIOD
-    if custom_period:
-        temp_df = resample_data(temp_df, period=custom_period)
     
     # Oblicz globalny zakres osi Y
     min_val = float('inf')
@@ -434,20 +574,18 @@ def plot_all_sensors(df: pd.DataFrame, sensors: list, output_dir: str = None,
         y_range = None
     
     # Plot simulated current for all sensors (no error bands when plotting all sensors)
-    sim_output = None if output_dir is None else os.path.join(output_dir, 'all_sensors_simulated.png')
-    plot_sensors_data(df, sensors, 'current', 'Simulated Leakage Current for All Sensors', 
-                     sim_output, start_date, end_date, use_lines, show_error_band, resampling_period,
-                     force_no_error=True, y_range=y_range)  # Force no error band for all sensors plot
+    plot_sensors_data(df, sensors, 'current', 'Simulated Leakage Current for All Sensors', y_range=y_range)
     
     # Plot real current for all sensors (if available)
-    real_output = None if output_dir is None else os.path.join(output_dir, 'all_sensors_real.png')
-    plot_sensors_data(df, sensors, 'real_current', 'Real Leakage Current for All Sensors', 
-                     real_output, start_date, end_date, False, False, resampling_period, y_range=y_range)
+    plot_sensors_data(df, sensors, 'real_current', 'Real Leakage Current for All Sensors', y_range=y_range)
+    
+    # Zwróć średnie grupowe (sim i real) jako DataFrame
+    return get_group_averages(df, sensors)
 
 
 
-def plot_currents_vs_parameter(df: pd.DataFrame, sensor_name: str, param_type: str = 'luminosity', 
-                               output_path: str = None, use_lines: bool = None, show_error_band: bool = None):
+
+def plot_currents_vs_parameter(df: pd.DataFrame, sensor_name: str, param_type: str = 'luminosity'):
     sensor_number = get_sensor_number(sensor_name)
     """
     Plot both simulated and real currents against a chosen parameter (integrated luminosity or cumulative fluence).
@@ -471,15 +609,10 @@ def plot_currents_vs_parameter(df: pd.DataFrame, sensor_name: str, param_type: s
         return
     
     temp_df = df.copy()
-    if PLOT_RESAMPLING_PERIOD:
-        temp_df = resample_data(temp_df, period=PLOT_RESAMPLING_PERIOD)
     
     df_binned = temp_df
     
     fig, ax = plt.subplots(figsize=DEFAULT_FIGURE_SIZE)
-    
-    use_line_plot = USE_LINES_FOR_SIMULATION if use_lines is None else use_lines
-    show_err = SHOW_ERROR_BANDS if show_error_band is None else show_error_band
     
     df_binned = df_binned.sort_values(by=param_col)
     
@@ -491,27 +624,9 @@ def plot_currents_vs_parameter(df: pd.DataFrame, sensor_name: str, param_type: s
     
     if sim_col in df_binned.columns and df_binned[sim_col].notna().any():
         df_sim = df_binned[[sim_col, param_col]].dropna()
-        
-        if show_err and use_line_plot:
-            error_value = df_sim[sim_col] * (ERROR_PERCENTAGE / 100)
-            ax.fill_between(
-                df_sim[param_col], 
-                df_sim[sim_col] - error_value, 
-                df_sim[sim_col] + error_value, 
-                color=ERROR_BAND_COLOR, 
-                alpha=ERROR_BAND_ALPHA, 
-                label=f'{ERROR_PERCENTAGE}% Error Band',
-                zorder=ERROR_BAND_ZORDER
-            )
-        
-        if use_line_plot:
-            ax.plot(df_sim[param_col], df_sim[sim_col], 
-                   color=SIMULATED_DATA_COLOR, linewidth=LINE_WIDTH, 
-                   label='Simulated Data', zorder=DATA_ZORDER)
-        else:
-            ax.scatter(df_sim[param_col], df_sim[sim_col], 
-                      color=SIMULATED_DATA_COLOR, s=SCATTER_MARKER_SIZE, 
-                      label='Simulated Data', zorder=DATA_ZORDER)
+        ax.plot(df_sim[param_col], df_sim[sim_col], 
+               color=SIMULATED_DATA_COLOR, linewidth=LINE_WIDTH, 
+               label='Simulated Data', zorder=DATA_ZORDER)
     
     add_parameter_info(ax)
     ax.set_xlabel(x_label)
@@ -520,20 +635,6 @@ def plot_currents_vs_parameter(df: pd.DataFrame, sensor_name: str, param_type: s
     ax.grid(True)
     ax.legend()
     
-    if output_path:
-        plt.savefig(output_path)
-    
-    # Wykres gotowy do wyświetlenia
-
-
-def plot_currents_vs_cumulative_fluence(df: pd.DataFrame, sensor_name: str, output_path: str = None,
-                                       show_error_band: bool = None):
-    """
-    Plot both simulated and real currents against delivered fluence.
-    """
-    return plot_currents_vs_parameter(df, sensor_name, param_type='fluence', output_path=output_path,
-                                      show_error_band=show_error_band, use_lines=True)
-
 
 def plot_all_currents_vs_fluence(df: pd.DataFrame, sensors: list, output_dir: str = None):
     """Plot all sensors currents against fluence in two separate plots using continuous lines.
@@ -550,10 +651,8 @@ def plot_all_currents_vs_fluence(df: pd.DataFrame, sensors: list, output_dir: st
         print("No fluence data found for any sensors")
         return
     
-    # Resample data if configured
+    
     temp_df = df.copy()
-    if PLOT_RESAMPLING_PERIOD:
-        temp_df = resample_data(temp_df, period=PLOT_RESAMPLING_PERIOD)
     
     # First, collect all data to determine common axis limits
     all_fluence_values = []
@@ -646,10 +745,8 @@ def plot_all_currents_vs_luminosity(df: pd.DataFrame, sensors: list, output_dir:
         print("No integrated luminosity data found")
         return
     
-    # Resample data if configured
+    
     temp_df = df.copy()
-    if PLOT_RESAMPLING_PERIOD:
-        temp_df = resample_data(temp_df, period=PLOT_RESAMPLING_PERIOD)
     
     # First, collect all data to determine common axis limits
     all_lumi_values = []
@@ -731,7 +828,7 @@ def plot_all_currents_vs_luminosity(df: pd.DataFrame, sensors: list, output_dir:
         print("No data available for plotting currents vs luminosity")
 
 
-def plot_integrated_luminosity(df: pd.DataFrame, output_path: str = None):
+def plot_integrated_luminosity(df: pd.DataFrame):
     """Plot integrated luminosity over time."""
     try:
         plt.figure(figsize=DEFAULT_FIGURE_SIZE)
@@ -740,8 +837,8 @@ def plot_integrated_luminosity(df: pd.DataFrame, output_path: str = None):
         plt.xlabel('Time')
         plt.ylabel('Integrated Luminosity (fb$^{-1}$)')
         plt.grid(True)
-        if output_path:
-            plt.savefig(output_path)
+        
+            
         # Wykres gotowy do wyświetlenia
         print("Created integrated luminosity plot")
     except Exception as e:
@@ -749,13 +846,13 @@ def plot_integrated_luminosity(df: pd.DataFrame, output_path: str = None):
 
 
 
-def plot_currents_vs_position(summary_df: pd.DataFrame, target_luminosities: list, output_path: str = None):
+def plot_currents_vs_position(summary_df: pd.DataFrame, target_luminosities: list):
     """
     Plot simulated and real currents against sensor position.
     Args:
         summary_df: DataFrame from create_sensor_summary with columns [current_sim, current_real, position, luminosity]
         target_luminosities: List of target luminosity values used for the plot
-        output_path: Optional path to save the plot
+        
     """
     fig, ax = plt.subplots(figsize=(8, 6))
     
@@ -798,5 +895,5 @@ def plot_currents_vs_position(summary_df: pd.DataFrame, target_luminosities: lis
     ax.legend(fontsize=8, loc='upper left')
     plt.tight_layout()
     
-    if output_path:
-        plt.savefig(output_path)
+    
+        

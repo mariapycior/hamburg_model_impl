@@ -1,8 +1,8 @@
 import numpy as np
 import pandas as pd
 from scipy import stats
-from config import SIMULATION_PERIOD, OUTPUT_SIMULATED_DF_PATH, TARGET_LUMINOSITIES
-from config_plot import CURRENT_TEMP_MODE, REFERENCE_TEMPERATURE, FIT_QUALITY_METRICS, ERROR_PERCENTAGE
+from config import SIMULATION_PERIOD, OUTPUT_SIMULATED_DF_PATH
+from config_plot import CURRENT_TEMP_MODE, REFERENCE_TEMPERATURE, FIT_QUALITY_METRICS, ERROR_PERCENTAGE, TARGET_LUMINOSITIES
 
 import os
 
@@ -258,6 +258,12 @@ def current_for_lumi(df: pd.DataFrame, target_luminosities: list = None) -> pd.D
             summary.loc[sensor, f'current_real{lumi_str}'] = real_val
             
     return summary.sort_values('position')
+
+
+def resample_dataframe(df: pd.DataFrame, period: str = None) -> pd.DataFrame:
+    if not period or df.empty:
+        return df
+    return df.resample(period).mean()
 
 
 def calculate_fit_quality(df: pd.DataFrame, sensors: list, metric: str = None) -> dict:
