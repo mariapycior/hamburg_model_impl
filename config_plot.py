@@ -67,7 +67,7 @@ RATIO_PLOT_HEIGHT = 0.2  # Height ratio of the ratio subplot (relative to main p
 
 # --- Sensor Grouping Settings ---
 # Grouping mode: 'none', 'side', 'type', 'z_position', 'tb'
-SENSOR_GROUPING_MODE = 'tb'
+SENSOR_GROUPING_MODE = 'type'
 
 # Colors for different groups
 GROUP_COLORS = {
