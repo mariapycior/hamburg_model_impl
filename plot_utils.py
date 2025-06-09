@@ -304,7 +304,8 @@ def plot_simulated_vs_real(df: pd.DataFrame, sensor_name, output_path: str = Non
                 sensor_num = get_sensor_number(sensor)
                 ax.scatter(real_data.index, real_data, 
                           color=dark_color, s=SCATTER_MARKER_SIZE, 
-                          label=f'{sensor_num} (Real)', zorder=DATA_ZORDER)
+                          label=None,  # Nie dodajemy etykiety do punktów
+                          zorder=DATA_ZORDER)
         
         # Rysuj dane symulowane
         if sim_col in temp_df.columns:
@@ -315,7 +316,7 @@ def plot_simulated_vs_real(df: pd.DataFrame, sensor_name, output_path: str = Non
                 show_error = SHOW_ERROR_BANDS if show_error_band is None else show_error_band
                 
                 if use_line_plot and show_error:
-                    # Pokaż pasmo błędu dla każdego sensora
+                    # Pokaż pasmo błędu dla każdego sensora, ale bez dodawania do legendy
                     error_value = sim_data * (ERROR_PERCENTAGE / 100)
                     ax.fill_between(
                         sim_data.index, 
@@ -323,7 +324,7 @@ def plot_simulated_vs_real(df: pd.DataFrame, sensor_name, output_path: str = Non
                         sim_data + error_value, 
                         color=light_color, 
                         alpha=ERROR_BAND_ALPHA, 
-                        label=f'{ERROR_PERCENTAGE}% Error Band' if i == 0 else None,  # Etykieta tylko dla pierwszego
+                        label=None,  # Usunięto z legendy
                         zorder=ERROR_BAND_ZORDER
                     )
                 
@@ -332,12 +333,14 @@ def plot_simulated_vs_real(df: pd.DataFrame, sensor_name, output_path: str = Non
                     ax.plot(sim_data.index, sim_data, 
                        color=medium_color, 
                        linewidth=LINE_WIDTH, 
-                       label=f'{sensor_num} (Sim)', zorder=DATA_ZORDER)
+                       label=f'{sensor_num}',  # Pokazuj tylko nazwę sensora
+                       zorder=DATA_ZORDER)
                 else:
                     ax.scatter(sim_data.index, sim_data, 
                               color=medium_color, 
                               s=SCATTER_MARKER_SIZE, 
-                              label=f'{sensor_num} (Sim)', zorder=DATA_ZORDER)
+                              label=f'{sensor_num}',  # Pokazuj tylko nazwę sensora
+                              zorder=DATA_ZORDER)
 
     add_parameter_info(ax)
     
@@ -355,7 +358,16 @@ def plot_simulated_vs_real(df: pd.DataFrame, sensor_name, output_path: str = Non
         ax.set_title(f'Real vs Simulated Leakage Current for Sensors {sensor_numbers_str}')
     
     ax.grid(True)
-    ax.legend(loc='best', fontsize='small')
+    
+    # Dodaj czarny punkt dla Real Data tylko w legendzie
+    from matplotlib.lines import Line2D
+    # Twórz legendDetailHandlerę z oryginalnych elementów plus czarny punkt
+    handles, labels = ax.get_legend_handles_labels()
+    black_dot = Line2D([0], [0], marker='o', color='w', markerfacecolor='black', markersize=5, linestyle='')
+    handles.append(black_dot)
+    labels.append('Real Data')
+    
+    ax.legend(handles=handles, labels=labels, loc='best', fontsize='small')
     plt.tight_layout()
     
     if output_path:
@@ -586,7 +598,7 @@ def plot_currents_vs_parameter(df: pd.DataFrame, sensor_name, param_type: str = 
                     sensor_num = get_sensor_number(sensor)
                     ax.scatter(df_real[sensor_param_col], df_real[real_col], 
                               color=dark_color, s=SCATTER_MARKER_SIZE, 
-                              label=f'{sensor_num} (Real)', zorder=DATA_ZORDER)
+                              label=None, zorder=DATA_ZORDER)
     
     # Rysowanie danych symulowanych
     for i, sensor in enumerate(sensors):
@@ -615,7 +627,7 @@ def plot_currents_vs_parameter(df: pd.DataFrame, sensor_name, param_type: str = 
                             df_sim[sim_col] + error_value, 
                             color=light_color, 
                             alpha=ERROR_BAND_ALPHA, 
-                            label=f'{ERROR_PERCENTAGE}% Error Band' if i == 0 else None,  # Etykieta tylko dla pierwszego
+                            label=None,  # Usunięto z legendy
                             zorder=ERROR_BAND_ZORDER
                         )
                     
@@ -624,11 +636,11 @@ def plot_currents_vs_parameter(df: pd.DataFrame, sensor_name, param_type: str = 
                     if use_line_plot:
                         ax.plot(df_sim[sensor_param_col], df_sim[sim_col], 
                                color=medium_color, linewidth=LINE_WIDTH, 
-                               label=f'{sensor_num} (Sim)', zorder=DATA_ZORDER)
+                               label=f'{sensor_num}', zorder=DATA_ZORDER)
                     else:
                         ax.scatter(df_sim[sensor_param_col], df_sim[sim_col], 
                                   color=medium_color, s=SCATTER_MARKER_SIZE, 
-                                  label=f'{sensor_num} (Sim)', zorder=DATA_ZORDER)
+                                  label=f'{sensor_num}', zorder=DATA_ZORDER)
     
     add_parameter_info(ax)
     ax.set_xlabel(x_label)
@@ -644,7 +656,16 @@ def plot_currents_vs_parameter(df: pd.DataFrame, sensor_name, param_type: str = 
         sensor_num = get_sensor_number(sensor_name)
         ax.set_title(f'Leakage Current vs {title_param} for Sensor {sensor_num}')
     ax.grid(True)
-    ax.legend()
+    
+    # Dodaj czarny punkt dla Real Data tylko w legendzie
+    from matplotlib.lines import Line2D
+    # Twórz legendę z oryginalnych elementów plus czarny punkt
+    handles, labels = ax.get_legend_handles_labels()
+    black_dot = Line2D([0], [0], marker='o', color='w', markerfacecolor='black', markersize=5, linestyle='')
+    handles.append(black_dot)
+    labels.append('Real Data')
+    
+    ax.legend(handles=handles, labels=labels)
     
     if output_path:
         plt.savefig(output_path)
