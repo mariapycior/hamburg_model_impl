@@ -742,10 +742,13 @@ def plot_all_currents_vs_fluence(df: pd.DataFrame, sensors: list, output_dir: st
         # Plot for simulated data
         fig, ax = plt.subplots(figsize=DEFAULT_FIGURE_SIZE)
         
-        for sensor, sim_data in sim_data_by_sensor.items():
+        for i, (sensor, sim_data) in enumerate(sim_data_by_sensor.items()):
             fluence_col = f"delivered_fluence_{sensor}"
+            color_idx = i % len(COLOR_PALETTES)
+            # Używamy średniego koloru z palety (indeks 1) dla linii symulacji
+            color = COLOR_PALETTES[color_idx][1]
             ax.plot(sim_data[fluence_col], sim_data[f'current_{sensor}'], 
-                   linewidth=LINE_WIDTH, label=sensor, zorder=DATA_ZORDER)
+                   linewidth=LINE_WIDTH, label=sensor, color=color, zorder=DATA_ZORDER)
         
         add_parameter_info(ax)
         
@@ -763,10 +766,13 @@ def plot_all_currents_vs_fluence(df: pd.DataFrame, sensors: list, output_dir: st
         # Plot for real data
         fig, ax = plt.subplots(figsize=DEFAULT_FIGURE_SIZE)
         
-        for sensor, real_data in real_data_by_sensor.items():
+        for i, (sensor, real_data) in enumerate(real_data_by_sensor.items()):
             fluence_col = f"delivered_fluence_{sensor}"
+            color_idx = i % len(COLOR_PALETTES)
+            # Używamy jasnego koloru z palety (indeks 0) dla danych rzeczywistych
+            color = COLOR_PALETTES[color_idx][0]
             ax.plot(real_data[fluence_col], real_data[f'real_current_{sensor}'], 
-                   linewidth=LINE_WIDTH, label=sensor, zorder=DATA_ZORDER)
+                   linewidth=LINE_WIDTH, label=sensor, color=color, zorder=DATA_ZORDER)
         
         add_parameter_info(ax)
         
@@ -834,9 +840,12 @@ def plot_all_currents_vs_luminosity(df: pd.DataFrame, sensors: list, output_dir:
         # Plot for simulated data
         fig, ax = plt.subplots(figsize=DEFAULT_FIGURE_SIZE)
         
-        for sensor, sim_data in sim_data_by_sensor.items():
+        for i, (sensor, sim_data) in enumerate(sim_data_by_sensor.items()):
+            color_idx = i % len(COLOR_PALETTES)
+            # Używamy średniego koloru z palety (indeks 1) dla linii symulacji
+            color = COLOR_PALETTES[color_idx][1]
             ax.plot(sim_data['integrated_luminosity'], sim_data[f'current_{sensor}'], 
-                   linewidth=LINE_WIDTH, label=sensor, zorder=DATA_ZORDER)
+                   linewidth=LINE_WIDTH, label=sensor, color=color, zorder=DATA_ZORDER)
         
         add_parameter_info(ax)
         
@@ -854,9 +863,12 @@ def plot_all_currents_vs_luminosity(df: pd.DataFrame, sensors: list, output_dir:
         # Plot for real data
         fig, ax = plt.subplots(figsize=DEFAULT_FIGURE_SIZE)
         
-        for sensor, real_data in real_data_by_sensor.items():
+        for i, (sensor, real_data) in enumerate(real_data_by_sensor.items()):
+            color_idx = i % len(COLOR_PALETTES)
+            # Używamy jasnego koloru z palety (indeks 0) dla danych rzeczywistych
+            color = COLOR_PALETTES[color_idx][0]
             ax.plot(real_data['integrated_luminosity'], real_data[f'real_current_{sensor}'], 
-                   linewidth=LINE_WIDTH, label=sensor, zorder=DATA_ZORDER)
+                   linewidth=LINE_WIDTH, label=sensor, color=color, zorder=DATA_ZORDER)
         
         add_parameter_info(ax)
         
