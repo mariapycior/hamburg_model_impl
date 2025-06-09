@@ -46,7 +46,7 @@ class Paths:
         return os.path.join(self.output_dir, filename)
 
 # --- Input File Configuration ---
-FLUENCE_FILENAME = "avgFluenceBinned.csv"
+FLUENCE_FILENAME = "avgFluenceBinned_10T_74_78.csv"
 LUMI_FILENAME = "lumi_binned.csv"
 
 # Current file to year mapping
