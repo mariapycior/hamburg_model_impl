@@ -23,6 +23,7 @@ def plot_group_averages(df_group_averages):
     import matplotlib.pyplot as plt
     import matplotlib.gridspec as gridspec
     import numpy as np
+    import config  # Dodajemy import config dla dostępu do TEMPERATURE_CORRECTION_ENABLED
     from config_plot import (
         SIMULATED_DATA_COLOR, REAL_DATA_COLOR, DEFAULT_FIGURE_SIZE, LINE_WIDTH, 
         SCATTER_MARKER_SIZE, SENSOR_GROUPING_MODE, RATIO_PLOT_HEIGHT, SHOW_RATIO_FOR_SINGLE_SENSOR
@@ -59,20 +60,37 @@ def plot_group_averages(df_group_averages):
     if y_min == float('inf') or y_max == float('-inf'):
         y_min, y_max = 0, 1
     
-    # Use original figure size
-    # Fix width for all group counts, avoid making it too wide
-    if n_groups > 2:
-        fig_width = DEFAULT_FIGURE_SIZE[0] * 1.5
+    # Dostosuj rozmiar figury i układ w zależności od trybu grupowania
+    if grouping_mode == 'z_position' and n_groups > 4:
+        # Dla grup pozycji Z używamy większego rozmiaru i układu 2x4
+        # Zakładamy, że zazwyczaj będzie 8 grup (lub więcej, ale wyświetlimy tylko 8)
+        fig_width = DEFAULT_FIGURE_SIZE[0] * 2  # Szerokość dla 4 kolumn
+        fig_height = DEFAULT_FIGURE_SIZE[1] * 1.8  # Wysokość dla 2 wierszy
+        fig = plt.figure(figsize=(fig_width, fig_height))
+        
+        # Jeśli jest włączony SHOW_RATIO_FOR_SINGLE_SENSOR, to każdy subplot będzie podzielony na 2 części
+        if SHOW_RATIO_FOR_SINGLE_SENSOR:
+            # Siatka 4x4 (2 wiersze, 4 kolumny dla wykresów głównych; każdy z nich ma pod sobą wykres ratio)
+            rows_in_grid = 4  # 2 grupy w pionie, każda podzielona na 2 części (główny + ratio)
+            fig_gs = gridspec.GridSpec(rows_in_grid, 4)
+        else:
+            # Siatka 2x4 (tylko główne wykresy)
+            fig_gs = gridspec.GridSpec(2, 4)
     else:
-        fig_width = DEFAULT_FIGURE_SIZE[0]
-    fig_height = DEFAULT_FIGURE_SIZE[1]
-    fig = plt.figure(figsize=(fig_width, fig_height))
-    
-    # Create a GridSpec for each group (2 rows if ratio enabled, 1 row otherwise)
-    if SHOW_RATIO_FOR_SINGLE_SENSOR:
-        fig_gs = gridspec.GridSpec(2, n_groups, height_ratios=[1-RATIO_PLOT_HEIGHT, RATIO_PLOT_HEIGHT])
-    else:
-        fig_gs = gridspec.GridSpec(1, n_groups)
+        # Dla innych trybów grupowania - oryginalny układ liniowy
+        # Fix width for all group counts, avoid making it too wide
+        if n_groups > 2:
+            fig_width = DEFAULT_FIGURE_SIZE[0] * 1.5
+        else:
+            fig_width = DEFAULT_FIGURE_SIZE[0]
+        fig_height = DEFAULT_FIGURE_SIZE[1]
+        fig = plt.figure(figsize=(fig_width, fig_height))
+        
+        # Create a GridSpec for each group (2 rows if ratio enabled, 1 row otherwise)
+        if SHOW_RATIO_FOR_SINGLE_SENSOR:
+            fig_gs = gridspec.GridSpec(2, n_groups, height_ratios=[1-RATIO_PLOT_HEIGHT, RATIO_PLOT_HEIGHT])
+        else:
+            fig_gs = gridspec.GridSpec(1, n_groups)
     
     # Store all axes for later reference
     main_axes = []
@@ -95,12 +113,30 @@ def plot_group_averages(df_group_averages):
                 if not np.isnan(sim_val) and not np.isnan(real_val) and real_val != 0:
                     all_ratio_values.append(sim_val / real_val)
     
-    for i, group in enumerate(group_names):
+    # Ograniczymy liczbę grup do 8 dla układu 2x4 (jeśli tryb z_position)
+    plot_groups = group_names[:8] if grouping_mode == 'z_position' and len(group_names) > 8 else group_names
+    
+    for i, group in enumerate(plot_groups):
         sim_col = f"sim_{group}"
         real_col = f"real_{group}"
         
-        # Create main axis
-        ax_main = plt.subplot(fig_gs[0, i])
+        # Create main axis - różna pozycja w zależności od trybu grupowania
+        if grouping_mode == 'z_position' and len(plot_groups) > 4:
+            # Dla układu 2x4 obliczamy pozycję w siatce
+            row = i // 4  # 0 dla pierwszych 4 grup, 1 dla kolejnych 4
+            col = i % 4    # 0-3 dla każdego wiersza
+            
+            if SHOW_RATIO_FOR_SINGLE_SENSOR:
+                # W przypadku włączonych wykresów ratio każda grupa zajmuje 2 wiersze
+                main_row = row * 2  # 0, 2 dla głównych wykresów
+                ax_main = plt.subplot(fig_gs[main_row, col])
+            else:
+                # Bez ratio - po prostu używamy obliczonego wiersza
+                ax_main = plt.subplot(fig_gs[row, col])
+        else:
+            # Oryginalny układ liniowy
+            ax_main = plt.subplot(fig_gs[0, i])
+            
         main_axes.append(ax_main)
         
         # Plot data on main axis
@@ -132,8 +168,19 @@ def plot_group_averages(df_group_averages):
             # Hide x-labels on main plot
             plt.setp(ax_main.get_xticklabels(), visible=False)
             
-            # Create ratio axis
-            ax_ratio = plt.subplot(fig_gs[1, i], sharex=ax_main)
+            # Create ratio axis - różna pozycja w zależności od trybu grupowania
+            if grouping_mode == 'z_position' and len(plot_groups) > 4:
+                # Dla układu 2x4 obliczamy pozycję w siatce
+                row = i // 4  # 0 dla pierwszych 4 grup, 1 dla kolejnych 4
+                col = i % 4    # 0-3 dla każdego wiersza
+                
+                # W przypadku włączonych wykresów ratio każda grupa zajmuje 2 wiersze
+                ratio_row = row * 2 + 1  # 1, 3 dla wykresów ratio (po jednym wierszu poniżej głównego)
+                ax_ratio = plt.subplot(fig_gs[ratio_row, col], sharex=ax_main)
+            else:
+                # Oryginalny układ liniowy
+                ax_ratio = plt.subplot(fig_gs[1, i], sharex=ax_main)
+            
             ratio_axes.append(ax_ratio)
             
             # Calculate ratio where both values exist
@@ -195,10 +242,24 @@ def plot_group_averages(df_group_averages):
     # Add overall title - zmniejszony rozmiar i obniżona pozycja
     fig.suptitle(f'Mean values: {suptitle}', fontsize=12, y=0.98)
     
-    # Adjust layout
-    if ratio_axes:
-        plt.subplots_adjust(hspace=0.1)  # Reduce space between main and ratio plots
-    plt.tight_layout(rect=[0, 0.03, 1, 0.97])  # Zmniejszona przestrzeń na górze
+    # Dostosuj układ wykresu
+    if grouping_mode == 'z_position' and len(plot_groups) > 4:
+        # Dodaj informację o korekcji temperaturowej
+        if hasattr(config, 'TEMPERATURE_CORRECTION_ENABLED'):
+            correction_text = "Temperature correction: " + ("Enabled" if config.TEMPERATURE_CORRECTION_ENABLED else "Disabled")
+            fig.text(0.02, 0.01, correction_text, fontsize=8)
+        
+        # Dostosuj odstępy dla układu 2x4
+        if ratio_axes:
+            plt.subplots_adjust(hspace=0.05, wspace=0.25)  # Mniejsza przestrzeń między wykresami wertykalnymi
+        else:
+            plt.subplots_adjust(hspace=0.25, wspace=0.25)  # Większa przestrzeń między wierszami
+        plt.tight_layout(rect=[0, 0.02, 1, 0.95])  # Więcej miejsca na tytuł
+    else:
+        # Standardowy układ dla innych trybów
+        if ratio_axes:
+            plt.subplots_adjust(hspace=0.1)  # Reduce space between main and ratio plots
+        plt.tight_layout(rect=[0, 0.03, 1, 0.97])  # Zmniejszona przestrzeń na górze
     plt.show()
 
 def get_group_averages(df: pd.DataFrame, sensors: list):
