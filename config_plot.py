@@ -10,6 +10,10 @@ CURRENT_TEMP_MODE = 'adjust_both'
 # Reference temperature for adjusting currents (in Kelvin)
 REFERENCE_TEMPERATURE = 273.35
 
+# Temperature correction settings
+TEMPERATURE_CORRECTION_ENABLED = True  # Whether to apply temperature correction
+TEMPERATURE_CORRECTION_DELTA = 3     # Correction value in Kelvin
+
 # --- Plot Mode Settings ---
 # Whether to use lines for simulated data (True) or scatter points (False)
 USE_LINES_FOR_SIMULATION = True

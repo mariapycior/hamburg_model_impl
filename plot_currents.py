@@ -51,7 +51,7 @@ def load_simulated_data(simulated_path):
 
 def process_and_plot_data(result_df, sensors_to_use, args):
 
-    result_df = cpl.prepare_data_for_analysis(result_df, params, sensors_to_use, args.start_date)
+    result_df = cpl.prepare_data_for_analysis(result_df, params, sensors_to_use)
     
     # Apply resampling before plotting
     from config_plot import PLOT_RESAMPLING_PERIOD
