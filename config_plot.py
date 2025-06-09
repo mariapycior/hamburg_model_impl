@@ -5,10 +5,14 @@ This file contains settings related to plot appearance, data averaging, and data
 
 # --- Data Processing Settings ---
 # Mode for current-temperature adjustment: 'adjust_sim', 'adjust_real', or 'adjust_both'
-CURRENT_TEMP_MODE = 'adjust_both'
+CURRENT_TEMP_MODE = 'adjust_real'
 
 # Reference temperature for adjusting currents (in Kelvin)
-REFERENCE_TEMPERATURE = 273.35
+REFERENCE_TEMPERATURE = 273.15
+
+# Temperature correction settings
+TEMPERATURE_CORRECTION_ENABLED = True  # Whether to apply temperature correction
+TEMPERATURE_CORRECTION_DELTA = 3     # Correction value in Kelvin
 
 # --- Plot Mode Settings ---
 # Whether to use lines for simulated data (True) or scatter points (False)
