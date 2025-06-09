@@ -412,10 +412,8 @@ def plot_simulated_vs_real(df: pd.DataFrame, sensor_name: str):
         # Standard figure with a single plot
         fig, ax = plt.subplots(figsize=DEFAULT_FIGURE_SIZE)
     
-    if start_date is not None and end_date is not None:
-        ax.set_xlim(pd.to_datetime(start_date), pd.to_datetime(end_date))
-    else:
-        ax.set_xlim(df.index.min(), df.index.max())
+    # Używamy danych z ramki danych do ustawienia zakresu osi x
+    ax.set_xlim(df.index.min(), df.index.max())
 
 
     real_data = None

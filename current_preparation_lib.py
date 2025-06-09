@@ -2,7 +2,7 @@ import numpy as np
 import pandas as pd
 from scipy import stats
 from config import SIMULATION_PERIOD, OUTPUT_SIMULATED_DF_PATH
-from config_plot import CURRENT_TEMP_MODE, REFERENCE_TEMPERATURE, FIT_QUALITY_METRICS, ERROR_PERCENTAGE, TARGET_LUMINOSITIES
+from config_plot import CURRENT_TEMP_MODE, REFERENCE_TEMPERATURE, FIT_QUALITY_METRICS, ERROR_PERCENTAGE, TARGET_LUMINOSITIES, TEMPERATURE_CORRECTION_ENABLED, TEMPERATURE_CORRECTION_DELTA
 
 import os
 
@@ -188,6 +188,29 @@ def load_and_prepare_simulated_df(sensor_names, path=OUTPUT_SIMULATED_DF_PATH):
         print(f"Error loading simulated data: {e}")
         return None
 
+def scale_real_current_with_temp_correction(df: pd.DataFrame, params, sensors: list) -> pd.DataFrame:
+    """Apply temperature correction to real current values to simulate values as if they were measured at a temperature
+    lower by TEMPERATURE_CORRECTION_DELTA degrees."""
+    if not TEMPERATURE_CORRECTION_ENABLED:
+        return df
+        
+    out = df.copy()
+    for sensor in sensors:
+        real_col = f"real_current_{sensor}"
+        temp_col = f"temperature_{sensor}"
+        
+        if real_col not in out.columns or temp_col not in out.columns:
+            continue
+            
+        # Calculate scaling factor for temperature correction
+        T_corrected = out[temp_col].values - TEMPERATURE_CORRECTION_DELTA
+        R_Tcorr = _calculate_temperature_adjustment(
+            T_corrected, out[temp_col].values, params.E_eff, params.kb)
+        
+        # Apply correction to real current values
+        out[real_col] = out[real_col].values * R_Tcorr
+    return out
+
 def add_delivered_fluence(df: pd.DataFrame, params, sensors: list) -> pd.DataFrame:
     out = df.copy()
     
@@ -208,7 +231,11 @@ def prepare_data_for_analysis(df: pd.DataFrame, params, sensors_to_use, start_da
     if start_date:
         start_date = pd.to_datetime(start_date)
         result_df = result_df[result_df.index >= start_date]
-
+    
+    # Najpierw zastosuj korekcję temperaturową dla realnych danych (skalowanie w dół o 3K)
+    result_df = scale_real_current_with_temp_correction(result_df, params, sensors_to_use)
+    
+    # Następnie zastosuj standardową korektę temperaturową według wybranego trybu
     if CURRENT_TEMP_MODE == 'adjust_real':
         result_df = adjust_real_current_with_temperature(result_df, params, sensors_to_use)
     elif CURRENT_TEMP_MODE == 'adjust_sim':
