@@ -19,6 +19,9 @@ venv/
 # Python cache files
 __pycache__/
 *.py[cod]
+
+# Local config file
+local_config.py
 *$py.class
 
 # IDE files
