@@ -10,7 +10,7 @@ import importlib.util
 
 # --- Data Processing Settings ---
 # Mode for current-temperature adjustment: 'adjust_sim', 'adjust_real', or 'adjust_both'
-CURRENT_TEMP_MODE = 'adjust_both'
+CURRENT_TEMP_MODE = 'adjust_sim'
 
 # Reference temperature for adjusting currents (in Kelvin)
 REFERENCE_TEMPERATURE = 273.35
