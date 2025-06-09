@@ -70,6 +70,14 @@ GENERATE_ALL_SENSORS_PLOT = False
 GENERATE_TEMPERATURE_PLOTS = True
 GENERATE_FLUENCE_PLOTS = True
 
+# --- Ratio Plot Settings ---
+# Whether to show ratio (Simulated/Real) subplot
+SHOW_RATIO = True
+# Whether to show ratio for multiple sensors plots
+SHOW_RATIO_FOR_MULTIPLE_SENSORS = True
+# Height ratio of the ratio subplot (relative to main plot)
+RATIO_PLOT_HEIGHT = 0.2
+
 # --- Fit Quality Metrics ---
 # Available metrics: 'mse', 'rmse', 'mae', 'r2', 'pearson', 'spearman', 'all'
 # Use 'all' to calculate all metrics, or list specific metrics to calculate

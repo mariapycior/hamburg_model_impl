@@ -1,4 +1,5 @@
 import os
+import matplotlib as mpl
 import matplotlib.pyplot as plt
 import pandas as pd
 import numpy as np
@@ -25,7 +26,8 @@ from config_plot import (
     CURRENT_TEMP_MODE, REFERENCE_TEMPERATURE,
     USE_LINES_FOR_SIMULATION, SHOW_ERROR_BANDS, ERROR_PERCENTAGE, PLOT_RESAMPLING_PERIOD,
     SCATTER_MARKER_SIZE, LINE_WIDTH, ERROR_BAND_ALPHA, REAL_DATA_COLOR, SIMULATED_DATA_COLOR, ERROR_BAND_COLOR,
-    COLOR_PALETTES, DEFAULT_FIGURE_SIZE, MULTI_SUBPLOT_FIGURE_SIZE, ERROR_BAND_ZORDER, DATA_ZORDER
+    COLOR_PALETTES, DEFAULT_FIGURE_SIZE, MULTI_SUBPLOT_FIGURE_SIZE, ERROR_BAND_ZORDER, DATA_ZORDER,
+    SHOW_RATIO, RATIO_PLOT_HEIGHT, SHOW_RATIO_FOR_MULTIPLE_SENSORS
 )
 
 
@@ -115,7 +117,7 @@ def setup_subplot(ax, x_data, y_data, color, label, title, ylabel, xlim, ylim=No
             y_data_series + error_value, 
             color=ERROR_BAND_COLOR, 
             alpha=ERROR_BAND_ALPHA, 
-            label=f'{ERROR_PERCENTAGE}% Error Band',
+            label=None,  # Usunięto z legendy
             zorder=ERROR_BAND_ZORDER
         )
     
@@ -182,7 +184,7 @@ def plot_leakage_current(df: pd.DataFrame, sensor_name,
                         df[sim_col] + error_value, 
                         color=ERROR_BAND_COLOR, 
                         alpha=ERROR_BAND_ALPHA, 
-                        label=f'{ERROR_PERCENTAGE}% Error Band',
+                        label=None,  # Usunięto z legendy
                         zorder=ERROR_BAND_ZORDER
                     )
                 
@@ -278,7 +280,16 @@ def plot_simulated_vs_real(df: pd.DataFrame, sensor_name, output_path: str = Non
     elif custom_period:
         temp_df = temp_df.resample(custom_period).mean()
 
-    fig, ax = plt.subplots(figsize=DEFAULT_FIGURE_SIZE)
+    # Przygotuj figure z/bez ratio subplot
+    if SHOW_RATIO:
+        import matplotlib.gridspec as gridspec
+        fig = plt.figure(figsize=DEFAULT_FIGURE_SIZE)
+        gs = gridspec.GridSpec(2, 1, height_ratios=[1-RATIO_PLOT_HEIGHT, RATIO_PLOT_HEIGHT])
+        ax_main = fig.add_subplot(gs[0])
+        ax_ratio = fig.add_subplot(gs[1], sharex=ax_main)
+        ax = ax_main  # Dla zgodności z istniejącym kodem
+    else:
+        fig, ax = plt.subplots(figsize=DEFAULT_FIGURE_SIZE)
     
     if start_date is not None and end_date is not None:
         ax.set_xlim(pd.to_datetime(start_date), pd.to_datetime(end_date))
@@ -347,27 +358,98 @@ def plot_simulated_vs_real(df: pd.DataFrame, sensor_name, output_path: str = Non
     ax.set_ylabel('Leakage Current (mA)')
     ax.set_xlabel('Time')
     
-    # Ustawienie tytułu i etykiet osi z numerami sensorów
+    # Różne ustawienia wykresu
+    ax.set_ylabel('Leakage Current (mA)')
+    title = f'Simulated vs Real Leakage Current'
     if len(valid_sensors) == 1:
-        sensor_num = get_sensor_number(valid_sensors[0])
-        ax.set_title(f'Real vs Simulated Leakage Current for Sensor {sensor_num}')
-    else:
-        # Użyj numerów sensorów w tytule dla wielu sensorów
-        sensor_numbers = [get_sensor_number(s) for s in valid_sensors]
-        sensor_numbers_str = ', '.join(sensor_numbers)
-        ax.set_title(f'Real vs Simulated Leakage Current for Sensors {sensor_numbers_str}')
-    
+        title += f' for Sensor {valid_sensors[0]}'
+    ax.set_title(title)
+    add_parameter_info(ax)
     ax.grid(True)
     
-    # Dodaj czarny punkt dla Real Data tylko w legendzie
+    # Twórz legendę
     from matplotlib.lines import Line2D
-    # Twórz legendDetailHandlerę z oryginalnych elementów plus czarny punkt
-    handles, labels = ax.get_legend_handles_labels()
-    black_dot = Line2D([0], [0], marker='o', color='w', markerfacecolor='black', markersize=5, linestyle='')
-    handles.append(black_dot)
-    labels.append('Real Data')
+    custom_handles, custom_labels = [], []
     
-    ax.legend(handles=handles, labels=labels, loc='best', fontsize='small')
+    # Pobierz istniejące elementy legendy dla symulacji
+    for i, sensor in enumerate(valid_sensors):
+        sensor_idx = min(i, 4)
+        medium_color = COLOR_PALETTES[sensor_idx][1]  # Kolor dla symulacji
+        sensor_num = get_sensor_number(sensor)
+        
+        # Dodaj element dla symulacji
+        custom_handles.append(Line2D([0], [0], color=medium_color, linestyle='-', linewidth=1.5))
+        custom_labels.append(f'{sensor_num}')
+    
+    # Dodaj wspólny element dla rzeczywistych danych
+    black_dot = Line2D([0], [0], marker='o', color='w', markerfacecolor='black', markersize=5, linestyle='')
+    custom_handles.append(black_dot)
+    custom_labels.append('Real Data')
+    
+    # Usunięto informację o pasmie błędu z legendy, zgodnie z wymaganiem
+    
+    ax.legend(handles=custom_handles, labels=custom_labels, 
+             loc='best', fontsize='small')
+    
+    # Dodaj ratio plot
+    if SHOW_RATIO and SHOW_RATIO_FOR_MULTIPLE_SENSORS:
+        # Ukryj etykiety osi X na głównym wykresie
+        if 'ax_main' in locals():
+            plt.setp(ax_main.get_xticklabels(), visible=False)
+            
+        # Lista do przechowywania wszystkich ratio (do późniejszego skalowania osi Y)
+        all_ratio_values = []
+        
+        # Dla każdego sensora przygotuj ratio
+        for i, sensor in enumerate(valid_sensors):
+            sim_col = f"current_{sensor}"
+            real_col = f"real_current_{sensor}"
+            
+            # Sprawdź czy są dostępne dane symulowane i rzeczywiste dla sensora
+            if sim_col in temp_df.columns and real_col in temp_df.columns:
+                # Znajdź wspólne indeksy (daty) dla obu zestawów danych
+                sim_data = temp_df[sim_col].dropna()
+                real_data = temp_df[real_col].dropna()
+                common_indices = sim_data.index.intersection(real_data.index)
+                
+                if len(common_indices) > 0:
+                    # Oblicz ratio dla wspólnych indeksów
+                    ratio = sim_data.loc[common_indices] / real_data.loc[common_indices]
+                    
+                    # Użyj koloru zgodnego z kolorem sensora
+                    sensor_idx = min(i, 4)  # Ogranicz indeks do 4 (5 dostępnych palet)
+                    medium_color = COLOR_PALETTES[sensor_idx][1]  # Użyjmy koloru z symulacji dla spójności
+                    
+                    # Rysuj ratio na dolnym subplocie
+                    if 'ax_ratio' in locals():
+                        ax_ratio.scatter(common_indices, ratio, 
+                                      color=medium_color, 
+                                      s=SCATTER_MARKER_SIZE, 
+                                      alpha=0.7,
+                                      label=f'{get_sensor_number(sensor)}')
+                        
+                        # Dodaj wartości ratio do listy (do skalowania)
+                        all_ratio_values.extend(ratio.values)
+        
+        # Konfiguracja wykresu ratio
+        if 'ax_ratio' in locals() and all_ratio_values:            
+            # Dodaj linię odniesienia przy ratio=1.0
+            ax_ratio.axhline(y=1.0, color='gray', linestyle='-', alpha=0.7)
+            ax_ratio.set_ylabel('Sim/Real')
+            ax_ratio.set_xlabel('Time')
+            ax_ratio.grid(True, alpha=0.3)
+            
+            # Usunięto legendę dla ratio plot, zgodnie z wymaganiem
+            
+            # Dopasuj zakres osi Y ratio
+            ratios = np.array(all_ratio_values)
+            if len(ratios) > 0:
+                max_dev = max(abs(np.nanmin(ratios) - 1.0), abs(np.nanmax(ratios) - 1.0))
+                max_dev = max_dev * 1.2  # Dodaj trochę marginesu
+                ylim_low = max(0, 1.0 - max_dev)  # Nie schodź poniżej 0
+                ylim_high = 1.0 + max_dev
+                ax_ratio.set_ylim(ylim_low, ylim_high)
+    
     plt.tight_layout()
     
     if output_path:
@@ -508,7 +590,7 @@ def plot_all_sensors(df: pd.DataFrame, sensors: list, output_dir: str = None,
 
 
 def plot_currents_vs_parameter(df: pd.DataFrame, sensor_name, param_type: str = 'luminosity', 
-                                output_path: str = None, use_lines: bool = None, show_error_band: bool = None):
+                                output_path: str = None, use_lines: bool = None, show_error_band: bool = None, show_ratio: bool = None):
     """
     Plot both simulated and real currents against a chosen parameter (integrated luminosity or cumulative fluence).
     Supports single sensor (string) or multiple sensors (list, max 5).
@@ -571,9 +653,25 @@ def plot_currents_vs_parameter(df: pd.DataFrame, sensor_name, param_type: str = 
     df_binned = temp_df.sort_values(by=param_col)
     
     # Ustawienia wykresu
-    fig, ax = plt.subplots(figsize=DEFAULT_FIGURE_SIZE)
+    # Przygotuj figure z/bez ratio subplot
+    show_ratio_plot = SHOW_RATIO if show_ratio is None else show_ratio
+    
+    if show_ratio_plot:
+        import matplotlib.gridspec as gridspec
+        fig = plt.figure(figsize=DEFAULT_FIGURE_SIZE)
+        gs = gridspec.GridSpec(2, 1, height_ratios=[1-RATIO_PLOT_HEIGHT, RATIO_PLOT_HEIGHT])
+        ax_main = fig.add_subplot(gs[0])
+        ax_ratio = fig.add_subplot(gs[1], sharex=ax_main)
+        ax = ax_main  # Dla zgodności z istniejącym kodem
+    else:
+        fig, ax = plt.subplots(figsize=DEFAULT_FIGURE_SIZE)
+    
     use_line_plot = USE_LINES_FOR_SIMULATION if use_lines is None else use_lines
     show_err = SHOW_ERROR_BANDS if show_error_band is None else show_error_band
+    
+    # Słowniki do przechowywania danych dla ratio
+    sim_data_by_sensor = {}
+    real_data_by_sensor = {}
     
     # Kolory są pobierane z COLOR_PALETTES dla każdego sensora
     
@@ -594,6 +692,9 @@ def plot_currents_vs_parameter(df: pd.DataFrame, sensor_name, param_type: str = 
             if sensor_param_col in df_binned.columns:
                 df_real = df_binned[[real_col, sensor_param_col]].dropna()
                 if not df_real.empty:
+                    # Zapisz dane do późniejszego obliczenia ratio
+                    real_data_by_sensor[sensor] = {'param': df_real[sensor_param_col].values, 'current': df_real[real_col].values}
+                    
                     # Użyj numeru sensora zamiast pełnej nazwy
                     sensor_num = get_sensor_number(sensor)
                     ax.scatter(df_real[sensor_param_col], df_real[real_col], 
@@ -618,6 +719,9 @@ def plot_currents_vs_parameter(df: pd.DataFrame, sensor_name, param_type: str = 
             if sensor_param_col in df_binned.columns:
                 df_sim = df_binned[[sim_col, sensor_param_col]].dropna()
                 if not df_sim.empty:
+                    # Zapisz dane do późniejszego obliczenia ratio
+                    sim_data_by_sensor[sensor] = {'param': df_sim[sensor_param_col].values, 'current': df_sim[sim_col].values}
+                    
                     # Pokaż pasmo błędu dla każdego sensora
                     if show_err and use_line_plot:
                         error_value = df_sim[sim_col] * (ERROR_PERCENTAGE / 100)
@@ -667,6 +771,79 @@ def plot_currents_vs_parameter(df: pd.DataFrame, sensor_name, param_type: str = 
     
     ax.legend(handles=handles, labels=labels)
     
+    # Rysuj wykres ratio jeśli potrzebny
+    if show_ratio_plot:
+        import numpy as np
+        from scipy import interpolate
+        
+        # Ukryj etykiety osi X na głównym wykresie
+        plt.setp(ax_main.get_xticklabels(), visible=False)
+        
+        # Dla każdego sensora oblicz ratio symulacja/rzeczywiste
+        for i, sensor in enumerate(sensors):
+            if sensor in sim_data_by_sensor and sensor in real_data_by_sensor:
+                sim_data = sim_data_by_sensor[sensor]
+                real_data = real_data_by_sensor[sensor]
+                
+                # Uzyskaj kolor z tej samej palety co wyżej
+                sensor_idx = min(i, 4)
+                color = COLOR_PALETTES[sensor_idx][1]  # Używamy koloru dla symulacji
+                
+                # Aby obliczyć ratio potrzebujemy wspólnych wartości parametru (np. fluencji)
+                # Używamy interpolacji, aby obliczyć wartości prądu symulowanego w punktach rzeczywistych
+                try:
+                    # Interpolacja danych symulowanych do punktów rzeczywistych
+                    sim_interp = interpolate.interp1d(sim_data['param'], sim_data['current'], 
+                                                     bounds_error=False, fill_value=np.nan)
+                    
+                    # Oblicz interpolowane wartości symulowane w punktach rzeczywistych
+                    interp_sim_currents = sim_interp(real_data['param'])
+                    
+                    # Oblicz ratio tylko dla punktów, gdzie interpolacja zwróciła poprawne wartości
+                    valid_indices = ~np.isnan(interp_sim_currents)
+                    if np.any(valid_indices):
+                        ratio = interp_sim_currents[valid_indices] / real_data['current'][valid_indices]
+                        
+                        # Rysuj ratio na dolnym subplocie
+                        ax_ratio.scatter(real_data['param'][valid_indices], ratio, 
+                                       color=color, s=SCATTER_MARKER_SIZE, alpha=0.7,
+                                       label=f'{get_sensor_number(sensor)}')
+                except Exception as e:
+                    print(f"Error calculating ratio for sensor {sensor}: {e}")
+        
+        # Dodaj linię odniesienia przy ratio=1.0
+        ax_ratio.axhline(y=1.0, color='gray', linestyle='-', alpha=0.7)
+        
+        # Konfiguracja wykresu ratio
+        ax_ratio.set_xlabel(x_label)
+        ax_ratio.set_ylabel('Sim/Real')
+        ax_ratio.grid(True, alpha=0.3)
+        
+        # Usunięto legendę dla ratio plot, zgodnie z wymaganiem
+        
+        # Automatyczne dopasowanie zakresu osi Y
+        # Ten kod będzie działał, jeśli mamy jakieś dane ratio
+        if hasattr(ax_ratio, '_children') and any(isinstance(child, mpl.collections.PathCollection) for child in ax_ratio.get_children()):
+            # Pobierz wszystkie punkty ratio
+            ratio_points = []
+            for collection in [c for c in ax_ratio.get_children() if isinstance(c, mpl.collections.PathCollection)]:
+                if hasattr(collection, '_offsets') and len(collection._offsets) > 0:
+                    offsets = collection.get_offsets()
+                    if len(offsets) > 0 and offsets.shape[1] >= 2:
+                        ratio_points.extend(offsets[:, 1])
+            
+            if ratio_points:
+                ratios = np.array(ratio_points)
+                # Ustal zakres osi Y na podstawie maksymalnego odchylenia od 1.0
+                if len(ratios) > 0:
+                    max_dev = max(abs(np.nanmin(ratios) - 1.0), abs(np.nanmax(ratios) - 1.0))
+                    max_dev = max_dev * 1.2  # Dodaj trochę marginesu
+                    ylim_low = max(0, 1.0 - max_dev)  # Nie schodź poniżej 0
+                    ylim_high = 1.0 + max_dev
+                    ax_ratio.set_ylim(ylim_low, ylim_high)
+    
+    plt.tight_layout()
+    
     if output_path:
         plt.savefig(output_path)
     
@@ -674,12 +851,12 @@ def plot_currents_vs_parameter(df: pd.DataFrame, sensor_name, param_type: str = 
 
 
 def plot_currents_vs_cumulative_fluence(df: pd.DataFrame, sensor_name: str, output_path: str = None,
-                                  use_lines: bool = None, show_error_band: bool = None):
+                                   use_lines: bool = None, show_error_band: bool = None, show_ratio: bool = None):
     """
     Plot both simulated and real currents against delivered fluence.
     """
     return plot_currents_vs_parameter(df, sensor_name, param_type='fluence', output_path=output_path,
-                                     use_lines=use_lines, show_error_band=show_error_band)
+                                     use_lines=use_lines, show_error_band=show_error_band, show_ratio=show_ratio)
 
 
 def plot_all_currents_vs_fluence(df: pd.DataFrame, sensors: list, output_dir: str = None):
