@@ -23,7 +23,7 @@ ERROR_PERCENTAGE = 10  # 10% error band
 # --- Data Aggregation Settings ---
 # Resampling period for plots (independent from simulation period in config.py)
 # Available values: None (use raw data), '1H', '24H', '1W'
-PLOT_RESAMPLING_PERIOD = '1W'
+PLOT_RESAMPLING_PERIOD = '24H'
 
 # --- Visual Settings ---
 # Marker size for scatter plots
@@ -66,11 +66,12 @@ SHOW_RATIO_FOR_SINGLE_SENSOR = True  # Set to True to enable ratio subplot
 RATIO_PLOT_HEIGHT = 0.2  # Height ratio of the ratio subplot (relative to main plot)
 
 # --- Sensor Grouping Settings ---
-# Grouping mode: 'none', 'side', 'type', 'z_position', 'tb'
-SENSOR_GROUPING_MODE = 'type'
+# Grouping mode: 'all', 'none', 'side', 'type', 'z_position', 'tb'
+SENSOR_GROUPING_MODE = 'all'
 
 # Colors for different groups
 GROUP_COLORS = {
+    'all': ['#1E90FF'],              # Dodgerblue - kolor dla wszystkich sensorów
     'side': ['#0000FF', '#FF0000'],  # A (blue), C (red)
     'type': ['#00FF00', '#FF00FF'],  # R (green), Phi (magenta)
     'tb': ['#00FFFF', '#FF8000'],    # T (cyan), B (orange)

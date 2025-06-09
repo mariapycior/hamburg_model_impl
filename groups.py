@@ -175,6 +175,12 @@ legend_texts = {
 # - title: Title for the legend
 # - groups: List of tuples (sensor_list, group_label, index_for_color)
 group_modes = {
+    'all': {
+        'title': "All Sensors",
+        'groups': [
+            (all_sensors, "All sensors", 0)
+        ]
+    },
     'side': {
         'title': "Sensors by Side",
         'groups': [

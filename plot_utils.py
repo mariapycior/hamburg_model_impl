@@ -192,13 +192,14 @@ def plot_group_averages(df_group_averages):
         for ax in ratio_axes:
             ax.set_ylim(ylim_low, ylim_high)
     
-    # Add overall title - zmniejszony rozmiar i obniżona pozycja
-    fig.suptitle(f'Mean values: {suptitle}', fontsize=12, y=0.98)
+    # Dodaj box z parametrami do pierwszego wykresu (jeśli istnieje)
+    if main_axes:
+        add_parameter_info(main_axes[0], loc='upper left')
     
     # Adjust layout
     if ratio_axes:
         plt.subplots_adjust(hspace=0.1)  # Reduce space between main and ratio plots
-    plt.tight_layout(rect=[0, 0.03, 1, 0.97])  # Zmniejszona przestrzeń na górze
+    plt.tight_layout()  # Usunięte ograniczenie przestrzeni na górze
     plt.show()
 
 def get_group_averages(df: pd.DataFrame, sensors: list):
