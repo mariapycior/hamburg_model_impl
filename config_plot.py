@@ -2,6 +2,11 @@
 Configuration file for plotting options and settings.
 This file contains settings related to plot appearance, data averaging, and data processing options.
 """
+import os
+import importlib.util
+
+# Default configuration values
+# These may be overridden by local_config.py if it exists
 
 # --- Data Processing Settings ---
 # Mode for current-temperature adjustment: 'adjust_sim', 'adjust_real', or 'adjust_both'
@@ -28,6 +33,19 @@ ERROR_PERCENTAGE = 10  # 10% error band
 # Resampling period for plots (independent from simulation period in config.py)
 # Available values: None (use raw data), '1H', '24H', '1W'
 PLOT_RESAMPLING_PERIOD = '1W'
+
+# Try to import local_config.py if it exists
+LOCAL_CONFIG_PATH = os.path.join(os.path.dirname(__file__), 'local_config.py')
+if os.path.exists(LOCAL_CONFIG_PATH):
+    spec = importlib.util.spec_from_file_location('local_config', LOCAL_CONFIG_PATH)
+    local_config = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(local_config)
+    
+    # Override settings from local_config.py
+    for attr in dir(local_config):
+        if not attr.startswith('_'):  # Skip private attributes
+            globals()[attr] = getattr(local_config, attr)
+    print(f"Loaded local configuration from {LOCAL_CONFIG_PATH}")
 
 # --- Visual Settings ---
 # Marker size for scatter plots
