@@ -65,12 +65,12 @@ CURRENT_YEAR_LIST = [
 # --- Simulation Configuration ---
 
 # Temperature correction settings
-TEMPERATURE_CORRECTION_ENABLED = True # Whether to apply temperature correction
+TEMPERATURE_CORRECTION_ENABLED = False # Whether to apply temperature correction
 TEMPERATURE_CORRECTION_DELTA = 3.2     # Correction value in Kelvin
 
 # Resampling period for simulation data
 # Available values: '1min', '1H', '10H', '24H', '1W'
-SIMULATION_PERIOD = '10H'
+SIMULATION_PERIOD = '12H'
 
 # --- Output Configuration ---
 OUTPUT_SIMULATED_DF_PATH = "simulated_df.csv"

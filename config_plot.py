@@ -5,7 +5,7 @@ This file contains settings related to plot appearance, data averaging, and data
 
 # --- Data Processing Settings ---
 # Mode for current-temperature adjustment: 'adjust_sim', 'adjust_real', or 'adjust_both'
-CURRENT_TEMP_MODE = 'adjust_both'
+CURRENT_TEMP_MODE = 'adjust_sim'
 
 # Reference temperature for adjusting currents (in Kelvin)
 REFERENCE_TEMPERATURE = 273.35
@@ -71,7 +71,7 @@ RATIO_PLOT_HEIGHT = 0.2  # Height ratio of the ratio subplot (relative to main p
 
 # --- Sensor Grouping Settings ---
 # Grouping mode: 'none', 'side', 'type', 'z_position', 'tb'
-SENSOR_GROUPING_MODE = 'type'
+SENSOR_GROUPING_MODE = 'z_position'
 
 # Colors for different groups
 GROUP_COLORS = {
