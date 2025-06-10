@@ -156,8 +156,8 @@ legend_texts = {
     'sensors_phi': "Phi-type sensors",
     'sensors_side_a': "Side A",
     'sensors_side_c': "Side C",
-    'sensors_type_t': "Top (T) sensors",
-    'sensors_type_b': "Bottom (B) sensors",
+    'sensors_type_t': "(T) sensors",
+    'sensors_type_b': "(B) sensors",
     'sensors_z_lt_m200': "z < -200cm",
     'sensors_z_m200_m100': "z = [-200cm,-100cm]",
     'sensors_z_m100_0': "z = [-100cm,0cm]",
@@ -190,7 +190,7 @@ group_modes = {
         ]
     },
     'tb': {
-        'title': "Sensors by Position (Top/Bottom)",
+        'title': "Sensors by Position (T/B)",
         'groups': [
             (sensors_type_t, "- (T)", 0),
             (sensors_type_b, "- (B)", 1)
