@@ -6,8 +6,8 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import plot_utils
 
-from config import Paths, TARGET_LUMINOSITIES
-from config_plot import CURRENT_TEMP_MODE, PLOT_RESAMPLING_PERIOD
+from config import Paths
+from config_plot import CURRENT_TEMP_MODE, PLOT_RESAMPLING_PERIOD, TARGET_LUMINOSITIES
 from params import Parameters
 params = Parameters()
 import current_preparation_lib as cpl
