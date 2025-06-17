@@ -2,18 +2,13 @@
 Configuration file for plotting options and settings.
 This file contains settings related to plot appearance, data averaging, and data processing options.
 """
-import os
-import importlib.util
-
-# Default configuration values
-# These may be overridden by local_config.py if it exists
 
 # --- Data Processing Settings ---
 # Mode for current-temperature adjustment: 'adjust_sim', 'adjust_real', or 'adjust_both'
-CURRENT_TEMP_MODE = 'adjust_sim'
+CURRENT_TEMP_MODE = 'adjust_both'
 
 # Reference temperature for adjusting currents (in Kelvin)
-REFERENCE_TEMPERATURE = 273.35
+REFERENCE_TEMPERATURE = 273.15
 
 # Temperature correction settings
 TEMPERATURE_CORRECTION_ENABLED = True  # Whether to apply temperature correction
@@ -65,7 +60,7 @@ ERROR_BAND_COLOR = 'lightblue'
 
 # --- Figure Settings ---
 # Default figure size for single plots
-DEFAULT_FIGURE_SIZE = (8, 6)
+DEFAULT_FIGURE_SIZE = (7, 5)
 
 # Figure size for multi-subplot plots
 MULTI_SUBPLOT_FIGURE_SIZE = (6, 8)
@@ -87,8 +82,21 @@ GENERATE_FLUENCE_PLOTS = True
 SHOW_RATIO = True
 # Whether to show ratio for multiple sensors plots
 SHOW_RATIO_FOR_MULTIPLE_SENSORS = True
-# Height ratio of the ratio subplot (relative to main plot)
-RATIO_PLOT_HEIGHT = 0.2
+SHOW_RATIO_FOR_SINGLE_SENSOR = True  # Set to True to enable ratio subplot
+RATIO_PLOT_HEIGHT = 0.2  # Height ratio of the ratio subplot (relative to main plot)
+
+# --- Sensor Grouping Settings ---
+# Grouping mode: 'none', 'side', 'type', 'z_position', 'tb'
+SENSOR_GROUPING_MODE = 'type'
+
+# Colors for different groups
+GROUP_COLORS = {
+    'side': ['#0000FF', '#FF0000'],  # A (blue), C (red)
+    'type': ['#00FF00', '#FF00FF'],  # R (green), Phi (magenta)
+    'tb': ['#00FFFF', '#FF8000'],    # T (cyan), B (orange)
+    'z_position': ['#FF0000', '#00FF00', '#0000FF', '#FF00FF', '#00FFFF', '#FF8000', 
+                 '#800080', '#008080', '#808000']
+}
 
 # --- Fit Quality Metrics ---
 # Available metrics: 'mse', 'rmse', 'mae', 'r2', 'pearson', 'spearman', 'all'
