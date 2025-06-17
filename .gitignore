@@ -10,6 +10,11 @@
 *.npy
 *.npz
 
+# Config files to be locally managed
+config.py
+config_plot.py
+params.py
+
 # Environment files
 .env
 .venv/
