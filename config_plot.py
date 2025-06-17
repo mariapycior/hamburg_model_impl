@@ -85,6 +85,19 @@ SHOW_RATIO_FOR_MULTIPLE_SENSORS = True
 SHOW_RATIO_FOR_SINGLE_SENSOR = True  # Set to True to enable ratio subplot
 RATIO_PLOT_HEIGHT = 0.2  # Height ratio of the ratio subplot (relative to main plot)
 
+# --- Sensor Grouping Settings ---
+# Grouping mode: 'none', 'side', 'type', 'z_position', 'tb'
+SENSOR_GROUPING_MODE = 'type'
+
+# Colors for different groups
+GROUP_COLORS = {
+    'side': ['#0000FF', '#FF0000'],  # A (blue), C (red)
+    'type': ['#00FF00', '#FF00FF'],  # R (green), Phi (magenta)
+    'tb': ['#00FFFF', '#FF8000'],    # T (cyan), B (orange)
+    'z_position': ['#FF0000', '#00FF00', '#0000FF', '#FF00FF', '#00FFFF', '#FF8000', 
+                 '#800080', '#008080', '#808000']
+}
+
 # --- Fit Quality Metrics ---
 # Available metrics: 'mse', 'rmse', 'mae', 'r2', 'pearson', 'spearman', 'all'
 # Use 'all' to calculate all metrics, or list specific metrics to calculate
