@@ -37,19 +37,6 @@ ERROR_PERCENTAGE = 10  # 10% error band
 # Available values: None (use raw data), '1H', '24H', '1W'
 PLOT_RESAMPLING_PERIOD = '1W'
 
-# Try to import local_config.py if it exists
-LOCAL_CONFIG_PATH = os.path.join(os.path.dirname(__file__), 'local_config.py')
-if os.path.exists(LOCAL_CONFIG_PATH):
-    spec = importlib.util.spec_from_file_location('local_config', LOCAL_CONFIG_PATH)
-    local_config = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(local_config)
-    
-    # Override settings from local_config.py
-    for attr in dir(local_config):
-        if not attr.startswith('_'):  # Skip private attributes
-            globals()[attr] = getattr(local_config, attr)
-    print(f"Loaded local configuration from {LOCAL_CONFIG_PATH}")
-
 # --- Visual Settings ---
 # Marker size for scatter plots
 SCATTER_MARKER_SIZE = 1
@@ -106,4 +93,4 @@ RATIO_PLOT_HEIGHT = 0.2
 # --- Fit Quality Metrics ---
 # Available metrics: 'mse', 'rmse', 'mae', 'r2', 'pearson', 'spearman', 'all'
 # Use 'all' to calculate all metrics, or list specific metrics to calculate
-FIT_QUALITY_METRICS = 'all'  # Can be a string ('all') or a list of specific metrics, e.g. ['mse', 'pearson']
+FIT_QUALITY_METRICS = 'rmse'  # Can be a string ('all') or a list of specific metrics, e.g. ['mse', 'pearson']
