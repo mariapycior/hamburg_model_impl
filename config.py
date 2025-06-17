@@ -39,41 +39,43 @@ class Paths:
 
     def get_temperature_files_for_years(self, years: list) -> list:
         """Get temperature files for specified years."""
-        return [self.get_temperature_file(f'temperature_1T_{year}.csv') for year in years]
+        return [self.get_temperature_file(f'temperature_10T_{year}.csv') for year in years]
     
     def get_output_file(self, filename: str) -> str:
         """Get full path to an output file."""
         return os.path.join(self.output_dir, filename)
 
 # --- Input File Configuration ---
-FLUENCE_FILENAME = "avgFluenceBinned.csv"
+FLUENCE_FILENAME = "avgFluenceBinned_10T_74_78.csv"
 LUMI_FILENAME = "lumi_binned.csv"
 
 # Current file to year mapping
 CURRENT_YEAR_RANGES = {
-    'run1_current_all.csv': [2011, 2012],
-    'ls1_current_all.csv': [2013, 2014, 2015],
-    'run2_current_all.csv': [2016, 2017, 2018]
+    'run1_current.csv': [2011, 2012],
+    'ls1_current.csv': [2013, 2014, 2015],
+    '2016_current.csv': [2016],
+    '2016_current.csv': [2017],
+    '2016_current.csv': [2018],
 }
 
 CURRENT_YEAR_LIST = [
-    ('run1_current_all.csv', [2011, 2012]),
-    ('ls1_current_all.csv', [2013, 2014, 2015]),
-    ('run2_current_all.csv', [2016, 2017, 2018])
+    ('run1_current.csv', [2011, 2012]),
+    ('ls1_current.csv', [2013, 2014, 2015]),
+    ('2016_current.csv', [2016]),
+    ('2017_current.csv', [2017]),
+    ('2018_current.csv', [2018]),
 ]
 
 # --- Simulation Configuration ---
 
 # Temperature correction settings
-TEMPERATURE_CORRECTION_ENABLED = True # Whether to apply temperature correction
+TEMPERATURE_CORRECTION_ENABLED = False # Whether to apply temperature correction
 TEMPERATURE_CORRECTION_DELTA = 3.2     # Correction value in Kelvin
 
-# Target luminosity values for current vs position plots (in fb^-1)
-TARGET_LUMINOSITIES = [0.8, 3.1, 6.5]
 
 # Resampling period for simulation data
 # Available values: '1min', '1H', '10H', '24H', '1W'
-SIMULATION_PERIOD = '10H'
+SIMULATION_PERIOD = '12H'
 
 # --- Output Configuration ---
 OUTPUT_SIMULATED_DF_PATH = "simulated_df.csv"
