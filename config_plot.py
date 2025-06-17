@@ -19,6 +19,9 @@ REFERENCE_TEMPERATURE = 273.35
 TEMPERATURE_CORRECTION_ENABLED = True  # Whether to apply temperature correction
 TEMPERATURE_CORRECTION_DELTA = 3     # Correction value in Kelvin
 
+# Target luminosity values for current vs position plots (in fb^-1)
+TARGET_LUMINOSITIES = [0.8, 3.1, 6.5]
+
 # --- Plot Mode Settings ---
 # Whether to use lines for simulated data (True) or scatter points (False)
 USE_LINES_FOR_SIMULATION = True
