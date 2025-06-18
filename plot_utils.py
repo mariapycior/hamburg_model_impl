@@ -113,10 +113,10 @@ def plot_group_averages(df_group_averages):
         
         if real_col in df_group_averages:
             real_data = df_group_averages[real_col]
-            ax_main.scatter(df_group_averages.index, real_data, color=REAL_DATA_COLOR, s=SCATTER_MARKER_SIZE, label='Real Average')
+            ax_main.scatter(df_group_averages.index, real_data, color=REAL_DATA_COLOR, s=SCATTER_MARKER_SIZE, label='Measured Average')
         
-        ax_main.set_title(f'Group: {group}')
-        ax_main.set_ylabel('Average Leakage Current (mA)')
+        # ax_main.set_title(f'Group: {group}')
+        ax_main.set_ylabel('Average Leakage Current [mA]')
         ax_main.set_xlim(x_min, x_max)
         ax_main.set_ylim(y_min, y_max)
         ax_main.grid(True)
@@ -125,7 +125,7 @@ def plot_group_averages(df_group_averages):
         import matplotlib.ticker as mticker
         ax_main.yaxis.set_minor_locator(mticker.AutoMinorLocator(2))
         ax_main.grid(which='minor', axis='y', linestyle=':', alpha=0.4)
-        ax_main.legend()
+        ax_main.legend(fontsize=7, loc='best')
         
         # Add ratio subplot if enabled and both sim and real data exist
         if SHOW_RATIO_FOR_SINGLE_SENSOR and sim_data is not None and real_data is not None:
@@ -154,11 +154,15 @@ def plot_group_averages(df_group_averages):
                 ax_ratio.axhline(y=1.0, color='gray', linestyle='-', alpha=0.7)  # Solid reference line at ratio = 1
                 
                 # Set ratio plot labels and grid
-                ax_ratio.set_ylabel('Sim/Real')
+                ax_ratio.set_ylabel('Sim/Meas')
+                ax_ratio.set_xlabel('Year')
                 ax_ratio.grid(True)
                 
                 # Use global ratio limits calculated earlier for consistent y-axis range across all plots
                 # The limits will be applied after all plots are created
+                
+                # Save reference to ratio axes for later checks
+                fig.ratio_axes = True
         else:
             # If no ratio plot, configure x-axis on main plot
             for label in ax_main.get_xticklabels():
@@ -340,9 +344,9 @@ def setup_subplot(ax, x_data, y_data, color, label, title, ylabel, xlim, ylim=No
     if ylim:
         ax.set_ylim(ylim)
     ax.set_ylabel(ylabel)
-    ax.set_title(title)
+    # ax.set_title(title)
     ax.grid(True)
-    ax.legend()
+    ax.legend(fontsize=7)
 
 
 def plot_leakage_current(df: pd.DataFrame, sensor_name: str):
@@ -363,12 +367,12 @@ def plot_leakage_current(df: pd.DataFrame, sensor_name: str):
     sensor_number = get_sensor_number(sensor_name)
     
     setup_subplot(axes[0], df.index, df[sim_col], SIMULATED_DATA_COLOR, 'Leakage Current Simulated', 
-                 f'Simulated Leakage Current for Sensor {sensor_number}', 'Leakage Current (mA)', 
+                 f'Simulated Leakage Current for Sensor {sensor_number}', 'Leakage Current [mA]', 
                  (start_date, end_date), use_line=True, show_error_band=True, is_current_plot=True, force_no_error=False)
     
     if real_col in df.columns:
-        setup_subplot(axes[1], df.index, df[real_col], REAL_DATA_COLOR, 'Leakage Current (Real Data)', 
-                     f'Real Leakage Current for Sensor {sensor_number}', 'Leakage Current (mA)', 
+        setup_subplot(axes[1], df.index, df[real_col], REAL_DATA_COLOR, 'Leakage Current (Measured Data)', 
+                     f'Measured Leakage Current for Sensor {sensor_number}', 'Leakage Current [mA]', 
                      (start_date, end_date), use_line=False, show_error_band=False, is_current_plot=True, force_no_error=False)
     
     if fluence_col in df.columns:
@@ -421,7 +425,7 @@ def plot_simulated_vs_real(df: pd.DataFrame, sensor_name: str):
         real_data = temp_df[real_col].dropna()
         if not real_data.empty:
             ax.scatter(real_data.index, real_data, color=REAL_DATA_COLOR, s=SCATTER_MARKER_SIZE, 
-                      label='Real Leakage Current', zorder=DATA_ZORDER)
+                      label='Measured Leakage Current', zorder=DATA_ZORDER)
     
     sim_data = None
     if sim_col in temp_df.columns:
@@ -433,12 +437,12 @@ def plot_simulated_vs_real(df: pd.DataFrame, sensor_name: str):
 
     add_parameter_info(ax)
     
-    ax.set_ylabel('Leakage Current (mA)')
+    ax.set_ylabel('Leakage Current [mA]')
     if not show_ratio:
-        ax.set_xlabel('Time')  # Only add xlabel if no ratio plot
-    ax.set_title(f'Real vs Simulated Leakage Current for Sensor {sensor_number}')
+        ax.set_xlabel('Year')  # Only add xlabel if no ratio plot
+    # ax.set_title(f'Measured vs Simulated Leakage Current for Sensor {sensor_number}')
     ax.grid(True)
-    ax.legend()
+    ax.legend(fontsize=7)
     
     # Add ratio plot if enabled
     if show_ratio and real_data is not None and sim_data is not None:
@@ -453,9 +457,12 @@ def plot_simulated_vs_real(df: pd.DataFrame, sensor_name: str):
             ax_ratio.axhline(y=1.0, color='gray', linestyle='-', alpha=0.7)  # Reference line at ratio = 1
             
             # Set ratio plot labels and grid
-            ax_ratio.set_ylabel('Sim/Real')
-            ax_ratio.set_xlabel('Time')
+            ax_ratio.set_ylabel('Sim/Meas')
+            ax_ratio.set_xlabel('Year')
             ax_ratio.grid(True, alpha=0.3)
+            
+            # Save reference to ratio axes for later checks
+            fig.ratio_axes = True
             
             # Hide x-labels on main plot
             plt.setp(ax_main.get_xticklabels(), visible=False)
