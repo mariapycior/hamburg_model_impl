@@ -605,15 +605,19 @@ def plot_sensors_data(df: pd.DataFrame, sensors: list, column_prefix: str, title
         mean_data[valid_count <= (len(columns) // 2)] = float('nan')
         mean_data = mean_data.sort_index()
         ax.plot(mean_data.index, mean_data.values, color='black', linewidth=3, 
-                label=f'Mean ({"real" if column_prefix == "real_current" else "simulated"})', 
+                label=f'Mean ({"measured" if column_prefix == "real_current" else "simulated"})', 
                 zorder=DATA_ZORDER+1)  # Average line should be above individual data
     
     add_parameter_info(ax)
     ax.set_xlim(start_date, end_date)
     if y_range is not None:
         ax.set_ylim(y_range)
-    ax.set_ylabel('Leakage Current (mA)')
-    ax.set_title(title)
+    ax.set_ylabel('Leakage Current [mA]')
+    
+    # Dodaj etykietę Year tylko jeśli nie ma ratio
+    if not hasattr(plt.gcf(), 'ratio_axes') or not plt.gcf().ratio_axes:
+        ax.set_xlabel('Year')
+    # ax.set_title(title)
     ax.grid(True)
     plt.tight_layout()
     # Show legend with unique entries and appropriate title based on grouping mode
@@ -640,7 +644,7 @@ def plot_sensors_data(df: pd.DataFrame, sensors: list, column_prefix: str, title
     
     # Add legend only if we have unique labels
     if unique_labels:
-        legend = ax.legend(unique_handles, unique_labels, loc='best', framealpha=0.7, title=legend_title)
+        legend = ax.legend(unique_handles, unique_labels, loc='best', framealpha=0.7, title=legend_title, fontsize=7)
         # Make the legend title bold
         plt.setp(legend.get_title(), fontweight='bold')
     
@@ -690,8 +694,8 @@ def plot_all_sensors(df: pd.DataFrame, sensors: list):
     # Plot simulated current for all sensors (no error bands when plotting all sensors)
     plot_sensors_data(df, sensors, 'current', 'Simulated Leakage Current for All Sensors', y_range=y_range)
     
-    # Plot real current for all sensors (if available)
-    plot_sensors_data(df, sensors, 'real_current', 'Real Leakage Current for All Sensors', y_range=y_range)
+    # Plot measured current for all sensors (if available)
+    plot_sensors_data(df, sensors, 'real_current', 'Measured Leakage Current for All Sensors', y_range=y_range)
     
     # Zwróć średnie grupowe (sim i real) jako DataFrame
     return get_group_averages(df, sensors)
@@ -947,10 +951,12 @@ def plot_integrated_luminosity(df: pd.DataFrame):
     try:
         plt.figure(figsize=DEFAULT_FIGURE_SIZE)
         df['integrated_luminosity'].plot(zorder=DATA_ZORDER)
-        plt.title('Integrated Luminosity vs Time')
-        plt.xlabel('Time')
-        plt.ylabel('Integrated Luminosity (fb$^{-1}$)')
+        # plt.title('Integrated Luminosity vs Time')
+        plt.xlabel('Year')
+        plt.ylabel('Integrated Luminosity [fb$^{-1}$]')
         plt.grid(True)
+        plt.grid(True, which='minor', linestyle=':', alpha=0.3)
+        plt.minorticks_on()
         
             
         # Wykres gotowy do wyświetlenia
@@ -998,15 +1004,17 @@ def plot_currents_vs_position(summary_df: pd.DataFrame, target_luminosities: lis
             ax.scatter(positions, real_values, 
                       edgecolor=colors[color_idx], marker=markers[marker_idx],
                       facecolor='none', s=20, 
-                      label=f'Real @ {target_lumi} fb$^{{-1}}$', zorder=10)
+                      label=f'Measured @ {target_lumi} fb$^{{-1}}$', zorder=10)
     
     add_parameter_info(ax, loc='upper right')
     
     ax.set_xlabel('Sensor Z Position (mm)')
-    ax.set_ylabel('Leakage Current (mA)')
-    ax.set_title('Leakage Current vs Sensor Position at Different Luminosities')
+    ax.set_ylabel('Leakage Current [mA]')
+    # ax.set_title('Leakage Current vs Sensor Position at Different Luminosities')
     ax.grid(True)
-    ax.legend(fontsize=8, loc='upper left')
+    ax.grid(True, which='minor', linestyle=':', alpha=0.3)
+    ax.minorticks_on()
+    ax.legend(fontsize=7, loc='upper left')
     plt.tight_layout()
     
     
