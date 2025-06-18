@@ -113,10 +113,10 @@ def plot_group_averages(df_group_averages):
         
         if real_col in df_group_averages:
             real_data = df_group_averages[real_col]
-            ax_main.scatter(df_group_averages.index, real_data, color=REAL_DATA_COLOR, s=SCATTER_MARKER_SIZE, label='Real Average')
+            ax_main.scatter(df_group_averages.index, real_data, color=REAL_DATA_COLOR, s=SCATTER_MARKER_SIZE, label='Measured Average')
         
-        ax_main.set_title(f'Group: {group}')
-        ax_main.set_ylabel('Average Leakage Current (mA)')
+        # ax_main.set_title(f'Group: {group}')
+        ax_main.set_ylabel('Average Leakage Current [mA]')
         ax_main.set_xlim(x_min, x_max)
         ax_main.set_ylim(y_min, y_max)
         ax_main.grid(True)
@@ -125,7 +125,7 @@ def plot_group_averages(df_group_averages):
         import matplotlib.ticker as mticker
         ax_main.yaxis.set_minor_locator(mticker.AutoMinorLocator(2))
         ax_main.grid(which='minor', axis='y', linestyle=':', alpha=0.4)
-        ax_main.legend()
+        ax_main.legend(fontsize=7, loc='best')
         
         # Add ratio subplot if enabled and both sim and real data exist
         if SHOW_RATIO_FOR_SINGLE_SENSOR and sim_data is not None and real_data is not None:
@@ -154,8 +154,13 @@ def plot_group_averages(df_group_averages):
                 ax_ratio.axhline(y=1.0, color='gray', linestyle='-', alpha=0.7)  # Solid reference line at ratio = 1
                 
                 # Set ratio plot labels and grid
-                ax_ratio.set_ylabel('Sim/Real')
+                ax_ratio.set_ylabel('Sim/Meas')
+                ax_ratio.set_xlabel('Year')
                 ax_ratio.grid(True)
+                
+                # Double density grid on y axis for ratio plot - spójnie z głównym wykresem
+                ax_ratio.yaxis.set_minor_locator(mticker.AutoMinorLocator(2))
+                ax_ratio.grid(which='minor', axis='y', linestyle=':', alpha=0.4)
                 
                 # Use global ratio limits calculated earlier for consistent y-axis range across all plots
                 # The limits will be applied after all plots are created
@@ -193,7 +198,7 @@ def plot_group_averages(df_group_averages):
             ax.set_ylim(ylim_low, ylim_high)
     
     # Add overall title - zmniejszony rozmiar i obniżona pozycja
-    fig.suptitle(f'Mean values: {suptitle}', fontsize=12, y=0.98)
+    # fig.suptitle(f'Mean values: {suptitle}', fontsize=12, y=0.98)
     
     # Adjust layout
     if ratio_axes:
@@ -366,8 +371,8 @@ def plot_leakage_current(df: pd.DataFrame, sensor_name: str):
                  (start_date, end_date), use_line=True, show_error_band=True, is_current_plot=True, force_no_error=False)
     
     if real_col in df.columns:
-        setup_subplot(axes[1], df.index, df[real_col], REAL_DATA_COLOR, 'Leakage Current (Real Data)', 
-                     f'Real Leakage Current for Sensor {sensor_number}', 'Leakage Current (mA)', 
+        setup_subplot(axes[1], df.index, df[real_col], REAL_DATA_COLOR, 'Leakage Current (Measured Data)', 
+                     f'Measured Leakage Current for Sensor {sensor_number}', 'Leakage Current [mA]', 
                      (start_date, end_date), use_line=False, show_error_band=False, is_current_plot=True, force_no_error=False)
     
     if fluence_col in df.columns:
@@ -420,7 +425,7 @@ def plot_simulated_vs_real(df: pd.DataFrame, sensor_name: str):
         real_data = temp_df[real_col].dropna()
         if not real_data.empty:
             ax.scatter(real_data.index, real_data, color=REAL_DATA_COLOR, s=SCATTER_MARKER_SIZE, 
-                      label='Real Leakage Current', zorder=DATA_ZORDER)
+                      label='Measured Leakage Current', zorder=DATA_ZORDER)
     
     sim_data = None
     if sim_col in temp_df.columns:
@@ -433,9 +438,10 @@ def plot_simulated_vs_real(df: pd.DataFrame, sensor_name: str):
     add_parameter_info(ax)
     
     ax.set_ylabel('Leakage Current (mA)')
+    
+    # Dodaj etykietę Year tylko jeśli nie ma ratio
     if not show_ratio:
-        ax.set_xlabel('Time')  # Only add xlabel if no ratio plot
-    ax.set_title(f'Real vs Simulated Leakage Current for Sensor {sensor_number}')
+        ax.set_xlabel('Year')
     ax.grid(True)
     ax.legend()
     
@@ -452,9 +458,12 @@ def plot_simulated_vs_real(df: pd.DataFrame, sensor_name: str):
             ax_ratio.axhline(y=1.0, color='gray', linestyle='-', alpha=0.7)  # Reference line at ratio = 1
             
             # Set ratio plot labels and grid
-            ax_ratio.set_ylabel('Sim/Real')
-            ax_ratio.set_xlabel('Time')
+            ax_ratio.set_ylabel('Sim/Meas')
+            ax_ratio.set_xlabel('Year')
             ax_ratio.grid(True, alpha=0.3)
+            
+            # Save reference to ratio axes for later checks
+            fig.ratio_axes = True
             
             # Hide x-labels on main plot
             plt.setp(ax_main.get_xticklabels(), visible=False)
@@ -604,9 +613,19 @@ def plot_sensors_data(df: pd.DataFrame, sensors: list, column_prefix: str, title
     ax.set_xlim(start_date, end_date)
     if y_range is not None:
         ax.set_ylim(y_range)
-    ax.set_ylabel('Leakage Current (mA)')
-    ax.set_title(title)
+    ax.set_ylabel('Leakage Current [mA]')
+    
+    # Dodaj etykietę Year tylko jeśli nie ma ratio
+    if not hasattr(plt.gcf(), 'ratio_axes') or not plt.gcf().ratio_axes:
+        ax.set_xlabel('Year')
+    # ax.set_title(title)
+    
     ax.grid(True)
+    
+    # Double density grid on y axis - spójnie z innymi wykresami
+    import matplotlib.ticker as mticker
+    ax.yaxis.set_minor_locator(mticker.AutoMinorLocator(2))
+    ax.grid(which='minor', axis='y', linestyle=':', alpha=0.4)
     plt.tight_layout()
     # Show legend with unique entries and appropriate title based on grouping mode
     from collections import OrderedDict
@@ -632,7 +651,7 @@ def plot_sensors_data(df: pd.DataFrame, sensors: list, column_prefix: str, title
     
     # Add legend only if we have unique labels
     if unique_labels:
-        legend = ax.legend(unique_handles, unique_labels, loc='best', framealpha=0.7, title=legend_title)
+        legend = ax.legend(unique_handles, unique_labels, loc='best', framealpha=0.7, title=legend_title, fontsize=7)
         # Make the legend title bold
         plt.setp(legend.get_title(), fontweight='bold')
     
@@ -682,8 +701,8 @@ def plot_all_sensors(df: pd.DataFrame, sensors: list):
     # Plot simulated current for all sensors (no error bands when plotting all sensors)
     plot_sensors_data(df, sensors, 'current', 'Simulated Leakage Current for All Sensors', y_range=y_range)
     
-    # Plot real current for all sensors (if available)
-    plot_sensors_data(df, sensors, 'real_current', 'Real Leakage Current for All Sensors', y_range=y_range)
+    # Plot measured current for all sensors (if available)
+    plot_sensors_data(df, sensors, 'real_current', 'Measured Leakage Current for All Sensors', y_range=y_range)
     
     # Zwróć średnie grupowe (sim i real) jako DataFrame
     return get_group_averages(df, sensors)
@@ -726,7 +745,7 @@ def plot_currents_vs_parameter(df: pd.DataFrame, sensor_name: str, param_type: s
         df_real = df_binned[[real_col, param_col]].dropna()
         ax.scatter(df_real[param_col], df_real[real_col], 
                   color=REAL_DATA_COLOR, s=SCATTER_MARKER_SIZE, 
-                  label='Real Data', zorder=DATA_ZORDER)
+                  label='Measured Data', zorder=DATA_ZORDER)
     
     if sim_col in df_binned.columns and df_binned[sim_col].notna().any():
         df_sim = df_binned[[sim_col, param_col]].dropna()
@@ -737,7 +756,6 @@ def plot_currents_vs_parameter(df: pd.DataFrame, sensor_name: str, param_type: s
     add_parameter_info(ax)
     ax.set_xlabel(x_label)
     ax.set_ylabel('Leakage Current (mA)')
-    ax.set_title(f'Leakage Current vs {title_param} for Sensor {sensor_number}')
     ax.grid(True)
     ax.legend()
     
@@ -810,7 +828,6 @@ def plot_all_currents_vs_fluence(df: pd.DataFrame, sensors: list, output_dir: st
         
         ax.set_xlabel('Fluence (n/cm²)')
         ax.set_ylabel('Leakage Current (mA)')
-        ax.set_title('Simulated Leakage Current vs Fluence for All Sensors')
         ax.set_xlim(x_min, x_max)
         ax.set_ylim(y_min, y_max)
         ax.grid(True)
@@ -832,7 +849,6 @@ def plot_all_currents_vs_fluence(df: pd.DataFrame, sensors: list, output_dir: st
         
         ax.set_xlabel('Fluence (n/cm²)')
         ax.set_ylabel('Leakage Current (mA)')
-        ax.set_title('Real Leakage Current vs Fluence for All Sensors')
         ax.set_xlim(x_min, x_max)
         ax.set_ylim(y_min, y_max)
         ax.grid(True)
@@ -901,7 +917,6 @@ def plot_all_currents_vs_luminosity(df: pd.DataFrame, sensors: list, output_dir:
         
         ax.set_xlabel('Integrated Luminosity (fb$^{-1}$)')
         ax.set_ylabel('Leakage Current (mA)')
-        ax.set_title('Simulated Leakage Current vs Integrated Luminosity for All Sensors')
         ax.set_xlim(x_min, x_max)
         ax.set_ylim(y_min, y_max)
         ax.grid(True)
@@ -922,7 +937,6 @@ def plot_all_currents_vs_luminosity(df: pd.DataFrame, sensors: list, output_dir:
         
         ax.set_xlabel('Integrated Luminosity (fb$^{-1}$)')
         ax.set_ylabel('Leakage Current (mA)')
-        ax.set_title('Real Leakage Current vs Integrated Luminosity for All Sensors')
         ax.set_xlim(x_min, x_max)
         ax.set_ylim(y_min, y_max)
         ax.grid(True)
@@ -952,7 +966,7 @@ def plot_integrated_luminosity(df: pd.DataFrame):
 
 
 
-def plot_currents_vs_position(summary_df: pd.DataFrame, target_luminosities: list):
+def plot_currents_vs_position(summary_df: pd.DataFrame, target_luminosities: list, output_path: str = None):
     """
     Plot simulated and real currents against sensor position.
     Args:
@@ -990,16 +1004,15 @@ def plot_currents_vs_position(summary_df: pd.DataFrame, target_luminosities: lis
             ax.scatter(positions, real_values, 
                       edgecolor=colors[color_idx], marker=markers[marker_idx],
                       facecolor='none', s=20, 
-                      label=f'Real @ {target_lumi} fb$^{{-1}}$', zorder=10)
+                      label=f'Meas @ {target_lumi} fb$^{{-1}}$', zorder=10)
     
     add_parameter_info(ax, loc='upper right')
     
     ax.set_xlabel('Sensor Z Position (mm)')
-    ax.set_ylabel('Leakage Current (mA)')
-    ax.set_title('Leakage Current vs Sensor Position at Different Luminosities')
+    ax.set_ylabel('Leakage Current [mA]')
     ax.grid(True)
-    ax.legend(fontsize=8, loc='upper left')
+    ax.legend(fontsize=7, loc='upper left')
     plt.tight_layout()
     
-    
-        
+    if output_path:
+        plt.savefig(output_path)
