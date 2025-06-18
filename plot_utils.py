@@ -181,7 +181,7 @@ def plot_leakage_current(df: pd.DataFrame, sensor_name: str,
     
     if fluence_col in df.columns:
         setup_subplot(axes[2], df.index, df[fluence_col], 'green', 'Fluence', 
-                     'Fluence', 'Fluence [n/cm²]', (start_date, end_date), use_line=False)
+                     'Fluence', r'Fluence [$1\,\mathrm{MeV}\, \mathrm{n}_{\mathrm{eq}}/\mathrm{cm}^2$]', (start_date, end_date), use_line=False)
     
     if temp_col in df.columns:
         setup_subplot(axes[3], df.index, df[temp_col], 'magenta', 'Temperature', 
@@ -271,7 +271,7 @@ def plot_simulated_vs_real(df: pd.DataFrame, sensor_name: str, output_path: str 
     
     ax.set_ylabel('Leakage Current [mA]')
     if not show_ratio:
-        ax.set_xlabel('Time')  # Only add xlabel if no ratio plot
+        ax.set_xlabel('Year')  # Only add xlabel if no ratio plot
     ax.set_title(f'Real vs Simulated Leakage Current for Sensor {sensor_number}')
     ax.grid(True)
     ax.legend(fontsize=7)
@@ -289,8 +289,8 @@ def plot_simulated_vs_real(df: pd.DataFrame, sensor_name: str, output_path: str 
             ax_ratio.axhline(y=1.0, color='gray', linestyle='-', alpha=0.7)  # Reference line at ratio = 1
             
             # Set ratio plot labels and grid
-            ax_ratio.set_ylabel('Sim/Real')
-            ax_ratio.set_xlabel('Time')
+            ax_ratio.set_ylabel('Sim/Meas')
+            ax_ratio.set_xlabel('Year')
             ax_ratio.grid(True, alpha=0.3)
             
             # Hide x-labels on main plot
@@ -457,14 +457,14 @@ def plot_currents_vs_parameter(df: pd.DataFrame, sensor_name: str, param_type: s
     
     if param_type == 'luminosity':
         param_col = "integrated_luminosity"
-        x_label = 'Integrated Luminosity (fb$^{-1}$)'
+        x_label = r'Integrated Luminosity [fb$^{-1}$]'
         title_param = 'Integrated Luminosity'
     else:  # fluence
         delivered_fluence_col = f"delivered_fluence_{sensor_name}"
         if delivered_fluence_col not in df.columns:
             return
         param_col = delivered_fluence_col
-        x_label = 'Fluence [n/cm²]'
+        x_label = r'Fluence [$1\,\mathrm{MeV}\, \mathrm{n}_{\mathrm{eq}}/\mathrm{cm}^2$]'
         title_param = 'Cumulative Fluence'
     
     if param_col not in df.columns or (sim_col not in df.columns and real_col not in df.columns):
@@ -603,7 +603,7 @@ def plot_all_currents_vs_fluence(df: pd.DataFrame, sensors: list, output_dir: st
         
         add_parameter_info(ax)
         
-        ax.set_xlabel('Fluence [n/cm²]')
+        ax.set_xlabel(r'Fluence [$1\,\mathrm{MeV}\, \mathrm{n}_{\mathrm{eq}}/\mathrm{cm}^2$]')
         ax.set_ylabel('Leakage Current [mA]')
         ax.set_title('Simulated Leakage Current vs Fluence for All Sensors')
         ax.set_xlim(x_min, x_max)
@@ -625,7 +625,7 @@ def plot_all_currents_vs_fluence(df: pd.DataFrame, sensors: list, output_dir: st
         
         add_parameter_info(ax)
         
-        ax.set_xlabel('Fluence [n/cm²]')
+        ax.set_xlabel(r'Fluence [$1\,\mathrm{MeV}\, \mathrm{n}_{\mathrm{eq}}/\mathrm{cm}^2$]')
         ax.set_ylabel('Leakage Current [mA]')
         ax.set_title('Real Leakage Current vs Fluence for All Sensors')
         ax.set_xlim(x_min, x_max)
@@ -695,7 +695,7 @@ def plot_all_currents_vs_luminosity(df: pd.DataFrame, sensors: list, output_dir:
         
         add_parameter_info(ax)
         
-        ax.set_xlabel('Integrated Luminosity (fb$^{-1}$)')
+        ax.set_xlabel(r'Integrated Luminosity [fb$^{-1}$]')
         ax.set_ylabel('Leakage Current [mA]')
         ax.set_title('Simulated Leakage Current vs Integrated Luminosity for All Sensors')
         ax.set_xlim(x_min, x_max)
@@ -716,7 +716,7 @@ def plot_all_currents_vs_luminosity(df: pd.DataFrame, sensors: list, output_dir:
         
         add_parameter_info(ax)
         
-        ax.set_xlabel('Integrated Luminosity (fb$^{-1}$)')
+        ax.set_xlabel(r'Integrated Luminosity [fb$^{-1}$]')
         ax.set_ylabel('Leakage Current [mA]')
         ax.set_title('Real Leakage Current vs Integrated Luminosity for All Sensors')
         ax.set_xlim(x_min, x_max)
@@ -736,8 +736,8 @@ def plot_integrated_luminosity(df: pd.DataFrame, output_path: str = None):
         plt.figure(figsize=DEFAULT_FIGURE_SIZE)
         df['integrated_luminosity'].plot(zorder=DATA_ZORDER)
         plt.title('Integrated Luminosity vs Time')
-        plt.xlabel('Time')
-        plt.ylabel('Integrated Luminosity (fb$^{-1}$)')
+        plt.xlabel('Year')
+        plt.ylabel(r'Integrated Luminosity [fb$^{-1}$]')
         plt.grid(True)
         if output_path:
             plt.savefig(output_path)
