@@ -321,7 +321,7 @@ def plot_simulated_vs_real(df: pd.DataFrame, sensor_name, output_path: str = Non
                 sensor_num = get_sensor_number(sensor)
                 ax.scatter(real_data.index, real_data, 
                            color=dark_color, s=SCATTER_MARKER_SIZE, 
-                           label='Measured', zorder=DATA_ZORDER)
+                           label=None, zorder=DATA_ZORDER)
         
         # Rysuj dane symulowane
         if sim_col in temp_df.columns:
@@ -349,13 +349,13 @@ def plot_simulated_vs_real(df: pd.DataFrame, sensor_name, output_path: str = Non
                     ax.plot(sim_data.index, sim_data, 
                        color=medium_color, 
                        linewidth=LINE_WIDTH, 
-                       label='Simulated',
+                       label=f'Sensor {sensor_num}',
                        zorder=DATA_ZORDER)
                 else:
                     ax.scatter(sim_data.index, sim_data, 
                               color=medium_color, 
                               s=SCATTER_MARKER_SIZE, 
-                              label='Simulated',
+                              label=f'Sensor {sensor_num}',
                               zorder=DATA_ZORDER)
 
     add_parameter_info(ax)
@@ -378,27 +378,14 @@ def plot_simulated_vs_real(df: pd.DataFrame, sensor_name, output_path: str = Non
     
     # Twórz legendę
     from matplotlib.lines import Line2D
-    custom_handles, custom_labels = [], []
-    
-    # Pobierz istniejące elementy legendy dla symulacji
-    for i, sensor in enumerate(valid_sensors):
-        sensor_idx = min(i, 4)
-        medium_color = COLOR_PALETTES[sensor_idx][1]  # Kolor dla symulacji
-        sensor_num = get_sensor_number(sensor)
-        
-        # Dodaj element dla symulacji
-        custom_handles.append(Line2D([0], [0], color=medium_color, linestyle='-', linewidth=1.5))
-        custom_labels.append(f'{sensor_num}')
-    
-    # Dodaj wspólny element dla rzeczywistych danych
+    handles, labels = ax.get_legend_handles_labels()
+    filtered = [(h, l) for h, l in zip(handles, labels) if l and l.startswith('Sensor')]
+    handles = [h for h, l in filtered]
+    labels = [l for h, l in filtered]
     black_dot = Line2D([0], [0], marker='o', color='w', markerfacecolor='black', markersize=5, linestyle='')
-    custom_handles.append(black_dot)
-    custom_labels.append('Real Data')
-    
-    # Usunięto informację o pasmie błędu z legendy, zgodnie z wymaganiem
-    
-    ax.legend(handles=custom_handles, labels=custom_labels, 
-             loc='best', fontsize='small')
+    handles.append(black_dot)
+    labels.append('Measured')
+    ax.legend(handles=handles, labels=labels, fontsize=7)
     
     # Dodaj ratio plot
     if SHOW_RATIO and SHOW_RATIO_FOR_MULTIPLE_SENSORS:
@@ -716,7 +703,7 @@ def plot_currents_vs_parameter(df: pd.DataFrame, sensor_name, param_type: str = 
                     sensor_num = get_sensor_number(sensor)
                     ax.scatter(df_real[sensor_param_col], df_real[real_col], 
                               color=dark_color, s=SCATTER_MARKER_SIZE, 
-                              label='Measured', zorder=DATA_ZORDER)
+                              label=None, zorder=DATA_ZORDER)
 
     # Po wszystkich danych: jeśli jest ratio, ustaw opis osi X tylko na ax_ratio
     if show_ratio_plot:
@@ -761,11 +748,11 @@ def plot_currents_vs_parameter(df: pd.DataFrame, sensor_name, param_type: str = 
                     if use_line_plot:
                         ax.plot(df_sim[sensor_param_col], df_sim[sim_col], 
                                color=medium_color, linewidth=LINE_WIDTH, 
-                               label=f'{sensor_num}', zorder=DATA_ZORDER)
+                               label=f'Sensor {sensor_num}', zorder=DATA_ZORDER)
                     else:
                         ax.scatter(df_sim[sensor_param_col], df_sim[sim_col], 
                                   color=medium_color, s=SCATTER_MARKER_SIZE, 
-                                  label=f'{sensor_num}', zorder=DATA_ZORDER)
+                                  label=f'Sensor {sensor_num}', zorder=DATA_ZORDER)
     
     add_parameter_info(ax)
     ax.set_ylabel(r'Leakage Current [mA]')
@@ -789,7 +776,7 @@ def plot_currents_vs_parameter(df: pd.DataFrame, sensor_name, param_type: str = 
     handles, labels = ax.get_legend_handles_labels()
     black_dot = Line2D([0], [0], marker='o', color='w', markerfacecolor='black', markersize=5, linestyle='')
     handles.append(black_dot)
-    labels.append('Real Data')
+    labels.append('Measured')
     
     ax.legend(handles=handles, labels=labels, fontsize=7)
     
