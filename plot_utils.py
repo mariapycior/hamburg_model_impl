@@ -291,7 +291,9 @@ def plot_simulated_vs_real(df: pd.DataFrame, sensor_name: str, output_path: str 
             # Set ratio plot labels and grid
             ax_ratio.set_ylabel('Sim/Meas')
             ax_ratio.set_xlabel('Year')
+            ax_ratio.minorticks_on()
             ax_ratio.grid(True, alpha=0.3)
+            ax_ratio.grid(True, which='minor', alpha=0.15)
             
             # Hide x-labels on main plot
             plt.setp(ax_main.get_xticklabels(), visible=False)
