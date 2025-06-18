@@ -117,7 +117,7 @@ def setup_subplot(ax, x_data, y_data, color, label, title, ylabel, xlim, ylim=No
             y_data_series + error_value, 
             color=ERROR_BAND_COLOR, 
             alpha=ERROR_BAND_ALPHA, 
-            label=None,  # Usunięto z legendy
+            label=None,
             zorder=ERROR_BAND_ZORDER
         )
     
@@ -186,24 +186,24 @@ def plot_leakage_current(df: pd.DataFrame, sensor_name,
                         df[sim_col] + error_value, 
                         color=ERROR_BAND_COLOR, 
                         alpha=ERROR_BAND_ALPHA, 
-                        label=None,  # Usunięto z legendy
+                        label=None,
                         zorder=ERROR_BAND_ZORDER
                     )
                 
                 ax.plot(df.index, df[sim_col], 
                         color=sim_colors[i], linewidth=LINE_WIDTH, 
-                        label=f'{sensor} (Sim)', zorder=DATA_ZORDER)
+                        label='Simulated', zorder=DATA_ZORDER)
             else:
                 ax.scatter(df.index, df[sim_col], 
                           color=sim_colors[i], s=SCATTER_MARKER_SIZE, 
-                          label=f'{sensor} (Sim)', zorder=DATA_ZORDER)
+                          label='Simulated', zorder=DATA_ZORDER)
     
     # Formatowanie pierwszego subplotu
     if len(valid_sensors) == 1:
         ax.set_title(f'Simulated Leakage Current for Sensor {valid_sensors[0]}')
     else:
         ax.set_title('Simulated Leakage Current for Multiple Sensors')
-    ax.set_ylabel('Leakage Current [mA]')
+    ax.set_ylabel(r'Leakage Current [mA]')
     ax.set_xlim(start_date, end_date)
     add_parameter_info(ax)
     ax.grid(True)
@@ -219,7 +219,7 @@ def plot_leakage_current(df: pd.DataFrame, sensor_name,
         if real_col in df.columns and df[real_col].notna().any():
             ax.scatter(df.index, df[real_col], 
                       color=real_colors[i], s=SCATTER_MARKER_SIZE, 
-                      label=f'{sensor} (Real)', zorder=DATA_ZORDER)
+                      label='Measured', zorder=DATA_ZORDER)
             real_plot_created = True
     
     # Formatowanie drugiego subplotu
@@ -228,7 +228,7 @@ def plot_leakage_current(df: pd.DataFrame, sensor_name,
             ax.set_title(f'Real Leakage Current for Sensor {valid_sensors[0]}')
         else:
             ax.set_title('Real Leakage Current for Multiple Sensors')
-        ax.set_ylabel('Leakage Current [mA]')
+        ax.set_ylabel(r'Leakage Current [mA]')
         ax.set_xlim(start_date, end_date)
         add_parameter_info(ax)
         ax.grid(True)
@@ -248,7 +248,7 @@ def plot_leakage_current(df: pd.DataFrame, sensor_name,
         temp_col = f"temperature_{valid_sensors[0]}"
         if temp_col in df.columns:
             setup_subplot(axes[3], df.index, df[temp_col], 'magenta', 'Temperature', 
-                        'Temperature', 'Temperature (K)', (start_date, end_date), use_line=False)
+                        'Temperature [K]', r'Temperature [K]', (start_date, end_date), use_line=False)
 
     plt.tight_layout()
     if output_path:
@@ -320,9 +320,8 @@ def plot_simulated_vs_real(df: pd.DataFrame, sensor_name, output_path: str = Non
                 # Użyj numeru sensora zamiast pełnej nazwy
                 sensor_num = get_sensor_number(sensor)
                 ax.scatter(real_data.index, real_data, 
-                          color=dark_color, s=SCATTER_MARKER_SIZE, 
-                          label=None,  # Nie dodajemy etykiety do punktów
-                          zorder=DATA_ZORDER)
+                           color=dark_color, s=SCATTER_MARKER_SIZE, 
+                           label='Measured', zorder=DATA_ZORDER)
         
         # Rysuj dane symulowane
         if sim_col in temp_df.columns:
@@ -341,7 +340,7 @@ def plot_simulated_vs_real(df: pd.DataFrame, sensor_name, output_path: str = Non
                         sim_data + error_value, 
                         color=light_color, 
                         alpha=ERROR_BAND_ALPHA, 
-                        label=None,  # Usunięto z legendy
+                        label=None, 
                         zorder=ERROR_BAND_ZORDER
                     )
                 
@@ -350,22 +349,24 @@ def plot_simulated_vs_real(df: pd.DataFrame, sensor_name, output_path: str = Non
                     ax.plot(sim_data.index, sim_data, 
                        color=medium_color, 
                        linewidth=LINE_WIDTH, 
-                       label=f'{sensor_num}',  # Pokazuj tylko nazwę sensora
+                       label='Simulated',
                        zorder=DATA_ZORDER)
                 else:
                     ax.scatter(sim_data.index, sim_data, 
                               color=medium_color, 
                               s=SCATTER_MARKER_SIZE, 
-                              label=f'{sensor_num}',  # Pokazuj tylko nazwę sensora
+                              label='Simulated',
                               zorder=DATA_ZORDER)
 
     add_parameter_info(ax)
     
-    ax.set_ylabel('Leakage Current [mA]')
-    ax.set_xlabel('Year')
+    ax.set_ylabel(r'Leakage Current [mA]')
+    # Opis osi X tylko jeśli nie ma ratio
+    if not (SHOW_RATIO and SHOW_RATIO_FOR_MULTIPLE_SENSORS):
+        ax.set_xlabel(r'Year')
     
     # Różne ustawienia wykresu
-    ax.set_ylabel('Leakage Current [mA]')
+    ax.set_ylabel(r'Leakage Current [mA]')
     title = f'Simulated vs Real Leakage Current'
     if len(valid_sensors) == 1:
         title += f' for Sensor {valid_sensors[0]}'
@@ -426,7 +427,7 @@ def plot_simulated_vs_real(df: pd.DataFrame, sensor_name, output_path: str = Non
                     
                     # Użyj koloru zgodnego z kolorem sensora
                     sensor_idx = min(i, 4)  # Ogranicz indeks do 4 (5 dostępnych palet)
-                    medium_color = COLOR_PALETTES[sensor_idx][1]  # Użyjmy koloru z symulacji dla spójności
+                    medium_color = COLOR_PALETTES[sensor_idx][1]  # Używamy koloru z symulacji dla spójności
                     
                     # Rysuj ratio na dolnym subplocie
                     if 'ax_ratio' in locals():
@@ -450,14 +451,6 @@ def plot_simulated_vs_real(df: pd.DataFrame, sensor_name, output_path: str = Non
         ax_ratio.grid(True, which='minor', alpha=0.15)
             
             # Usunięto legendę dla ratio plot, zgodnie z wymaganiem
-        # Dopasuj zakres osi Y ratio
-        ratios = np.array(all_ratio_values)
-        if len(ratios) > 0:
-            max_dev = max(abs(np.nanmin(ratios) - 1.0), abs(np.nanmax(ratios) - 1.0))
-            max_dev = max_dev * 1.2  # Dodaj trochę marginesu
-            ylim_low = max(0, 1.0 - max_dev)  # Nie schodź poniżej 0
-            ylim_high = 1.0 + max_dev
-            ax_ratio.set_ylim(ylim_low, ylim_high)
     
     plt.tight_layout()
     
@@ -475,10 +468,12 @@ def plot_sensors_data(df: pd.DataFrame, sensors: list, column_prefix: str, title
     
     temp_df = df.copy()
     custom_period = resampling_period or PLOT_RESAMPLING_PERIOD
-    if custom_period:
-        temp_df = resample_data(temp_df, period=custom_period)
     
-    for sensor in sensors:
+    if custom_period:
+        temp_df = temp_df.resample(custom_period).mean()
+
+    # Rysuj wykresy dla każdego sensora
+    for i, sensor in enumerate(sensors):
         col_name = f"{column_prefix}_{sensor}"
         if col_name in temp_df.columns:
             columns.append(col_name)
@@ -524,14 +519,19 @@ def plot_sensors_data(df: pd.DataFrame, sensors: list, column_prefix: str, title
         mean_data[valid_count <= (len(columns) // 2)] = float('nan')
         mean_data = mean_data.sort_index()
         ax.plot(mean_data.index, mean_data.values, color='black', linewidth=3, 
-                label=f'Mean ({"real" if column_prefix == "real_current" else "simulated"})', 
+                label='Mean (Measured)' if column_prefix == 'real_current' else 'Mean (Simulated)',
                 zorder=DATA_ZORDER+1)  # Mean line should be above individual data
     
     add_parameter_info(ax)
     ax.set_xlim(start_date, end_date)
     if y_range is not None:
         ax.set_ylim(y_range)
-    ax.set_ylabel('Leakage Current [mA]')
+    if column_prefix == "current" or column_prefix == "real_current":
+        ax.set_ylabel(r'Leakage Current [mA]')
+    elif column_prefix == "fluence":
+        ax.set_ylabel(r'Fluence [$1\,\mathrm{MeV}\, \mathrm{n}_{\mathrm{eq}}/\mathrm{cm}^2$]')
+    elif column_prefix == "temperature":
+        ax.set_ylabel(r'Temperature [K]')
     ax.set_title(title)
     ax.grid(True)
     ax.minorticks_on()
@@ -550,7 +550,7 @@ def plot_all_sensors(df: pd.DataFrame, sensors: list, output_dir: str = None,
     temp_df = df.copy()
     custom_period = resampling_period or PLOT_RESAMPLING_PERIOD
     if custom_period:
-        temp_df = resample_data(temp_df, period=custom_period)
+        temp_df = temp_df.resample(custom_period).mean()
     
     # Oblicz globalny zakres osi Y
     min_val = float('inf')
@@ -616,7 +616,7 @@ def plot_currents_vs_parameter(df: pd.DataFrame, sensor_name, param_type: str = 
     # Sprawdzanie parametru dla wykresów
     if param_type == 'luminosity':
         param_col = "integrated_luminosity"
-        x_label = 'Integrated Luminosity [fb$^{-1}$]'
+        x_label = r'Integrated Luminosity [fb$^{-1}$]'
         title_param = 'Integrated Luminosity'
     else:  # fluence
         # Dla wielu sensorów musimy sprawdzić, które mają dane fluence
@@ -633,7 +633,7 @@ def plot_currents_vs_parameter(df: pd.DataFrame, sensor_name, param_type: str = 
         # Dla fluence będziemy używać tylko sensorów z dostępnymi danymi fluence
         sensors = valid_sensors
         param_col = f"delivered_fluence_{sensors[0]}"  # Użyj pierwszego sensora jako bazowego dla osi X
-        x_label = 'Fluence (n/cm²)'
+        x_label = r'Fluence [$1\,\mathrm{MeV}\, \mathrm{n}_{\mathrm{eq}}/\mathrm{cm}^2$]'
         title_param = 'Cumulative Fluence'
     
     if param_col not in df.columns:
@@ -676,7 +676,13 @@ def plot_currents_vs_parameter(df: pd.DataFrame, sensor_name, param_type: str = 
         ax = ax_main  # Dla zgodności z istniejącym kodem
     else:
         fig, ax = plt.subplots(figsize=DEFAULT_FIGURE_SIZE)
-    
+
+    # Opis osi X tylko na dolnym wykresie (ratio) jeśli jest ratio, a na głównym tylko jeśli nie ma ratio
+    if show_ratio_plot:
+        ax_ratio.set_xlabel(x_label)
+    else:
+        ax.set_xlabel(x_label)
+
     use_line_plot = USE_LINES_FOR_SIMULATION if use_lines is None else use_lines
     show_err = SHOW_ERROR_BANDS if show_error_band is None else show_error_band
     
@@ -710,8 +716,12 @@ def plot_currents_vs_parameter(df: pd.DataFrame, sensor_name, param_type: str = 
                     sensor_num = get_sensor_number(sensor)
                     ax.scatter(df_real[sensor_param_col], df_real[real_col], 
                               color=dark_color, s=SCATTER_MARKER_SIZE, 
-                              label=None, zorder=DATA_ZORDER)
-    
+                              label='Measured', zorder=DATA_ZORDER)
+
+    # Po wszystkich danych: jeśli jest ratio, ustaw opis osi X tylko na ax_ratio
+    if show_ratio_plot:
+        ax_ratio.set_xlabel(x_label)
+
     # Rysowanie danych symulowanych
     for i, sensor in enumerate(sensors):
         # Pobierz kolory z palety dla danego sensora (maksymalnie 5 sensorów)
@@ -742,7 +752,7 @@ def plot_currents_vs_parameter(df: pd.DataFrame, sensor_name, param_type: str = 
                             df_sim[sim_col] + error_value, 
                             color=light_color, 
                             alpha=ERROR_BAND_ALPHA, 
-                            label=None,  # Usunięto z legendy
+                            label=None,
                             zorder=ERROR_BAND_ZORDER
                         )
                     
@@ -758,8 +768,7 @@ def plot_currents_vs_parameter(df: pd.DataFrame, sensor_name, param_type: str = 
                                   label=f'{sensor_num}', zorder=DATA_ZORDER)
     
     add_parameter_info(ax)
-    ax.set_xlabel(x_label)
-    ax.set_ylabel('Leakage Current [mA]')
+    ax.set_ylabel(r'Leakage Current [mA]')
     # Tytuł z numerami sensorów
     if isinstance(sensor_name, list):
         # Użyj numerów sensorów w tytule dla wielu sensorów
@@ -782,7 +791,7 @@ def plot_currents_vs_parameter(df: pd.DataFrame, sensor_name, param_type: str = 
     handles.append(black_dot)
     labels.append('Real Data')
     
-    ax.legend(handles=handles, labels=labels)
+    ax.legend(handles=handles, labels=labels, fontsize=7)
     
     # Rysuj wykres ratio jeśli potrzebny
     if show_ratio_plot:
@@ -800,7 +809,7 @@ def plot_currents_vs_parameter(df: pd.DataFrame, sensor_name, param_type: str = 
                 
                 # Uzyskaj kolor z tej samej palety co wyżej
                 sensor_idx = min(i, 4)
-                color = COLOR_PALETTES[sensor_idx][1]  # Używamy koloru dla symulacji
+                color = COLOR_PALETTES[sensor_idx][1]  # Używamy koloru z symulacji dla spójności
                 
                 # Aby obliczyć ratio potrzebujemy wspólnych wartości parametru (np. fluencji)
                 # Używamy interpolacji, aby obliczyć wartości prądu symulowanego w punktach rzeczywistych
@@ -945,7 +954,7 @@ def plot_all_currents_vs_fluence(df: pd.DataFrame, sensors: list, output_dir: st
         add_parameter_info(ax)
         
         ax.set_xlabel(r'Fluence [$1\,\mathrm{MeV}\, \mathrm{n}_{\mathrm{eq}}/\mathrm{cm}^2$]')
-        ax.set_ylabel('Leakage Current [mA]')
+        ax.set_ylabel(r'Leakage Current [mA]')
         ax.set_title('Simulated Leakage Current vs Fluence for All Sensors')
         ax.set_xlim(x_min, x_max)
         ax.set_ylim(y_min, y_max)
@@ -971,7 +980,7 @@ def plot_all_currents_vs_fluence(df: pd.DataFrame, sensors: list, output_dir: st
         add_parameter_info(ax)
         
         ax.set_xlabel(r'Fluence [$1\,\mathrm{MeV}\, \mathrm{n}_{\mathrm{eq}}/\mathrm{cm}^2$]')
-        ax.set_ylabel('Leakage Current [mA]')
+        ax.set_ylabel(r'Leakage Current [mA]')
         ax.set_title('Measured Leakage Current vs Fluence for All Sensors')
         ax.set_xlim(x_min, x_max)
         ax.set_ylim(y_min, y_max)
@@ -1043,7 +1052,7 @@ def plot_all_currents_vs_luminosity(df: pd.DataFrame, sensors: list, output_dir:
                    linewidth=LINE_WIDTH, label=sensor, color=color, zorder=DATA_ZORDER)
         add_parameter_info(ax)
         ax.set_xlabel(r'Integrated Luminosity [fb$^{-1}$]')
-        ax.set_ylabel('Leakage Current [mA]')
+        ax.set_ylabel(r'Leakage Current [mA]')
         ax.set_title('Simulated Leakage Current vs Integrated Luminosity for All Sensors')
         ax.set_xlim(x_min, x_max)
         ax.set_ylim(y_min, y_max)
@@ -1065,7 +1074,7 @@ def plot_all_currents_vs_luminosity(df: pd.DataFrame, sensors: list, output_dir:
                    linewidth=LINE_WIDTH, label=sensor, color=color, zorder=DATA_ZORDER)
         add_parameter_info(ax)
         ax.set_xlabel(r'Integrated Luminosity [fb$^{-1}$]')
-        ax.set_ylabel('Leakage Current [mA]')
+        ax.set_ylabel(r'Leakage Current [mA]')
         ax.set_title('Measured Leakage Current vs Integrated Luminosity for All Sensors')
         ax.set_xlim(x_min, x_max)
         ax.set_ylim(y_min, y_max)
@@ -1139,7 +1148,7 @@ def plot_currents_vs_position(summary_df: pd.DataFrame, target_luminosities: lis
     add_parameter_info(ax, loc='upper right')
     
     ax.set_xlabel(r'Sensor Z Position [mm]')
-    ax.set_ylabel('Leakage Current [mA]')
+    ax.set_ylabel(r'Leakage Current [mA]')
     ax.set_title('Leakage Current vs Sensor Position at Different Luminosities')
     ax.grid(True)
     ax.minorticks_on()
