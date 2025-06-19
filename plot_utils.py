@@ -762,7 +762,7 @@ def plot_currents_vs_position(summary_df: pd.DataFrame, target_luminosities: lis
     fig, ax = plt.subplots(figsize=(8, 6))
     
     markers = ['o', '^', 's', 'D']
-    colors = ['blue', 'red', 'green', 'purple']
+    colors = ['blue', 'green', 'purple', 'red']
     
     for i, target_lumi in enumerate(target_luminosities):
         lumi_str = f'_f{target_lumi:.1f}'

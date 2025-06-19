@@ -52,7 +52,7 @@ def adjust_real_current_with_temperature(df: pd.DataFrame, params, sensors: list
 
 def adjust_both_with_new_temperature(df: pd.DataFrame, params, sensors: list, T_new: float = None) -> pd.DataFrame:
     out = df.copy()
-    #out = set_temperature_where_fluence_zero(out, sensors)
+    out = set_temperature_where_fluence_zero(out, sensors)
     if T_new is None:
         T_new = REFERENCE_TEMPERATURE
         
@@ -284,6 +284,11 @@ def current_for_lumi(df: pd.DataFrame, target_luminosities: list = None) -> pd.D
                 summary.loc[sensor, 'position'] = position
                 
             lumi_str = f'_f{target_lumi:.1f}'
+            # Dla luminancji 0.8 pomijamy wartości dla sensorów zawierających 'A'
+            if target_lumi == 0.8 and 'A' in sensor:
+                sim_val = None
+                real_val = None
+            
             summary.loc[sensor, f'current_sim{lumi_str}'] = sim_val
             summary.loc[sensor, f'current_real{lumi_str}'] = real_val
             
