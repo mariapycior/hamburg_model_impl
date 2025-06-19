@@ -52,7 +52,7 @@ def adjust_real_current_with_temperature(df: pd.DataFrame, params, sensors: list
 
 def adjust_both_with_new_temperature(df: pd.DataFrame, params, sensors: list, T_new: float = None) -> pd.DataFrame:
     out = df.copy()
-    out = set_temperature_where_fluence_zero(out, sensors)
+    #out = set_temperature_where_fluence_zero(out, sensors)
     if T_new is None:
         T_new = REFERENCE_TEMPERATURE
         
@@ -77,7 +77,7 @@ def get_temperature_bin_mean(temp_data):
     if len(temp_data) == 0:
         return None
     
-    filtered_temp = temp_data[(temp_data > 200) & (temp_data < 300)]
+    filtered_temp = temp_data[(temp_data > 250) & (temp_data < 270)]
     if len(filtered_temp) == 0:
         return None
         
@@ -134,7 +134,7 @@ def _apply_histogram_filtering(data: pd.DataFrame, sensor: str, temp_col: str, m
         if len(month_data_clean) == 0:
             continue
             
-        filter_mask = (month_data_clean > 200) & (month_data_clean < 300)
+        filter_mask = (month_data_clean > 250) & (month_data_clean < 270)
         filtered_month_data = month_data_clean[filter_mask]
         if len(filtered_month_data) < 10:
             continue
