@@ -5,7 +5,7 @@ import pandas as pd
 import numpy as np
 import re
 from params import Parameters
-from config import SIMULATION_PERIOD, TEMPERATURE_CORRECTION_ENABLED, TEMPERATURE_CORRECTION_DELTA
+from config import SIMULATION_PERIOD, TEMPERATURE_CORRECTION_ENABLED, TEMPERATURE_CORRECTION_DELTA, CROSS_SECTIONS
 from VeloDetectorElement import VeloDetectorElement
 
 def get_sensor_number(sensor_code):
@@ -36,6 +36,7 @@ def add_parameter_info(ax, loc='upper left'):
     timestep = pd.to_timedelta(SIMULATION_PERIOD.lower()).total_seconds() / 3600
     
     param_text = (
+        f"$\\sigma$ (7 TeV), $\\sigma$ (13 TeV) = {CROSS_SECTIONS}\n"
         f"$\\alpha_I$: {params.alpha_I:.2e} A/cm\n"
         f"$\\alpha_0^*$: {params.alpha_0_star:.2e} A/cm\n"
         f"$\\beta$: {params.beta:.2e} A/cm\n"
@@ -130,7 +131,7 @@ def setup_subplot(ax, x_data, y_data, color, label, title, ylabel, xlim, ylim=No
     if ylim:
         ax.set_ylim(ylim)
     ax.set_ylabel(ylabel)
-    ax.set_title(title)
+    ax.set_title(title, fontsize=10)
     ax.grid(True)
     ax.minorticks_on()
     ax.grid(True, which='minor', alpha=0.15)
@@ -200,9 +201,9 @@ def plot_leakage_current(df: pd.DataFrame, sensor_name,
     
     # Formatowanie pierwszego subplotu
     if len(valid_sensors) == 1:
-        ax.set_title(f'Simulated Leakage Current for Sensor {valid_sensors[0]}')
+        ax.set_title(f'Simulated Leakage Current for Sensor {valid_sensors[0]}', fontsize=10)
     else:
-        ax.set_title('Simulated Leakage Current for Multiple Sensors')
+        ax.set_title('Simulated Leakage Current for Multiple Sensors', fontsize=10)
     ax.set_ylabel(r'Leakage Current [mA]')
     ax.set_xlim(start_date, end_date)
     add_parameter_info(ax)
@@ -225,9 +226,9 @@ def plot_leakage_current(df: pd.DataFrame, sensor_name,
     # Formatowanie drugiego subplotu
     if real_plot_created:
         if len(valid_sensors) == 1:
-            ax.set_title(f'Real Leakage Current for Sensor {valid_sensors[0]}')
+            ax.set_title(f'Measured Leakage Current for Sensor {valid_sensors[0]}', fontsize=10)
         else:
-            ax.set_title('Real Leakage Current for Multiple Sensors')
+            ax.set_title('Measured Leakage Current for Multiple Sensors', fontsize=10)
         ax.set_ylabel(r'Leakage Current [mA]')
         ax.set_xlim(start_date, end_date)
         add_parameter_info(ax)
@@ -367,10 +368,10 @@ def plot_simulated_vs_real(df: pd.DataFrame, sensor_name, output_path: str = Non
     
     # Różne ustawienia wykresu
     ax.set_ylabel(r'Leakage Current [mA]')
-    title = f'Simulated vs Real Leakage Current'
+    title = f'Simulated vs Measured Leakage Current'
     if len(valid_sensors) == 1:
         title += f' for Sensor {valid_sensors[0]}'
-    ax.set_title(title)
+    ax.set_title(title, fontsize=10)
     add_parameter_info(ax)
     ax.grid(True)
     ax.minorticks_on()
@@ -519,7 +520,7 @@ def plot_sensors_data(df: pd.DataFrame, sensors: list, column_prefix: str, title
         ax.set_ylabel(r'Fluence [$1\,\mathrm{MeV}\, \mathrm{n}_{\mathrm{eq}}/\mathrm{cm}^2$]')
     elif column_prefix == "temperature":
         ax.set_ylabel(r'Temperature [K]')
-    ax.set_title(title)
+    ax.set_title(title, fontsize=10)
     ax.grid(True)
     ax.minorticks_on()
     ax.grid(True, which='minor', alpha=0.15)
@@ -582,7 +583,7 @@ def plot_all_sensors(df: pd.DataFrame, sensors: list, output_dir: str = None,
     
     # Plot real current for all sensors (if available)
     real_output = None if output_dir is None else os.path.join(output_dir, 'all_sensors_real.png')
-    plot_sensors_data(df, sensors, 'real_current', 'Real Leakage Current for All Sensors', 
+    plot_sensors_data(df, sensors, 'real_current', 'Measured Leakage Current for All Sensors', 
                      real_output, start_date, end_date, False, False, resampling_period, y_range=y_range)
 
 
@@ -761,11 +762,11 @@ def plot_currents_vs_parameter(df: pd.DataFrame, sensor_name, param_type: str = 
         # Użyj numerów sensorów w tytule dla wielu sensorów
         sensor_numbers = [get_sensor_number(s) for s in sensor_name]
         sensor_numbers_str = ', '.join(sensor_numbers)
-        ax.set_title(f'Leakage Current vs {title_param} for Sensors {sensor_numbers_str}')
+        ax.set_title(f'Leakage Current vs {title_param} for Sensors {sensor_numbers_str}', fontsize=10)
     else:
         # Dla pojedynczego sensora
         sensor_num = get_sensor_number(sensor_name)
-        ax.set_title(f'Leakage Current vs {title_param} for Sensor {sensor_num}')
+        ax.set_title(f'Leakage Current vs {title_param} for Sensor {sensor_num}', fontsize=10)
     ax.grid(True)
     ax.minorticks_on()
     ax.grid(True, which='minor', alpha=0.15)
@@ -866,8 +867,13 @@ def plot_currents_vs_cumulative_fluence(df: pd.DataFrame, sensor_name: str, outp
     """
     Plot both simulated and real currents against delivered fluence.
     """
-    return plot_currents_vs_parameter(df, sensor_name, param_type='fluence', output_path=output_path,
-                                     use_lines=use_lines, show_error_band=show_error_band, show_ratio=show_ratio)
+    return plot_currents_vs_parameter(
+        df, sensor_name, param_type='fluence',
+        output_path=output_path,
+        use_lines=use_lines,
+        show_error_band=show_error_band,
+        show_ratio=show_ratio
+    )
 
 
 def plot_all_currents_vs_fluence(df: pd.DataFrame, sensors: list, output_dir: str = None):
@@ -942,7 +948,7 @@ def plot_all_currents_vs_fluence(df: pd.DataFrame, sensors: list, output_dir: st
         
         ax.set_xlabel(r'Fluence [$1\,\mathrm{MeV}\, \mathrm{n}_{\mathrm{eq}}/\mathrm{cm}^2$]')
         ax.set_ylabel(r'Leakage Current [mA]')
-        ax.set_title('Simulated Leakage Current vs Fluence for All Sensors')
+        ax.set_title('Simulated Leakage Current vs Fluence for All Sensors', fontsize=10)
         ax.set_xlim(x_min, x_max)
         ax.set_ylim(y_min, y_max)
         ax.grid(True)
@@ -968,7 +974,7 @@ def plot_all_currents_vs_fluence(df: pd.DataFrame, sensors: list, output_dir: st
         
         ax.set_xlabel(r'Fluence [$1\,\mathrm{MeV}\, \mathrm{n}_{\mathrm{eq}}/\mathrm{cm}^2$]')
         ax.set_ylabel(r'Leakage Current [mA]')
-        ax.set_title('Measured Leakage Current vs Fluence for All Sensors')
+        ax.set_title('Measured Leakage Current vs Fluence for All Sensors', fontsize=10)
         ax.set_xlim(x_min, x_max)
         ax.set_ylim(y_min, y_max)
         ax.grid(True)
@@ -1040,7 +1046,7 @@ def plot_all_currents_vs_luminosity(df: pd.DataFrame, sensors: list, output_dir:
         add_parameter_info(ax)
         ax.set_xlabel(r'Integrated Luminosity [fb$^{-1}$]')
         ax.set_ylabel(r'Leakage Current [mA]')
-        ax.set_title('Simulated Leakage Current vs Integrated Luminosity for All Sensors')
+        ax.set_title('Simulated Leakage Current vs Integrated Luminosity for All Sensors', fontsize=10)
         ax.set_xlim(x_min, x_max)
         ax.set_ylim(y_min, y_max)
         ax.grid(True)
@@ -1062,7 +1068,7 @@ def plot_all_currents_vs_luminosity(df: pd.DataFrame, sensors: list, output_dir:
         add_parameter_info(ax)
         ax.set_xlabel(r'Integrated Luminosity [fb$^{-1}$]')
         ax.set_ylabel(r'Leakage Current [mA]')
-        ax.set_title('Measured Leakage Current vs Integrated Luminosity for All Sensors')
+        ax.set_title('Measured Leakage Current vs Integrated Luminosity for All Sensors', fontsize=10)
         ax.set_xlim(x_min, x_max)
         ax.set_ylim(y_min, y_max)
         ax.grid(True)
@@ -1130,13 +1136,13 @@ def plot_currents_vs_position(summary_df: pd.DataFrame, target_luminosities: lis
             ax.scatter(positions, real_values, 
                       edgecolor=colors[color_idx], marker=markers[marker_idx],
                       facecolor='none', s=20, 
-                      label=f'Real @ {target_lumi} fb$^{{-1}}$', zorder=10)
+                      label=f'Measured @ {target_lumi} fb$^{{-1}}$', zorder=10)
     
     add_parameter_info(ax, loc='upper right')
     
     ax.set_xlabel(r'Sensor Z Position [mm]')
     ax.set_ylabel(r'Leakage Current [mA]')
-    ax.set_title('Leakage Current vs Sensor Position at Different Luminosities')
+    ax.set_title('Leakage Current vs Sensor Position at Different Luminosities', fontsize=10)
     ax.grid(True)
     ax.minorticks_on()
     ax.grid(True, which='minor', alpha=0.15)
