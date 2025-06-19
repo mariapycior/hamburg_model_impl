@@ -30,8 +30,9 @@ def plot_group_averages(df_group_averages):
     import groups
     # Extract group names
     group_names = []
+    # Pobieramy tylko nazwy grup bez kolumn *_std
     for col in df_group_averages.columns:
-        if col.startswith('sim_'):
+        if col.startswith('sim_') and not col.endswith('_std'):
             group_names.append(col[4:])
     n_groups = len(group_names)
     if n_groups == 0:
@@ -123,7 +124,19 @@ def plot_group_averages(df_group_averages):
         
         if sim_col in df_group_averages:
             sim_data = df_group_averages[sim_col]
-            ax_main.plot(df_group_averages.index, sim_data, color=SIMULATED_DATA_COLOR, linewidth=LINE_WIDTH, label='Simulated Average')
+            ax_main.plot(df_group_averages.index, sim_data, color=SIMULATED_DATA_COLOR, linewidth=LINE_WIDTH, label='Sim')
+            
+            # Dodajemy band dla odchylenia standardowego
+            if f'sim_{group}_std' in df_group_averages:
+                std_data = df_group_averages[f'sim_{group}_std']
+                ax_main.fill_between(
+                    df_group_averages.index,
+                    sim_data - std_data,
+                    sim_data + std_data,
+                    color=ERROR_BAND_COLOR,
+                    alpha=ERROR_BAND_ALPHA,
+                    label='Sim ± std'
+                )
         
         if real_col in df_group_averages:
             real_data = df_group_averages[real_col]
@@ -241,6 +254,7 @@ def get_group_averages(df: pd.DataFrame, sensors: list):
         real_cols = [f"real_current_{s}" for s in group_sensors if f"real_current_{s}" in df.columns]
         if sim_cols:
             result[f"sim_{group_label}"] = df[sim_cols].mean(axis=1)
+            result[f"sim_{group_label}_std"] = df[sim_cols].std(axis=1)
         if real_cols:
             result[f"real_{group_label}"] = df[real_cols].mean(axis=1)
     if result:
