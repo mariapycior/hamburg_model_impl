@@ -3,7 +3,7 @@ import matplotlib.pyplot as plt
 import pandas as pd
 import numpy as np
 from params import Parameters
-from config import SIMULATION_PERIOD, TEMPERATURE_CORRECTION_ENABLED, TEMPERATURE_CORRECTION_DELTA
+from config import SIMULATION_PERIOD, TEMPERATURE_CORRECTION_ENABLED, TEMPERATURE_CORRECTION_DELTA, CROSS_SECTIONS
 from config_plot import (
     CURRENT_TEMP_MODE, REFERENCE_TEMPERATURE,
     USE_LINES_FOR_SIMULATION, SHOW_ERROR_BANDS, ERROR_PERCENTAGE, PLOT_RESAMPLING_PERIOD,
@@ -41,6 +41,17 @@ def plot_group_averages(df_group_averages):
     # Get title for the grouping mode
     grouping_mode = SENSOR_GROUPING_MODE if hasattr(groups, 'group_modes') and SENSOR_GROUPING_MODE in groups.group_modes else 'none'
     suptitle = groups.group_modes[grouping_mode]['title'] if grouping_mode in groups.group_modes else 'Average Leakage Current per Group'
+
+    # Create figure with appropriate size
+    if n_groups > 2:
+        fig_width = DEFAULT_FIGURE_SIZE[0] * 1.5
+    else:
+        fig_width = DEFAULT_FIGURE_SIZE[0]
+    fig_height = DEFAULT_FIGURE_SIZE[1]
+    fig = plt.figure(figsize=(fig_width, fig_height))
+    
+    # Add main title to figure
+    fig.suptitle(suptitle, fontsize=12, y=0.98)
 
     # Find common x/y limits
     x_min, x_max = df_group_averages.index.min(), df_group_averages.index.max()
@@ -102,6 +113,9 @@ def plot_group_averages(df_group_averages):
         # Create main axis
         ax_main = plt.subplot(fig_gs[0, i])
         main_axes.append(ax_main)
+        
+        # Add subplot title with group name
+        ax_main.set_title(f'Group: {group}', fontsize=10)
         
         # Plot data on main axis
         sim_data = None
@@ -240,6 +254,7 @@ def add_parameter_info(ax, loc='upper left'):
     timestep = pd.to_timedelta(SIMULATION_PERIOD.lower()).total_seconds() / 3600
     
     param_text = (
+        f"$\\sigma$ (7 TeV), $\\sigma$ (13 TeV) = {CROSS_SECTIONS}\n"
         f"$\\alpha_I$: {params.alpha_I:.2e} A/cm\n"
         f"$\\alpha_0^*$: {params.alpha_0_star:.2e} A/cm\n"
         f"$\\beta$: {params.beta:.2e} A/cm\n"
@@ -344,7 +359,7 @@ def setup_subplot(ax, x_data, y_data, color, label, title, ylabel, xlim, ylim=No
     if ylim:
         ax.set_ylim(ylim)
     ax.set_ylabel(ylabel)
-    ax.set_title(title)
+    ax.set_title(title, fontsize=10)
     ax.grid(True)
     ax.legend()
 
@@ -618,7 +633,7 @@ def plot_sensors_data(df: pd.DataFrame, sensors: list, column_prefix: str, title
     # Dodaj etykietę Year tylko jeśli nie ma ratio
     if not hasattr(plt.gcf(), 'ratio_axes') or not plt.gcf().ratio_axes:
         ax.set_xlabel('Year')
-    # ax.set_title(title)
+    ax.set_title(title, fontsize=10)
     
     ax.grid(True)
     
