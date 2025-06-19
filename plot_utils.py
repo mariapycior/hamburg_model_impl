@@ -116,7 +116,10 @@ def plot_group_averages(df_group_averages):
         main_axes.append(ax_main)
         
         # Add subplot title with group name
-        ax_main.set_title(f'Group: {group}', fontsize=10)
+        if group == 'all':
+            ax_main.set_title('Mean Values from All Sensors', fontsize=10)
+        else:
+            ax_main.set_title(f'Group: {group}', fontsize=10)
         
         # Plot data on main axis
         sim_data = None
@@ -124,7 +127,7 @@ def plot_group_averages(df_group_averages):
         
         if sim_col in df_group_averages:
             sim_data = df_group_averages[sim_col]
-            ax_main.plot(df_group_averages.index, sim_data, color=SIMULATED_DATA_COLOR, linewidth=LINE_WIDTH, label='Sim')
+            ax_main.plot(df_group_averages.index, sim_data, color=SIMULATED_DATA_COLOR, linewidth=LINE_WIDTH, label='Simulated')
             
             # Dodajemy band dla odchylenia standardowego
             if f'sim_{group}_std' in df_group_averages:
