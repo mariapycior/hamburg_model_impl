@@ -11,6 +11,29 @@ def load_temperature_data(file_path: str) -> pd.DataFrame:
         raise FileNotFoundError(f"Temperature file not found: {file_path}")
     df = pd.read_csv(file_path, index_col="TS", parse_dates=["TS"])
     return df.dropna(how='all')
+    
+def _calculate_temperature_adjustment(T, T_ref, E_eff, kB, reverse=False):
+    if reverse:
+        # Przeliczanie z T na T_ref
+        return (T_ref / T) ** 2 * np.exp(-(E_eff / (2 * kB)) * (1 / T_ref - 1/ T))
+    else:
+        # Przeliczanie z T_ref na T
+        return (T / T_ref) ** 2 * np.exp(-(E_eff / (2 * kB)) * (1 / T - 1 / T_ref))
+
+def adjust_simulated_current_with_temperature(df: pd.DataFrame, params, sensors: list) -> pd.DataFrame:
+    out = df.copy()
+    out = set_temperature_where_fluence_zero(out, sensors)
+    for sensor in sensors:
+        sim_col = f"current_{sensor}"
+        temp_col = f"temperature_{sensor}"
+        
+        if sim_col not in out.columns or temp_col not in out.columns:
+            continue
+            
+        R_Tref = _calculate_temperature_adjustment(
+            out[temp_col].values, params.T_ref, params.E_eff, params.kb, reverse=False)
+        out[sim_col] = out[sim_col].values * R_Tref
+    return out
 
 def adjust_real_current_with_temperature(df: pd.DataFrame, params, sensors: list) -> pd.DataFrame:
     out = df.copy()
@@ -23,8 +46,8 @@ def adjust_real_current_with_temperature(df: pd.DataFrame, params, sensors: list
             continue
             
         R_Tref = _calculate_temperature_adjustment(
-            out[temp_col].values, params.T_ref, params.E_eff, params.kb, reverse=True)
-        out[real_col] = out[real_col].values * R_Tref
+            out[temp_col].values, params.T_ref, params.E_eff, params.kb, reverse = True)
+        out[real_col] = out[real_col].values * R_Tref # TO jest dobrze
     return out
 
 def adjust_both_with_new_temperature(df: pd.DataFrame, params, sensors: list, T_new: float = None) -> pd.DataFrame:
@@ -40,11 +63,10 @@ def adjust_both_with_new_temperature(df: pd.DataFrame, params, sensors: list, T_
         
         if real_col not in out.columns or sim_col not in out.columns or temp_col not in out.columns:
             continue
-            
-        R_Tref_real = _calculate_temperature_adjustment(
-            T_new, out[temp_col].values, params.E_eff, params.kb)
-        R_Tref_sim = _calculate_temperature_adjustment(
-            T_new, params.T_ref, params.E_eff, params.kb)
+                    
+        R_Tref_real = _calculate_temperature_adjustment(out[temp_col].values, T_new, params.E_eff, params.kb, reverse=True)
+        R_Tref_sim = _calculate_temperature_adjustment(params.T_ref, T_new, params.E_eff, params.kb, reverse=True)
+
         
         out[real_col] = out[real_col].values * R_Tref_real
         out[sim_col] = out[sim_col].values * R_Tref_sim
@@ -143,26 +165,6 @@ def _apply_histogram_filtering(data: pd.DataFrame, sensor: str, temp_col: str, m
     
     return out
 
-def _calculate_temperature_adjustment(T, T_ref, E_eff, kB, reverse=False):
-    if reverse:
-        return (T_ref / T) ** 2 * np.exp(-(E_eff / (2 * kB)) * (1 / T_ref - 1 / T))
-    else:
-        return (T / T_ref) ** 2 * np.exp(-(E_eff / (2 * kB)) * (1 / T - 1 / T_ref))
-
-def adjust_simulated_current_with_temperature(df: pd.DataFrame, params, sensors: list) -> pd.DataFrame:
-    out = df.copy()
-    out = set_temperature_where_fluence_zero(out, sensors)
-    for sensor in sensors:
-        sim_col = f"current_{sensor}"
-        temp_col = f"temperature_{sensor}"
-        
-        if sim_col not in out.columns or temp_col not in out.columns:
-            continue
-            
-        R_Tref = _calculate_temperature_adjustment(
-            out[temp_col].values, params.T_ref, params.E_eff, params.kb)
-        out[sim_col] = out[sim_col].values * R_Tref
-    return out
 
 
 def load_and_prepare_simulated_df(sensor_names, path=OUTPUT_SIMULATED_DF_PATH):
@@ -188,6 +190,7 @@ def load_and_prepare_simulated_df(sensor_names, path=OUTPUT_SIMULATED_DF_PATH):
         print(f"Error loading simulated data: {e}")
         return None
 
+
 def scale_real_current_with_temp_correction(df: pd.DataFrame, params, sensors: list) -> pd.DataFrame:
     """Apply temperature correction to real current values to simulate values as if they were measured at a temperature
     lower by TEMPERATURE_CORRECTION_DELTA degrees."""
@@ -205,7 +208,7 @@ def scale_real_current_with_temp_correction(df: pd.DataFrame, params, sensors: l
         # Calculate scaling factor for temperature correction
         T_corrected = out[temp_col].values - TEMPERATURE_CORRECTION_DELTA
         R_Tcorr = _calculate_temperature_adjustment(
-            T_corrected, out[temp_col].values, params.E_eff, params.kb)
+            T_corrected, out[temp_col].values, params.E_eff, params.kb, reverse=False)
         
         # Apply correction to real current values
         out[real_col] = out[real_col].values * R_Tcorr
