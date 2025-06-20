@@ -73,7 +73,7 @@ def process_and_plot_data(result_df, sensors_to_use, args):
         plot_utils.plot_currents_vs_position(curr_vs_pos_df, TARGET_LUMINOSITIES)
         plot_utils.plot_all_sensors(result_df, sensors_to_use)
         plot_utils.plot_all_currents_vs_luminosity(result_df, sensors_to_use)
-        #plot_utils.plot_all_currents_vs_fluence(result_df, sensors_to_use)
+        plot_utils.plot_all_currents_vs_fluence(result_df, sensors_to_use)
 
 def main():
     args = parse_arguments()

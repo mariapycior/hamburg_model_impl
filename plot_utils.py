@@ -147,7 +147,7 @@ def setup_subplot(ax, x_data, y_data, color, label, title, ylabel, xlim, ylim=No
     ax.set_ylabel(ylabel)
     ax.set_title(title, fontsize=10)
     ax.grid(True)
-    ax.legend(fontsize=7,)
+    # Usunięto legendę z wykresu z sensorami
 
 def plot_leakage_current(df: pd.DataFrame, sensor_name: str, 
                         output_path: str = None, start_date: pd.Timestamp = None, end_date: pd.Timestamp = None,
@@ -176,7 +176,7 @@ def plot_leakage_current(df: pd.DataFrame, sensor_name: str,
     
     if real_col in df.columns:
         setup_subplot(axes[1], df.index, df[real_col], REAL_DATA_COLOR, 'Leakage Current (Real Data)', 
-                     f'Real Leakage Current for Sensor {sensor_number}', 'Leakage Current (mA)', 
+                     f'Measured Leakage Current for Sensor {sensor_number}', 'Leakage Current (mA)', 
                      (start_date, end_date), use_line=False,
                      is_current_plot=True)
     
@@ -275,7 +275,7 @@ def plot_simulated_vs_real(df: pd.DataFrame, sensor_name: str, output_path: str 
         ax.set_xlabel('Year')  # Only add xlabel if no ratio plot
     ax.set_title(f'Measured vs Simulated Leakage Current for Sensor {sensor_number}', fontsize=10)
     ax.grid(True)
-    ax.legend(fontsize=7)
+    # Usunięto legendę z wykresu z sensorami
     
     # Add ratio plot if enabled
     if show_ratio and real_data is not None and sim_data is not None:
@@ -386,7 +386,7 @@ def plot_sensors_data(df: pd.DataFrame, sensors: list, column_prefix: str, title
     ax.set_title(title, fontsize=10)
     ax.grid(True)
     plt.tight_layout()
-    ax.legend(fontsize=7,loc='center left', bbox_to_anchor=(1.01, 0.5), title='Sensors')
+    # Usunięto legendę z wykresu z sensorami
     
     if output_path:
         plt.savefig(output_path)
@@ -444,7 +444,7 @@ def plot_all_sensors(df: pd.DataFrame, sensors: list, output_dir: str = None,
     
     # Plot real current for all sensors (if available)
     real_output = None if output_dir is None else os.path.join(output_dir, 'all_sensors_real.png')
-    plot_sensors_data(df, sensors, 'real_current', 'Real Leakage Current for All Sensors', 
+    plot_sensors_data(df, sensors, 'real_current', 'Measured Leakage Current for All Sensors', 
                      real_output, start_date, end_date, False, False, resampling_period, y_range=y_range)
 
 
@@ -460,8 +460,8 @@ def plot_currents_vs_parameter(df: pd.DataFrame, sensor_name: str, param_type: s
     
     if param_type == 'luminosity':
         param_col = "integrated_luminosity"
-        x_label = r'Integrated Luminosity [fb$^{-1}$]'
-        title_param = 'Integrated Luminosity'
+        x_label = r'Luminosity [fb$^{-1}$]'
+        title_param = 'Luminosity'
     else:  # fluence
         delivered_fluence_col = f"delivered_fluence_{sensor_name}"
         if delivered_fluence_col not in df.columns:
@@ -521,7 +521,7 @@ def plot_currents_vs_parameter(df: pd.DataFrame, sensor_name: str, param_type: s
     ax.set_ylabel('Leakage Current [mA]')
     ax.set_title(f'Leakage Current vs {title_param} for Sensor {sensor_number}', fontsize=10)
     ax.grid(True)
-    ax.legend(fontsize=7)
+    # Usunięto legendę z wykresu z sensorami
     
     if output_path:
         plt.savefig(output_path)
@@ -613,7 +613,7 @@ def plot_all_currents_vs_fluence(df: pd.DataFrame, sensors: list, output_dir: st
         ax.set_ylim(y_min, y_max)
         ax.grid(True)
         plt.tight_layout()
-        ax.legend(fontsize=7,loc='center left', bbox_to_anchor=(1.01, 0.5), title='Sensors')
+        # Usunięto legendę z wykresu z sensorami
         if output_dir is not None:
             plt.savefig(os.path.join(output_dir, "all_simulated_vs_fluence.png"), bbox_inches='tight')
         
@@ -635,7 +635,7 @@ def plot_all_currents_vs_fluence(df: pd.DataFrame, sensors: list, output_dir: st
         ax.set_ylim(y_min, y_max)
         ax.grid(True)
         plt.tight_layout()
-        ax.legend(fontsize=7,loc='center left', bbox_to_anchor=(1.01, 0.5), title='Sensors')
+        # Usunięto legendę z wykresu z sensorami
         if output_dir is not None:
             plt.savefig(os.path.join(output_dir, "all_real_vs_fluence.png"), bbox_inches='tight')
     else:
@@ -698,14 +698,14 @@ def plot_all_currents_vs_luminosity(df: pd.DataFrame, sensors: list, output_dir:
         
         add_parameter_info(ax)
         
-        ax.set_xlabel(r'Integrated Luminosity [fb$^{-1}$]')
+        ax.set_xlabel(r'Luminosity [fb$^{-1}$]')
         ax.set_ylabel('Leakage Current [mA]')
-        ax.set_title('Simulated Leakage Current vs Integrated Luminosity for All Sensors', fontsize=10)
+        ax.set_title('Simulated Leakage Current vs Luminosity for All Sensors', fontsize=10)
         ax.set_xlim(x_min, x_max)
         ax.set_ylim(y_min, y_max)
         ax.grid(True)
         plt.tight_layout()
-        ax.legend(fontsize=7,loc='center left', bbox_to_anchor=(1.01, 0.5), title='Sensors')
+        # Usunięto legendę z wykresu z sensorami
         if output_dir is not None:
             plt.savefig(os.path.join(output_dir, "all_simulated_vs_luminosity.png"), bbox_inches='tight')
         
@@ -719,14 +719,14 @@ def plot_all_currents_vs_luminosity(df: pd.DataFrame, sensors: list, output_dir:
         
         add_parameter_info(ax)
         
-        ax.set_xlabel(r'Integrated Luminosity [fb$^{-1}$]')
+        ax.set_xlabel(r'Luminosity [fb$^{-1}$]')
         ax.set_ylabel('Leakage Current [mA]')
-        ax.set_title('Measured Leakage Current vs Integrated Luminosity for All Sensors', fontsize=10)
+        ax.set_title('Measured Leakage Current vs Luminosity for All Sensors', fontsize=10)
         ax.set_xlim(x_min, x_max)
         ax.set_ylim(y_min, y_max)
         ax.grid(True)
         plt.tight_layout()
-        ax.legend(fontsize=7,loc='center left', bbox_to_anchor=(1.01, 0.5), title='Sensors')
+        # Usunięto legendę z wykresu z sensorami
         if output_dir is not None:
             plt.savefig(os.path.join(output_dir, "all_real_vs_luminosity.png"), bbox_inches='tight')
     else:
@@ -738,9 +738,9 @@ def plot_integrated_luminosity(df: pd.DataFrame, output_path: str = None):
     try:
         plt.figure(figsize=DEFAULT_FIGURE_SIZE)
         df['integrated_luminosity'].plot(zorder=DATA_ZORDER)
-        plt.title('Integrated Luminosity vs Time')
+        plt.title('Luminosity vs Time')
         plt.xlabel('Year')
-        plt.ylabel(r'Integrated Luminosity [fb$^{-1}$]')
+        plt.ylabel(r'Luminosity [fb$^{-1}$]')
         plt.grid(True)
         if output_path:
             plt.savefig(output_path)
@@ -789,15 +789,15 @@ def plot_currents_vs_position(summary_df: pd.DataFrame, target_luminosities: lis
             ax.scatter(positions, real_values, 
                       edgecolor=colors[color_idx], marker=markers[marker_idx],
                       facecolor='none', s=20, 
-                      label=f'Real @ {target_lumi} fb$^{{-1}}$', zorder=10)
+                      label=f'Measured @ {target_lumi} fb$^{{-1}}$', zorder=10)
     
     add_parameter_info(ax, loc='upper right')
     
-    ax.set_xlabel('Sensor Z Position (mm)')
+    ax.set_xlabel('Sensor Z Position [mm]')
     ax.set_ylabel('Leakage Current [mA]')
     ax.set_title('Leakage Current vs Sensor Position at Different Luminosities', fontsize=10)
     ax.grid(True)
-    ax.legend(fontsize=7, loc='upper left')
+    ax.legend(fontsize=7, loc='upper left', title='Luminosity [fb$^{-1}$]', title_fontsize=8)
     plt.tight_layout()
     
     if output_path:
