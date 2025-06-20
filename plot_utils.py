@@ -61,7 +61,7 @@ def add_parameter_info(ax, loc='upper left'):
             param_text += f"\n$\\mathbf{{{temp_info.replace(' ', '\\ ')}}}$"
         
     if TEMPERATURE_CORRECTION_ENABLED:
-        param_text += f"\nTemp. correction: +{TEMPERATURE_CORRECTION_DELTA} K (meas. current)"
+        param_text += f"\nTemp. correction: +{TEMPERATURE_CORRECTION_DELTA} K "
     
     props = dict(boxstyle='round', facecolor='white', alpha=0.7)
     
@@ -166,27 +166,29 @@ def plot_leakage_current(df: pd.DataFrame, sensor_name: str,
         end_date = df.index.max()
 
     fig, axes = plt.subplots(4, 1, figsize=MULTI_SUBPLOT_FIGURE_SIZE)
-    
     sensor_number = get_sensor_number(sensor_name)
     
+    # Add main title at the top
+    fig.suptitle(f'Simulation and Measurements for Sensor {sensor_number} (NTC01)', fontsize=10)
+    
     setup_subplot(axes[0], df.index, df[sim_col], SIMULATED_DATA_COLOR, 'Leakage Current Simulated', 
-                 f'Simulated Leakage Current for Sensor {sensor_number}', 'Leakage Current (mA)', 
+                 '', 'Current [mA]', 
                  (start_date, end_date), use_line=use_lines, show_error_band=show_error_band,
                  is_current_plot=True)
     
     if real_col in df.columns:
-        setup_subplot(axes[1], df.index, df[real_col], REAL_DATA_COLOR, 'Leakage Current (Real Data)', 
-                     f'Measured Leakage Current for Sensor {sensor_number}', 'Leakage Current (mA)', 
+        setup_subplot(axes[1], df.index, df[real_col], REAL_DATA_COLOR, 'Real Data', 
+                     '', 'Current [mA]', 
                      (start_date, end_date), use_line=False,
                      is_current_plot=True)
     
     if fluence_col in df.columns:
         setup_subplot(axes[2], df.index, df[fluence_col], 'green', 'Fluence', 
-                     'Fluence', r'Fluence [$1\,\mathrm{MeV}\, \mathrm{n}_{\mathrm{eq}}/\mathrm{cm}^2$]', (start_date, end_date), use_line=False)
+                     '', r'Fluence [$1\,\mathrm{MeV}\, \mathrm{n}_{\mathrm{eq}}/\mathrm{cm}^2$]', (start_date, end_date), use_line=False)
     
     if temp_col in df.columns:
         setup_subplot(axes[3], df.index, df[temp_col], 'magenta', 'Temperature', 
-                     'Temperature', 'Temperature [K]', (start_date, end_date), use_line=False)
+                     '', 'Temperature [K]', (start_date, end_date), use_line=False)
 
     plt.tight_layout()
     if output_path:
@@ -779,7 +781,7 @@ def plot_currents_vs_position(summary_df: pd.DataFrame, target_luminosities: lis
         color_idx = i % len(colors)
         marker_idx = i % len(markers)
         
-        if sim_values is not None:
+        if sim_values is None:
             ax.scatter(positions, sim_values, 
                       color=colors[color_idx], marker=markers[marker_idx],
                       s=20, label=f'Sim @ {target_lumi} fb$^{{-1}}$', 
@@ -789,7 +791,7 @@ def plot_currents_vs_position(summary_df: pd.DataFrame, target_luminosities: lis
             ax.scatter(positions, real_values, 
                       edgecolor=colors[color_idx], marker=markers[marker_idx],
                       facecolor='none', s=20, 
-                      label=f'Measured @ {target_lumi} fb$^{{-1}}$', zorder=10)
+                      label=f'Meas @ {target_lumi} fb$^{{-1}}$', zorder=10)
     
     add_parameter_info(ax, loc='upper right')
     
@@ -797,6 +799,7 @@ def plot_currents_vs_position(summary_df: pd.DataFrame, target_luminosities: lis
     ax.set_ylabel('Leakage Current [mA]')
     ax.set_title('Leakage Current vs Sensor Position at Different Luminosities', fontsize=10)
     ax.grid(True)
+    ax.set_xlim(-300, 850)  # Set x-axis to start from -250
     ax.legend(fontsize=7, loc='upper left', title='Luminosity [fb$^{-1}$]', title_fontsize=8)
     plt.tight_layout()
     
