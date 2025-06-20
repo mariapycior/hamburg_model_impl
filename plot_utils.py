@@ -3,7 +3,7 @@ import matplotlib.pyplot as plt
 import pandas as pd
 import numpy as np
 from params import Parameters
-from config import SIMULATION_PERIOD, TEMPERATURE_CORRECTION_ENABLED, CROSS_SECTIONS, TEMPERATURE_CORRECTION_DELTA
+from config import SIMULATION_PERIOD, TEMPERATURE_CORRECTION_ENABLED, CROSS_SECTIONS, TEMPERATURE_CORRECTION_DELTA, NTC, LUMINOSITY
 from config_plot import (
     CURRENT_TEMP_MODE, REFERENCE_TEMPERATURE,
     USE_LINES_FOR_SIMULATION, SHOW_ERROR_BANDS, ERROR_PERCENTAGE, PLOT_RESAMPLING_PERIOD,
@@ -20,14 +20,16 @@ def add_parameter_info(ax, loc='upper left'):
     timestep = pd.to_timedelta(SIMULATION_PERIOD.lower()).total_seconds() / 3600
     
     param_text = (
-        f"$\sigma$ (7 TeV), $\sigma$ (13 TeV) = {CROSS_SECTIONS}\n"
+        #f"$\sigma$ (7 TeV), $\sigma$ (13 TeV) = {CROSS_SECTIONS}\n"
         f"$\\alpha_I$: {params.alpha_I:.2e} A/cm\n"
         f"$\\alpha_0^*$: {params.alpha_0_star:.2e} A/cm\n"
         f"$\\beta$: {params.beta:.2e} A/cm\n"
         f"$E_I$: {params.E_I:.2f} eV\n"
         f"$V$: {params.V:.3f} cm$^3$\n"
         f"$E_{{eff}}$: {params.E_eff:.2f} eV\n"
-        f"Simulation timestep: {timestep:.1f} h"
+        f"Simulation timestep: {timestep:.1f} h\n"
+        f"Thermistor: NTC{NTC}\n"
+        f"{'Recorded' if LUMINOSITY == 'recorded' else 'Delivered'} Luminosity"
     )
     
     # Add resampling period information
@@ -70,7 +72,7 @@ def add_parameter_info(ax, loc='upper left'):
     halign, valign = 'left', 'top'
     
     if loc == 'upper right':
-        x, y = 0.98, 0.98
+        x, y = 0.95, 0.95
         halign = 'right'
     elif loc == 'lower left':
         x, y = 0.02, 0.02
@@ -761,7 +763,7 @@ def plot_currents_vs_position(summary_df: pd.DataFrame, target_luminosities: lis
         target_luminosities: List of target luminosity values used for the plot
         output_path: Optional path to save the plot
     """
-    fig, ax = plt.subplots(figsize=(8, 6))
+    fig, ax = plt.subplots(figsize=(5, 5))
     
     markers = ['o', '^', 's', 'D']
     colors = ['blue', 'green', 'purple', 'red']
@@ -781,7 +783,7 @@ def plot_currents_vs_position(summary_df: pd.DataFrame, target_luminosities: lis
         color_idx = i % len(colors)
         marker_idx = i % len(markers)
         
-        if sim_values is None:
+        if sim_values is not None:
             ax.scatter(positions, sim_values, 
                       color=colors[color_idx], marker=markers[marker_idx],
                       s=20, label=f'Sim @ {target_lumi} fb$^{{-1}}$', 
@@ -793,14 +795,42 @@ def plot_currents_vs_position(summary_df: pd.DataFrame, target_luminosities: lis
                       facecolor='none', s=20, 
                       label=f'Meas @ {target_lumi} fb$^{{-1}}$', zorder=10)
     
-    add_parameter_info(ax, loc='upper right')
+    # Dodaj legendę
+    ax.legend(loc='upper right', bbox_to_anchor=(1, 1), 
+                      fontsize=7, title='Luminosity', title_fontsize=7)
+    
+    # Dodaj box z informacjami w lewym górnym rogu
+    info_text = ""
+    
+    # Dodaj informację o dostarczonej luminosności
+    if LUMINOSITY == "delivered":
+        info_text += "Delivered Luminosity\n"
+    else:
+        info_text += "Recorded Luminosity\n"
+    
+    # Dodaj informację o korekcji temperatury
+    if CURRENT_TEMP_MODE == 'adjust_both':
+        kelvin_temp = REFERENCE_TEMPERATURE
+        celsius_temp = kelvin_temp - 273.15
+        info_text += f"$\mathbf{{Adjusted\ both\ to\ {kelvin_temp:.2f}\ K\ ({celsius_temp:.2f}\ °C)}}$\n"
+    elif CURRENT_TEMP_MODE == 'adjust_real':
+        info_text += "$\mathbf{{Adjusted\ meas.\ to\ ref.\ temperature}}$\n"
+    elif CURRENT_TEMP_MODE == 'adjust_sim':
+        info_text += "$\mathbf{{Adjusted\ ref.\ to\ meas.\ temperature}}$\n"
+    
+    # Dodaj informację o korekcji temperatury
+    if TEMPERATURE_CORRECTION_ENABLED:
+        info_text += f"Temp. correction: +{TEMPERATURE_CORRECTION_DELTA} K\n"
+    
+    # Dodaj box z informacjami
+    props = dict(boxstyle='round', facecolor='white', alpha=0.7)
+    ax.text(0.02, 0.98, info_text, transform=ax.transAxes, fontsize=7,
+            verticalalignment='top', horizontalalignment='left', bbox=props)
     
     ax.set_xlabel('Sensor Z Position [mm]')
     ax.set_ylabel('Leakage Current [mA]')
     ax.set_title('Leakage Current vs Sensor Position at Different Luminosities', fontsize=10)
     ax.grid(True)
-    ax.set_xlim(-300, 850)  # Set x-axis to start from -250
-    ax.legend(fontsize=7, loc='upper left', title='Luminosity [fb$^{-1}$]', title_fontsize=8)
     plt.tight_layout()
     
     if output_path:
