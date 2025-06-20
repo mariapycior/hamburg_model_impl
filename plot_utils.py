@@ -36,14 +36,14 @@ def add_parameter_info(ax, loc='upper left'):
     timestep = pd.to_timedelta(SIMULATION_PERIOD.lower()).total_seconds() / 3600
     
     param_text = (
-        f"$\\sigma$ (7 TeV), $\\sigma$ (13 TeV) = {CROSS_SECTIONS}\n"
+        f"$\sigma$ (7 TeV), $\sigma$ (13 TeV) = {CROSS_SECTIONS}\n"
         f"$\\alpha_I$: {params.alpha_I:.2e} A/cm\n"
         f"$\\alpha_0^*$: {params.alpha_0_star:.2e} A/cm\n"
         f"$\\beta$: {params.beta:.2e} A/cm\n"
         f"$E_I$: {params.E_I:.2f} eV\n"
         f"$V$: {params.V:.3f} cm$^3$\n"
         f"$E_{{eff}}$: {params.E_eff:.2f} eV\n"
-        f"Timestep: {timestep:.1f} h"
+        f"Simulation timestep: {timestep:.1f} h"
     )
     
     # Add resampling period information
@@ -63,9 +63,9 @@ def add_parameter_info(ax, loc='upper left'):
     
     temp_info = ""
     if CURRENT_TEMP_MODE == 'adjust_real':
-        temp_info = "Adjusted real to sim. temperature"
+        temp_info = "Adjusted meas. to ref. temperature"
     elif CURRENT_TEMP_MODE == 'adjust_sim':
-        temp_info = "Adjusted sim. to real temperature"
+        temp_info = "Adjusted ref. to meas. temperature"
     elif CURRENT_TEMP_MODE == 'adjust_both':
         temp_info = f"Adjusted both to {REFERENCE_TEMPERATURE:.2f} K"
     
@@ -80,8 +80,24 @@ def add_parameter_info(ax, loc='upper left'):
         param_text += f"\nTemp. correction: +{TEMPERATURE_CORRECTION_DELTA} K"
     
     props = dict(boxstyle='round', facecolor='white', alpha=0.7)
-    ax.text(0.02, 0.98, param_text, transform=ax.transAxes, fontsize=8,
-            verticalalignment='top', horizontalalignment='left', bbox=props)
+    
+    # Ustaw pozycję na podstawie parametru loc
+    x, y = 0.02, 0.98  # domyślnie upper left
+    halign, valign = 'left', 'top'
+    
+    if loc == 'upper right':
+        x, y = 0.98, 0.98
+        halign = 'right'
+    elif loc == 'lower left':
+        x, y = 0.02, 0.02
+        valign = 'bottom'
+    elif loc == 'lower right':
+        x, y = 0.98, 0.02
+        halign, valign = 'right', 'bottom'
+    
+    ax.text(x, y, param_text, transform=ax.transAxes, fontsize=8,
+            verticalalignment=valign, horizontalalignment=halign, bbox=props)
+
 
 
 def resample_data(data, period):
