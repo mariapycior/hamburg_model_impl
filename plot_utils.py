@@ -15,10 +15,11 @@ from VeloDetectorElement import VeloDetectorElement
 import matplotlib.gridspec as gridspec
 
 
-def plot_group_averages(df_group_averages):
+def plot_group_averages(df_group_averages, plot_by='time'):
     """
     Plot average simulated and real leakage currents for each group on separate subplots.
     df_group_averages: DataFrame with columns sim_* and real_* (index: time)
+    plot_by: 'time' or 'luminosity' to specify x-axis
     """
     import matplotlib.pyplot as plt
     import matplotlib.gridspec as gridspec
@@ -57,9 +58,21 @@ def plot_group_averages(df_group_averages):
     fig.suptitle(suptitle, fontsize=12, y=0.98)
 
     # Find common x/y limits
-    x_min, x_max = df_group_averages.index.min(), df_group_averages.index.max()
     y_min = float('inf')
     y_max = float('-inf')
+    
+    # Get x-axis data based on plot_by parameter
+    if plot_by == 'time':
+        x_data = df_group_averages.index
+        x_min, x_max = x_data.min(), x_data.max()
+        x_label = 'Year'
+    elif plot_by == 'luminosity':
+        x_data = df_group_averages['integrated_luminosity']
+        x_min, x_max = x_data.min(), x_data.max()
+        x_label = 'Integrated Luminosity (fb$^{-1}$)'
+    else:
+        raise ValueError(f"Unknown plot_by value: {plot_by}")
+    
     for group in group_names:
         sim_col = f"sim_{group}"
         real_col = f"real_{group}"
@@ -130,13 +143,13 @@ def plot_group_averages(df_group_averages):
         
         if sim_col in df_group_averages:
             sim_data = df_group_averages[sim_col]
-            ax_main.plot(df_group_averages.index, sim_data, color=SIMULATED_DATA_COLOR, linewidth=LINE_WIDTH, label='Simulated')
+            ax_main.plot(x_data, sim_data, color=SIMULATED_DATA_COLOR, linewidth=LINE_WIDTH, label='Simulated')
             
             # Dodajemy band dla odchylenia standardowego
             if f'sim_{group}_std' in df_group_averages:
                 std_data = df_group_averages[f'sim_{group}_std']
                 ax_main.fill_between(
-                    df_group_averages.index,
+                    x_data,
                     sim_data - std_data,
                     sim_data + std_data,
                     color=ERROR_BAND_COLOR,
@@ -146,10 +159,11 @@ def plot_group_averages(df_group_averages):
         
         if real_col in df_group_averages:
             real_data = df_group_averages[real_col]
-            ax_main.scatter(df_group_averages.index, real_data, color=REAL_DATA_COLOR, s=SCATTER_MARKER_SIZE, label='Measured')
+            ax_main.scatter(x_data, real_data, color=REAL_DATA_COLOR, s=SCATTER_MARKER_SIZE, label='Measured')
         
         # ax_main.set_title(f'Group: {group}')
         ax_main.set_ylabel('Average Leakage Current [mA]')
+        ax_main.set_xlabel(x_label)
         ax_main.set_xlim(x_min, x_max)
         ax_main.set_ylim(y_min, y_max)
         ax_main.grid(True)
@@ -179,7 +193,7 @@ def plot_group_averages(df_group_averages):
                 real_val = real_data.loc[idx]
                 if not np.isnan(sim_val) and not np.isnan(real_val) and real_val != 0:
                     ratio_values.append(sim_val / real_val)
-                    x_values.append(idx)
+                    x_values.append(x_data.loc[idx])
             
             if x_values:  # Only proceed if we have ratio data
                 # Plot ratio
@@ -188,10 +202,11 @@ def plot_group_averages(df_group_averages):
                 
                 # Set ratio plot labels and grid
                 ax_ratio.set_ylabel('Sim/Meas')
-                ax_ratio.set_xlabel('Year')
+                ax_ratio.set_xlabel(x_label)
             # Obróć etykiety na osi X o 45 stopni
             for label in ax_ratio.get_xticklabels():
                 label.set_rotation(45)
+                label.set_ha('right')
                 ax_ratio.grid(True)
                 
                 # Double density grid on y axis for ratio plot - spójnie z głównym wykresem
@@ -268,6 +283,9 @@ def get_group_averages(df: pd.DataFrame, sensors: list):
             result[f"real_{group_label}"] = df[real_cols].mean(axis=1)
     if result:
         out_df = pd.DataFrame(result, index=df.index)
+        # Dodaj kolumnę integrated_luminosity jeśli istnieje w wejściowym DataFrame'u
+        if 'integrated_luminosity' in df.columns:
+            out_df['integrated_luminosity'] = df['integrated_luminosity']
         return out_df
     else:
         return pd.DataFrame(index=df.index)
@@ -1043,7 +1061,7 @@ def plot_currents_vs_position(summary_df: pd.DataFrame, target_luminosities: lis
     fig, ax = plt.subplots(figsize=(8, 6))
     
     markers = ['o', '^', 's', 'D']
-    colors = ['blue', 'red', 'green', 'purple']
+    colors = ['blue', 'green', 'purple','red',]
     
     for i, target_lumi in enumerate(target_luminosities):
         lumi_str = f'_f{target_lumi:.1f}'
