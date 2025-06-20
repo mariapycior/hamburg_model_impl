@@ -20,15 +20,18 @@ def get_sensor_position(sensor_code):
         print(f"Error getting sensor position for {sensor_code}: {e}")
         return None
 
-def get_sensor_number(sensor_code):
-    """Get sensor number and position from sensor code using VeloDetectorElement."""
+def get_sensor_number(sensor_code, for_legend=True):
+    """Get sensor number and position from sensor code using VeloDetectorElement.
+    If for_legend is True, include position with 'mm' in position string."""
     try:
         velo_det = VeloDetectorElement()
         sensor_key = (sensor_code, 'HV')
         if sensor_key in velo_det.__members__['__Velo_Det__']:
             sensor_num = velo_det.__members__['__Velo_Det__'][sensor_key][1]
-            z_position = velo_det.__members__['__Velo_Det__'][sensor_key][2]
-            return f"{sensor_num} (z={z_position:.0f}mm)"
+            if for_legend:
+                z_position = velo_det.__members__['__Velo_Det__'][sensor_key][2]
+                return f"{sensor_num} (z={z_position:.0f}mm)"
+            return str(sensor_num)
         return sensor_code  # Return original code if not found
     except Exception as e:
         print(f"Error getting sensor number for {sensor_code}: {e}")
@@ -347,7 +350,7 @@ def plot_simulated_vs_real(df: pd.DataFrame, sensor_name, output_path: str = Non
             real_data = temp_df[real_col].dropna()
             if not real_data.empty:
                 # Użyj numeru sensora zamiast pełnej nazwy
-                sensor_num = get_sensor_number(sensor)
+                sensor_num = get_sensor_number(sensor, for_legend=True)
                 ax.scatter(real_data.index, real_data, 
                            color=dark_color, s=SCATTER_MARKER_SIZE, 
                            label=None, zorder=DATA_ZORDER)
@@ -729,7 +732,7 @@ def plot_currents_vs_parameter(df: pd.DataFrame, sensor_name, param_type: str = 
                     real_data_by_sensor[sensor] = {'param': df_real[sensor_param_col].values, 'current': df_real[real_col].values}
                     
                     # Użyj numeru sensora zamiast pełnej nazwy
-                    sensor_num = get_sensor_number(sensor)
+                    sensor_num = get_sensor_number(sensor, for_legend=True)
                     ax.scatter(df_real[sensor_param_col], df_real[real_col], 
                               color=dark_color, s=SCATTER_MARKER_SIZE, 
                               label=None, zorder=DATA_ZORDER)
@@ -773,7 +776,7 @@ def plot_currents_vs_parameter(df: pd.DataFrame, sensor_name, param_type: str = 
                         )
                     
                     # Użyj numeru sensora zamiast pełnej nazwy
-                    sensor_num = get_sensor_number(sensor)
+                    sensor_num = get_sensor_number(sensor, for_legend=True)
                     if use_line_plot:
                         ax.plot(df_sim[sensor_param_col], df_sim[sim_col], 
                                color=medium_color, linewidth=LINE_WIDTH, 
@@ -788,12 +791,12 @@ def plot_currents_vs_parameter(df: pd.DataFrame, sensor_name, param_type: str = 
     # Tytuł z numerami sensorów
     if isinstance(sensor_name, list):
         # Użyj numerów sensorów w tytule dla wielu sensorów
-        sensor_numbers = [get_sensor_number(s) for s in sensor_name]
+        sensor_numbers = [get_sensor_number(s, for_legend=False) for s in sensor_name]
         sensor_numbers_str = ', '.join(sensor_numbers)
         ax.set_title(f'Leakage Current vs {title_param} for Sensors {sensor_numbers_str}', fontsize=10)
     else:
         # Dla pojedynczego sensora
-        sensor_num = get_sensor_number(sensor_name)
+        sensor_num = get_sensor_number(sensor_name, for_legend=False)
         ax.set_title(f'Leakage Current vs {title_param} for Sensor {sensor_num}', fontsize=10)
     ax.grid(True)
     ax.minorticks_on()
