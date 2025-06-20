@@ -51,14 +51,16 @@ def add_parameter_info(ax, loc='upper left'):
     timestep = pd.to_timedelta(SIMULATION_PERIOD.lower()).total_seconds() / 3600
     
     param_text = (
-        f"$\sigma$ (7 TeV), $\sigma$ (13 TeV) = {CROSS_SECTIONS}\n"
+        #f"$\sigma$ (7 TeV), $\sigma$ (13 TeV) = {CROSS_SECTIONS}\n"
         f"$\\alpha_I$: {params.alpha_I:.2e} A/cm\n"
         f"$\\alpha_0^*$: {params.alpha_0_star:.2e} A/cm\n"
         f"$\\beta$: {params.beta:.2e} A/cm\n"
         f"$E_I$: {params.E_I:.2f} eV\n"
         f"$V$: {params.V:.3f} cm$^3$\n"
         f"$E_{{eff}}$: {params.E_eff:.2f} eV\n"
-        f"Simulation timestep: {timestep:.1f} h"
+        f"Simulation timestep: {timestep:.1f} h\n"
+        f"Thermistor: NTC{NTC}\n"
+        f"{'Recorded' if LUMINOSITY == 'recorded' else 'Delivered'} Luminosity"
     )
     
     # Add resampling period information
