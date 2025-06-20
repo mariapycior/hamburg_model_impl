@@ -8,20 +8,32 @@ from params import Parameters
 from config import SIMULATION_PERIOD, TEMPERATURE_CORRECTION_ENABLED, TEMPERATURE_CORRECTION_DELTA, CROSS_SECTIONS
 from VeloDetectorElement import VeloDetectorElement
 
-def get_sensor_number(sensor_code):
-    """Get sensor number from sensor code using VeloDetectorElement."""
+def get_sensor_position(sensor_code):
+    """Get sensor position (Z coordinate) from sensor code using VeloDetectorElement."""
     try:
         velo_det = VeloDetectorElement()
-        # The sensor code is assumed to be in format like 'VL01_CT' or 'PU02_AB'
-        # We need to add 'HV' to match the key format in VeloDetectorElement
         sensor_key = (sensor_code, 'HV')
         if sensor_key in velo_det.__members__['__Velo_Det__']:
-            # Sensor number is at index 1
-            return str(velo_det.__members__['__Velo_Det__'][sensor_key][1])
+            return velo_det.__members__['__Velo_Det__'][sensor_key][2]
+        return None  # Return None if position not found
+    except Exception as e:
+        print(f"Error getting sensor position for {sensor_code}: {e}")
+        return None
+
+def get_sensor_number(sensor_code):
+    """Get sensor number and position from sensor code using VeloDetectorElement."""
+    try:
+        velo_det = VeloDetectorElement()
+        sensor_key = (sensor_code, 'HV')
+        if sensor_key in velo_det.__members__['__Velo_Det__']:
+            sensor_num = velo_det.__members__['__Velo_Det__'][sensor_key][1]
+            z_position = velo_det.__members__['__Velo_Det__'][sensor_key][2]
+            return f"{sensor_num} (z={z_position:.0f}mm)"
         return sensor_code  # Return original code if not found
     except Exception as e:
         print(f"Error getting sensor number for {sensor_code}: {e}")
         return sensor_code  # Return original code on error
+
 from config_plot import (
     CURRENT_TEMP_MODE, REFERENCE_TEMPERATURE,
     USE_LINES_FOR_SIMULATION, SHOW_ERROR_BANDS, ERROR_PERCENTAGE, PLOT_RESAMPLING_PERIOD,
