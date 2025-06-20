@@ -34,6 +34,8 @@ def plot_group_averages(df_group_averages):
     for col in df_group_averages.columns:
         if col.startswith('sim_') and not col.endswith('_std'):
             group_names.append(col[4:])
+    # Limit to first 3 groups
+    group_names = group_names[:3]
     n_groups = len(group_names)
     if n_groups == 0:
         print("No data to plot group averages.")
