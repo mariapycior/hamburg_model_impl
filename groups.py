@@ -80,61 +80,47 @@ sensors_type_b = [
 ]
 
 # Sensors grouped by z-position ranges
-# Legend: "z < -200cm"
-sensors_z_lt_m200 = [
-    'PU01_AT', 'PU01_CT', 'PU02_AB', 'PU02_CB'
-]
-
-# Legend: "z = [-200cm,-100cm]"
-sensors_z_m200_m100 = [
+# Legend: "z ≤ -50cm"
+sensors_z_le_m50 = [
+    'PU01_AT', 'PU01_CT', 'PU02_AB', 'PU02_CB',
     'VL01_AT', 'VL01_AB', 'VL01_CT', 'VL01_CB',
     'VL02_AT', 'VL02_AB', 'VL02_CT', 'VL02_CB',
     'VL03_AT', 'VL03_AB', 'VL03_CT', 'VL03_CB'
 ]
 
-# Legend: "z = [-100cm,0cm]"
-sensors_z_m100_0 = [
+# Legend: "z = (-50cm, 150cm]"
+sensors_z_m50_150 = [
     'VL04_AT', 'VL04_AB', 'VL04_CT', 'VL04_CB',
     'VL05_AT', 'VL05_AB', 'VL05_CT', 'VL05_CB',
-    'VL06_AT', 'VL06_AB', 'VL06_CT', 'VL06_CB'
-]
-
-# Legend: "z = [0cm,100cm]"
-sensors_z_0_100 = [
+    'VL06_AT', 'VL06_AB', 'VL06_CT', 'VL06_CB',
     'VL07_AT', 'VL07_AB', 'VL07_CT', 'VL07_CB',
-    'VL08_AT', 'VL08_AB', 'VL08_CT', 'VL08_CB',
-    'VL09_AT', 'VL09_AB', 'VL09_CT', 'VL09_CB',
-    'VL10_AT', 'VL10_AB', 'VL10_CT', 'VL10_CB'
+    'VL08_AT', 'VL08_AB', 'VL08_CT', 'VL08_CB'
 ]
 
-# Legend: "z = [100cm,200cm]"
-sensors_z_100_200 = [
+# Legend: "z = (150cm, 300cm]"
+sensors_z_150_300 = [
     'VL11_AT', 'VL11_AB', 'VL11_CT', 'VL11_CB',
     'VL12_AT', 'VL12_AB', 'VL12_CT', 'VL12_CB',
-    'VL13_AT', 'VL13_AB', 'VL13_CT', 'VL13_CB'
-]
-
-# Legend: "z = [200cm,300cm]"
-sensors_z_200_300 = [
+    'VL13_AT', 'VL13_AB', 'VL13_CT', 'VL13_CB',
     'VL14_AT', 'VL14_AB', 'VL14_CT', 'VL14_CB',
     'VL15_AT', 'VL15_AB', 'VL15_CT', 'VL15_CB',
     'VL16_AT', 'VL16_AB', 'VL16_CT', 'VL16_CB'
 ]
 
-# Legend: "z = [300cm,500cm]"
+# Legend: "z = (3000mm, 5000mm]"
 sensors_z_300_500 = [
     'VL19_AT', 'VL19_AB', 'VL19_CT', 'VL19_CB'
 ]
 
-# Legend: "z = [500cm,700cm]"
+# Legend: "z = (5000mm, 7000mm]"
 sensors_z_500_700 = [
     'VL22_AT', 'VL22_AB', 'VL22_CT', 'VL22_CB',
-    'VL23_AT', 'VL23_AB', 'VL23_CT', 'VL23_CB',
-    'VL24_AT', 'VL24_AB', 'VL24_CT', 'VL24_CB'
+    'VL23_AT', 'VL23_AB', 'VL23_CT', 'VL23_CB'
 ]
 
-# Legend: "z ≥ 700cm"
-sensors_z_ge_700 = [
+# Legend: "z > 7000mm"
+sensors_z_gt_700 = [
+    'VL24_AT', 'VL24_AB', 'VL24_CT', 'VL24_CB',
     'VL25_AT', 'VL25_AB', 'VL25_CT', 'VL25_CB'
 ]
 
@@ -152,22 +138,16 @@ legend_texts = {
     'sensors_r_side_c': "R-type, C-side",
     'sensors_phi_side_a': "Phi-type, A-side",
     'sensors_phi_side_c': "Phi-type, C-side",
-    'sensors_r': "R-type sensors",
-    'sensors_phi': "Phi-type sensors",
     'sensors_side_a': "Side A",
     'sensors_side_c': "Side C",
-    'sensors_type_t': "(T) sensors",
-    'sensors_type_b': "(B) sensors",
-    'sensors_z_lt_m200': "z < -200cm",
-    'sensors_z_m200_m100': "z = [-200cm,-100cm]",
-    'sensors_z_m100_0': "z = [-100cm,0cm]",
-    'sensors_z_0_100': "z = [0cm,100cm]",
-    'sensors_z_100_200': "z = [100cm,200cm]",
-    'sensors_z_200_300': "z = [200cm,300cm]",
-    'sensors_z_300_500': "z = [300cm,500cm]",
-    'sensors_z_500_700': "z = [500cm,700cm]",
-    'sensors_z_ge_700': "z ≥ 700cm",
-    'vl02_ct_sensors': "VL02_CT"
+    'sensors_type_t': "Top (T) sensors",
+    'sensors_type_b': "Bottom (B) sensors",
+    'sensors_z_le_m50': "z ≤ -50mm",
+    'sensors_z_m50_150': "z = (-50mm, 150mm]",
+    'sensors_z_150_300': "z = (150mm, 300mm]",
+    'sensors_z_300_500': "z = (300mm, 500mm]",
+    'sensors_z_500_700': "z = (500mm, 700mm]",
+    'sensors_z_gt_700': "z > 700mm"
 }
 
 # Grouping mode definitions
@@ -199,15 +179,12 @@ group_modes = {
     'z_position': {
         'title': "Sensors by Z Position",
         'groups': [
-            (sensors_z_lt_m200, "z < -200cm", 0),
-            (sensors_z_m200_m100, "z = [-200cm,-100cm]", 1),
-            (sensors_z_m100_0, "z = [-100cm,0cm]", 2),
-            (sensors_z_0_100, "z = [0cm,100cm]", 3),
-            (sensors_z_100_200, "z = [100cm,200cm]", 4),
-            (sensors_z_200_300, "z = [200cm,300cm]", 5),
-            (sensors_z_300_500, "z = [300cm,500cm]", 6),
-            (sensors_z_500_700, "z = [500cm,700cm]", 7),
-            (sensors_z_ge_700, "z ≥ 700cm", 8)
+            (sensors_z_le_m50, "z ≤ -50mm", 0),
+            (sensors_z_m50_150, "z = (-50mm, 150mm]", 1),
+            (sensors_z_150_300, "z = (150mm, 300mm]", 2),
+            (sensors_z_300_500, "z = (300mm, 500mm]", 3),
+            (sensors_z_500_700, "z = (500mm, 700mm]", 4),
+            (sensors_z_gt_700, "z > 700mm", 5)
         ]
     },
     'none': {
