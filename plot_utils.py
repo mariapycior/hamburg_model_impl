@@ -5,7 +5,7 @@ import pandas as pd
 import numpy as np
 import re
 from params import Parameters
-from config import SIMULATION_PERIOD, TEMPERATURE_CORRECTION_ENABLED, TEMPERATURE_CORRECTION_DELTA, CROSS_SECTIONS
+from config import SIMULATION_PERIOD, NTC, LUMINOSITY, TEMPERATURE_CORRECTION_ENABLED, TEMPERATURE_CORRECTION_DELTA, CROSS_SECTIONS
 from VeloDetectorElement import VeloDetectorElement
 
 def get_sensor_position(sensor_code):
