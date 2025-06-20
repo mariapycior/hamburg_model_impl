@@ -3,6 +3,11 @@ import matplotlib.pyplot as plt
 import pandas as pd
 import numpy as np
 from params import Parameters
+from config_plot import (
+    FIT_LUMINOSITY_RANGES, SIMULATION_LINE_COLOR, MEASUREMENT_LINE_COLOR,
+    SIMULATION_LINE_WIDTH, MEASUREMENT_LINE_WIDTH,
+    SIMULATION_TEXT_OFFSET, MEASUREMENT_TEXT_OFFSET
+)
 from config import SIMULATION_PERIOD, NTC, LUMINOSITY, TEMPERATURE_CORRECTION_ENABLED, TEMPERATURE_CORRECTION_DELTA, CROSS_SECTIONS
 from config_plot import (
     CURRENT_TEMP_MODE, REFERENCE_TEMPERATURE,
@@ -124,6 +129,35 @@ def plot_group_averages(df_group_averages, plot_by='time'):
                 if not np.isnan(sim_val) and not np.isnan(real_val) and real_val != 0:
                     all_ratio_values.append(sim_val / real_val)
     
+    def plot_linear_fit(ax, x_data, y_data, is_simulation, alpha=1.0):
+        """Dodaje dopasowanie liniowe do wykresu"""
+        for fit_range in FIT_LUMINOSITY_RANGES:
+            mask = (x_data >= fit_range['range'][0]) & (x_data <= fit_range['range'][1])
+            valid_mask = mask & ~np.isnan(y_data)
+            
+            if valid_mask.sum() >= 2:
+                x_valid = x_data[valid_mask]
+                y_valid = y_data[valid_mask]
+                
+                # Dopasuj linię z wyrazem wolnym
+                slope, intercept = np.polyfit(x_valid, y_valid, 1)
+                fit_line = slope * x_valid + intercept
+                
+                # Narysuj dopasowaną linię
+                ax.plot(x_valid, fit_line,
+                        color=SIMULATION_LINE_COLOR if is_simulation else MEASUREMENT_LINE_COLOR,
+                        alpha=alpha,
+                        linewidth=SIMULATION_LINE_WIDTH if is_simulation else MEASUREMENT_LINE_WIDTH)
+                
+                # Dodaj tekst z wartością nachylenia
+                text_x = x_valid.iloc[-1]
+                text_y = fit_line.iloc[-1] + (SIMULATION_TEXT_OFFSET if is_simulation else MEASUREMENT_TEXT_OFFSET)
+                ax.text(text_x, text_y, f'{slope:.4f} mA/fb-1',
+                        color=SIMULATION_LINE_COLOR if is_simulation else MEASUREMENT_LINE_COLOR,
+                        fontsize=8,
+                        fontweight='bold',
+                        verticalalignment='bottom')
+
     for i, group in enumerate(group_names):
         sim_col = f"sim_{group}"
         real_col = f"real_{group}"
@@ -158,14 +192,22 @@ def plot_group_averages(df_group_averages, plot_by='time'):
                     alpha=ERROR_BAND_ALPHA,
                     label='Sim ± std'
                 )
+            
+            # Dodaj dopasowanie liniowe dla danych symulowanych
+            if plot_by == 'luminosity':
+                plot_linear_fit(ax_main, df_group_averages['integrated_luminosity'],
+                               df_group_averages['sim_all'], True, alpha=0.5)
         
         if real_col in df_group_averages:
             real_data = df_group_averages[real_col]
-            ax_main.scatter(x_data, real_data, color=REAL_DATA_COLOR, s=SCATTER_MARKER_SIZE, label='Measured')
+            ax_main.scatter(x_data, real_data, color=MEASUREMENT_LINE_COLOR, s=SCATTER_MARKER_SIZE, label='Measured')
+            
+            # Sprawdź, czy mamy dane rzeczywiste
+            if real_col in df_group_averages and not df_group_averages[real_col].isna().all():
+                plot_linear_fit(ax_main, df_group_averages['integrated_luminosity'],
+                               df_group_averages['real_all'], False, alpha=0.5)
         
-        # ax_main.set_title(f'Group: {group}')
         ax_main.set_ylabel('Average Leakage Current [mA]')
-        # Usuwamy etykietę z głównego wykresu, zostawiając tylko na wykresie ratio
         ax_main.set_xlim(x_min, x_max)
         ax_main.set_ylim(y_min, y_max)
         ax_main.grid(True)
@@ -203,18 +245,13 @@ def plot_group_averages(df_group_averages, plot_by='time'):
             
             if x_values:  # Only proceed if we have ratio data
                 # Plot ratio
-                ax_ratio.scatter(x_values, ratio_values, color='black', s=SCATTER_MARKER_SIZE, alpha=0.7)
-                ax_ratio.axhline(y=1.0, color='gray', linestyle='-', alpha=0.7)  # Solid reference line at ratio = 1
+                ax_ratio.plot(x_values, ratio_values, color='gray', marker='o', markersize=2, linestyle='none')
+                ax_ratio.axhline(y=1.0, color='gray', linestyle='--', alpha=0.5)  # Solid reference line at ratio = 1
                 
                 # Set ratio plot labels and grid
-                ax_ratio.set_ylabel('Sim/Meas')
-                ax_ratio.set_xlabel(x_label, fontsize=10)  # Dodajemy rozmiar czcionki dla lepszej czytelności
-            # Obróć etykiety na osi X o 45 stopni
-            for label in ax_ratio.get_xticklabels():
-                label.set_rotation(45)
-                label.set_ha('right')
-                ax_ratio.grid(True)
-                
+                ax_ratio.set_ylabel('Sim/Real')
+                ax_ratio.set_ylim(0, 2)
+                ax_ratio.grid(True, linestyle=':', alpha=0.4)
                 # Double density grid on y axis for ratio plot - spójnie z głównym wykresem
                 ax_ratio.yaxis.set_minor_locator(mticker.AutoMinorLocator(2))
                 ax_ratio.grid(which='minor', axis='y', linestyle=':', alpha=0.4)
@@ -287,12 +324,13 @@ def get_group_averages(df: pd.DataFrame, sensors: list):
             result[f"sim_{group_label}_std"] = df[sim_cols].std(axis=1)
         if real_cols:
             result[f"real_{group_label}"] = df[real_cols].mean(axis=1)
+    
+    # Zawsze dodaj kolumnę integrated_luminosity jeśli istnieje w wejściowym DataFrame'u
+    if 'integrated_luminosity' in df.columns:
+        result['integrated_luminosity'] = df['integrated_luminosity']
+    
     if result:
-        out_df = pd.DataFrame(result, index=df.index)
-        # Dodaj kolumnę integrated_luminosity jeśli istnieje w wejściowym DataFrame'u
-        if 'integrated_luminosity' in df.columns:
-            out_df['integrated_luminosity'] = df['integrated_luminosity']
-        return out_df
+        return pd.DataFrame(result, index=df.index)
     else:
         return pd.DataFrame(index=df.index)
 
@@ -385,12 +423,18 @@ def get_sensor_number(sensor_code):
 
 def setup_subplot(ax, x_data, y_data, color, label, title, ylabel, xlim, ylim=None, use_line=None, show_error_band=None, is_current_plot=False, force_no_error=False):
     use_line = USE_LINES_FOR_SIMULATION if use_line is None else use_line
-    show_error_band = SHOW_ERROR_BANDS if show_error_band is None else show_error_band
+    # Ustawienie przezroczystości dla paska błędu
+    alpha = 0.5 if SHOW_ERROR_BANDS else 0
     if force_no_error:
         show_error_band = False
     # Naprawiony błąd - tworzymy serię z odpowiednimi indexami
     y_data_series = pd.Series(y_data, index=pd.RangeIndex(len(y_data)))
     y_data_series = y_data_series.sort_index()
+    # Dodaj pasek błędu dla danych rzeczywistych
+    if show_error_band and not force_no_error:
+        ax.fill_between(x_data.index, y_data - y_data * ERROR_PERCENTAGE / 100,
+                       y_data + y_data * ERROR_PERCENTAGE / 100, alpha=0.5,
+                       color=color[2], edgecolor='none')
     if use_line and show_error_band and is_current_plot:
         error_value = y_data_series * (ERROR_PERCENTAGE / 100)
         ax.fill_between(
@@ -1022,6 +1066,8 @@ def plot_all_currents_vs_luminosity(df: pd.DataFrame, sensors: list, output_dir:
             sensor_number = get_sensor_number(sensor)
             real_col = f"real_current_{sensor}"
             ax.plot(real_data['integrated_luminosity'], real_data[real_col], linewidth=LINE_WIDTH, label=f"Sensor {sensor_number}", zorder=DATA_ZORDER)
+            
+
         
         add_parameter_info(ax)
         
