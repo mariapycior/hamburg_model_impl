@@ -118,6 +118,7 @@ def plot_group_averages(df_group_averages):
         # Add subplot title with group name
         if group == 'all':
             ax_main.set_title('Mean Values from All Sensors', fontsize=10)
+            add_parameter_info(ax_main, loc='upper left')
         else:
             ax_main.set_title(f'Group: {group}', fontsize=10)
         
@@ -143,7 +144,7 @@ def plot_group_averages(df_group_averages):
         
         if real_col in df_group_averages:
             real_data = df_group_averages[real_col]
-            ax_main.scatter(df_group_averages.index, real_data, color=REAL_DATA_COLOR, s=SCATTER_MARKER_SIZE, label='Measured Average')
+            ax_main.scatter(df_group_averages.index, real_data, color=REAL_DATA_COLOR, s=SCATTER_MARKER_SIZE, label='Measured')
         
         # ax_main.set_title(f'Group: {group}')
         ax_main.set_ylabel('Average Leakage Current [mA]')
@@ -271,14 +272,14 @@ def add_parameter_info(ax, loc='upper left'):
     timestep = pd.to_timedelta(SIMULATION_PERIOD.lower()).total_seconds() / 3600
     
     param_text = (
-        f"$\\sigma$ (7 TeV), $\\sigma$ (13 TeV) = {CROSS_SECTIONS}\n"
+        f"$\sigma$ (7 TeV), $\sigma$ (13 TeV) = {CROSS_SECTIONS}\n"
         f"$\\alpha_I$: {params.alpha_I:.2e} A/cm\n"
         f"$\\alpha_0^*$: {params.alpha_0_star:.2e} A/cm\n"
         f"$\\beta$: {params.beta:.2e} A/cm\n"
         f"$E_I$: {params.E_I:.2f} eV\n"
         f"$V$: {params.V:.3f} cm$^3$\n"
         f"$E_{{eff}}$: {params.E_eff:.2f} eV\n"
-        f"Timestep: {timestep:.1f} h"
+        f"Simulation timestep: {timestep:.1f} h"
     )
     
     # Add resampling period information
@@ -298,9 +299,9 @@ def add_parameter_info(ax, loc='upper left'):
     
     temp_info = ""
     if CURRENT_TEMP_MODE == 'adjust_real':
-        temp_info = "Adjusted real to sim. temperature"
+        temp_info = "Adjusted meas. to ref. temperature"
     elif CURRENT_TEMP_MODE == 'adjust_sim':
-        temp_info = "Adjusted sim. to real temperature"
+        temp_info = "Adjusted ref. to meas. temperature"
     elif CURRENT_TEMP_MODE == 'adjust_both':
         temp_info = f"Adjusted both to {REFERENCE_TEMPERATURE:.2f} K"
     
@@ -332,6 +333,7 @@ def add_parameter_info(ax, loc='upper left'):
     
     ax.text(x, y, param_text, transform=ax.transAxes, fontsize=8,
             verticalalignment=valign, horizontalalignment=halign, bbox=props)
+
 
 
 def get_sensor_number(sensor_code):
