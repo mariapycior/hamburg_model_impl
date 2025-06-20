@@ -3,7 +3,7 @@ import matplotlib.pyplot as plt
 import pandas as pd
 import numpy as np
 from params import Parameters
-from config import SIMULATION_PERIOD, TEMPERATURE_CORRECTION_ENABLED, TEMPERATURE_CORRECTION_DELTA, CROSS_SECTIONS
+from config import SIMULATION_PERIOD, NTC, LUMINOSITY, TEMPERATURE_CORRECTION_ENABLED, TEMPERATURE_CORRECTION_DELTA, CROSS_SECTIONS
 from config_plot import (
     CURRENT_TEMP_MODE, REFERENCE_TEMPERATURE,
     USE_LINES_FOR_SIMULATION, SHOW_ERROR_BANDS, ERROR_PERCENTAGE, PLOT_RESAMPLING_PERIOD,
@@ -69,7 +69,7 @@ def plot_group_averages(df_group_averages, plot_by='time'):
     elif plot_by == 'luminosity':
         x_data = df_group_averages['integrated_luminosity']
         x_min, x_max = x_data.min(), x_data.max()
-        x_label = 'Integrated Luminosity (fb$^{-1}$)'
+        x_label = 'Integrated Luminosity [fb$^{-1}$]'
     else:
         raise ValueError(f"Unknown plot_by value: {plot_by}")
     
@@ -117,8 +117,10 @@ def plot_group_averages(df_group_averages, plot_by='time'):
             common_index = sim_data.index.intersection(real_data.index)
             
             for idx in common_index:
-                sim_val = sim_data.loc[idx]
-                real_val = real_data.loc[idx]
+                # Naprawiony błąd - używamy iloc dla Series
+                # Naprawiony błąd - używamy iloc z get_loc
+                sim_val = sim_data.iloc[sim_data.index.get_loc(idx)]
+                real_val = real_data.iloc[real_data.index.get_loc(idx)]
                 if not np.isnan(sim_val) and not np.isnan(real_val) and real_val != 0:
                     all_ratio_values.append(sim_val / real_val)
     
@@ -163,7 +165,7 @@ def plot_group_averages(df_group_averages, plot_by='time'):
         
         # ax_main.set_title(f'Group: {group}')
         ax_main.set_ylabel('Average Leakage Current [mA]')
-        ax_main.set_xlabel(x_label)
+        # Usuwamy etykietę z głównego wykresu, zostawiając tylko na wykresie ratio
         ax_main.set_xlim(x_min, x_max)
         ax_main.set_ylim(y_min, y_max)
         ax_main.grid(True)
@@ -193,7 +195,11 @@ def plot_group_averages(df_group_averages, plot_by='time'):
                 real_val = real_data.loc[idx]
                 if not np.isnan(sim_val) and not np.isnan(real_val) and real_val != 0:
                     ratio_values.append(sim_val / real_val)
-                    x_values.append(x_data.loc[idx])
+                    # Dla czasu używamy idx bezpośrednio, dla luminosy używamy wartości z x_data
+                    if plot_by == 'time':
+                        x_values.append(idx)
+                    else:
+                        x_values.append(x_data.loc[idx])
             
             if x_values:  # Only proceed if we have ratio data
                 # Plot ratio
@@ -202,7 +208,7 @@ def plot_group_averages(df_group_averages, plot_by='time'):
                 
                 # Set ratio plot labels and grid
                 ax_ratio.set_ylabel('Sim/Meas')
-                ax_ratio.set_xlabel(x_label)
+                ax_ratio.set_xlabel(x_label, fontsize=10)  # Dodajemy rozmiar czcionki dla lepszej czytelności
             # Obróć etykiety na osi X o 45 stopni
             for label in ax_ratio.get_xticklabels():
                 label.set_rotation(45)
@@ -295,14 +301,16 @@ def add_parameter_info(ax, loc='upper left'):
     timestep = pd.to_timedelta(SIMULATION_PERIOD.lower()).total_seconds() / 3600
     
     param_text = (
-        f"$\sigma$ (7 TeV), $\sigma$ (13 TeV) = {CROSS_SECTIONS}\n"
+        #f"$\sigma$ (7 TeV), $\sigma$ (13 TeV) = {CROSS_SECTIONS}\n"
         f"$\\alpha_I$: {params.alpha_I:.2e} A/cm\n"
         f"$\\alpha_0^*$: {params.alpha_0_star:.2e} A/cm\n"
         f"$\\beta$: {params.beta:.2e} A/cm\n"
         f"$E_I$: {params.E_I:.2f} eV\n"
         f"$V$: {params.V:.3f} cm$^3$\n"
         f"$E_{{eff}}$: {params.E_eff:.2f} eV\n"
-        f"Simulation timestep: {timestep:.1f} h"
+        f"Simulation timestep: {timestep:.1f} h\n"
+        f"Thermistor: NTC{NTC}\n"
+        f"{'Recorded' if LUMINOSITY == 'recorded' else 'Delivered'} Luminosity"
     )
     
     # Add resampling period information
@@ -354,7 +362,7 @@ def add_parameter_info(ax, loc='upper left'):
         x, y = 0.98, 0.02
         halign, valign = 'right', 'bottom'
     
-    ax.text(x, y, param_text, transform=ax.transAxes, fontsize=8,
+    ax.text(x, y, param_text, transform=ax.transAxes, fontsize=7,
             verticalalignment=valign, horizontalalignment=halign, bbox=props)
 
 
@@ -380,7 +388,8 @@ def setup_subplot(ax, x_data, y_data, color, label, title, ylabel, xlim, ylim=No
     show_error_band = SHOW_ERROR_BANDS if show_error_band is None else show_error_band
     if force_no_error:
         show_error_band = False
-    y_data_series = pd.Series(y_data, index=x_data)
+    # Naprawiony błąd - tworzymy serię z odpowiednimi indexami
+    y_data_series = pd.Series(y_data, index=pd.RangeIndex(len(y_data)))
     y_data_series = y_data_series.sort_index()
     if use_line and show_error_band and is_current_plot:
         error_value = y_data_series * (ERROR_PERCENTAGE / 100)
@@ -993,7 +1002,7 @@ def plot_all_currents_vs_luminosity(df: pd.DataFrame, sensors: list, output_dir:
         
         add_parameter_info(ax)
         
-        ax.set_xlabel('Integrated Luminosity (fb$^{-1}$)')
+        ax.set_xlabel('Integrated Luminosity [fb$^{-1}$]')
         # Obróć etykiety na osi X o 45 stopni
         for label in ax.get_xticklabels():
             label.set_rotation(45)
@@ -1016,7 +1025,7 @@ def plot_all_currents_vs_luminosity(df: pd.DataFrame, sensors: list, output_dir:
         
         add_parameter_info(ax)
         
-        ax.set_xlabel('Integrated Luminosity (fb$^{-1}$)')
+        ax.set_xlabel('Integrated Luminosity [fb$^{-1}$]')
         # Obróć etykiety na osi X o 45 stopni
         for label in ax.get_xticklabels():
             label.set_rotation(45)
@@ -1039,7 +1048,7 @@ def plot_integrated_luminosity(df: pd.DataFrame):
         df['integrated_luminosity'].plot(zorder=DATA_ZORDER)
         plt.title('Integrated Luminosity vs Time')
         plt.xlabel('Time')
-        plt.ylabel('Integrated Luminosity (fb$^{-1}$)')
+        plt.ylabel('Integrated Luminosity [fb$^{-1}$]')
         plt.grid(True)
         
             
