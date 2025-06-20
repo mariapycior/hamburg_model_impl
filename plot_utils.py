@@ -187,6 +187,9 @@ def plot_group_averages(df_group_averages):
                 # Set ratio plot labels and grid
                 ax_ratio.set_ylabel('Sim/Meas')
                 ax_ratio.set_xlabel('Year')
+            # Obróć etykiety na osi X o 45 stopni
+            for label in ax_ratio.get_xticklabels():
+                label.set_rotation(45)
                 ax_ratio.grid(True)
                 
                 # Double density grid on y axis for ratio plot - spójnie z głównym wykresem
@@ -476,6 +479,9 @@ def plot_simulated_vs_real(df: pd.DataFrame, sensor_name: str):
     # Dodaj etykietę Year tylko jeśli nie ma ratio
     if not show_ratio:
         ax.set_xlabel('Year')
+        # Obróć etykiety na osi X o 45 stopni
+        for label in ax.get_xticklabels():
+            label.set_rotation(45)
     ax.grid(True)
     ax.legend()
     
@@ -494,6 +500,9 @@ def plot_simulated_vs_real(df: pd.DataFrame, sensor_name: str):
             # Set ratio plot labels and grid
             ax_ratio.set_ylabel('Sim/Meas')
             ax_ratio.set_xlabel('Year')
+            # Obróć etykiety na osi X o 45 stopni
+            for label in ax_ratio.get_xticklabels():
+                label.set_rotation(45)
             ax_ratio.grid(True, alpha=0.3)
             
             # Save reference to ratio axes for later checks
@@ -652,6 +661,9 @@ def plot_sensors_data(df: pd.DataFrame, sensors: list, column_prefix: str, title
     # Dodaj etykietę Year tylko jeśli nie ma ratio
     if not hasattr(plt.gcf(), 'ratio_axes') or not plt.gcf().ratio_axes:
         ax.set_xlabel('Year')
+        # Obróć etykiety na osi X o 45 stopni
+        for label in ax.get_xticklabels():
+            label.set_rotation(45)
     ax.set_title(title, fontsize=10)
     
     ax.grid(True)
@@ -755,6 +767,9 @@ def plot_currents_vs_parameter(df: pd.DataFrame, sensor_name: str, param_type: s
     if param_type == 'luminosity':
         param_col = "integrated_luminosity"
         x_label = 'Integrated Luminosity (fb$^{-1}$)'
+        # Obróć etykiety na osi X o 45 stopni
+        for label in ax.get_xticklabels():
+            label.set_rotation(45)
         title_param = 'Integrated Luminosity'
     else:  # fluence
         delivered_fluence_col = f"delivered_fluence_{sensor_name}"
@@ -762,6 +777,9 @@ def plot_currents_vs_parameter(df: pd.DataFrame, sensor_name: str, param_type: s
             return
         param_col = delivered_fluence_col
         x_label = 'Fluence (n/cm²)'
+        # Obróć etykiety na osi X o 45 stopni
+        for label in ax.get_xticklabels():
+            label.set_rotation(45)
         title_param = 'Cumulative Fluence'
     
     if param_col not in df.columns or (sim_col not in df.columns and real_col not in df.columns):
@@ -861,6 +879,9 @@ def plot_all_currents_vs_fluence(df: pd.DataFrame, sensors: list, output_dir: st
         add_parameter_info(ax)
         
         ax.set_xlabel('Fluence (n/cm²)')
+        # Obróć etykiety na osi X o 45 stopni
+        for label in ax.get_xticklabels():
+            label.set_rotation(45)
         ax.set_ylabel('Leakage Current (mA)')
         ax.set_xlim(x_min, x_max)
         ax.set_ylim(y_min, y_max)
@@ -882,6 +903,9 @@ def plot_all_currents_vs_fluence(df: pd.DataFrame, sensors: list, output_dir: st
         add_parameter_info(ax)
         
         ax.set_xlabel('Fluence (n/cm²)')
+        # Obróć etykiety na osi X o 45 stopni
+        for label in ax.get_xticklabels():
+            label.set_rotation(45)
         ax.set_ylabel('Leakage Current (mA)')
         ax.set_xlim(x_min, x_max)
         ax.set_ylim(y_min, y_max)
@@ -950,6 +974,9 @@ def plot_all_currents_vs_luminosity(df: pd.DataFrame, sensors: list, output_dir:
         add_parameter_info(ax)
         
         ax.set_xlabel('Integrated Luminosity (fb$^{-1}$)')
+        # Obróć etykiety na osi X o 45 stopni
+        for label in ax.get_xticklabels():
+            label.set_rotation(45)
         ax.set_ylabel('Leakage Current (mA)')
         ax.set_xlim(x_min, x_max)
         ax.set_ylim(y_min, y_max)
@@ -970,6 +997,9 @@ def plot_all_currents_vs_luminosity(df: pd.DataFrame, sensors: list, output_dir:
         add_parameter_info(ax)
         
         ax.set_xlabel('Integrated Luminosity (fb$^{-1}$)')
+        # Obróć etykiety na osi X o 45 stopni
+        for label in ax.get_xticklabels():
+            label.set_rotation(45)
         ax.set_ylabel('Leakage Current (mA)')
         ax.set_xlim(x_min, x_max)
         ax.set_ylim(y_min, y_max)
