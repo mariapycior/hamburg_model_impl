@@ -81,7 +81,7 @@ def add_parameter_info(ax, loc='upper left'):
         x, y = 0.98, 0.02
         halign, valign = 'right', 'bottom'
     
-    ax.text(x, y, param_text, transform=ax.transAxes, fontsize=8,
+    ax.text(x, y, param_text, transform=ax.transAxes, fontsize=7,
             verticalalignment=valign, horizontalalignment=halign, bbox=props)
 
 
@@ -786,13 +786,13 @@ def plot_currents_vs_position(summary_df: pd.DataFrame, target_luminosities: lis
         if sim_values is not None:
             ax.scatter(positions, sim_values, 
                       color=colors[color_idx], marker=markers[marker_idx],
-                      s=20, label=f'Sim @ {target_lumi} fb$^{{-1}}$', 
+                      s=15, label=f'Sim @ {target_lumi} fb$^{{-1}}$', 
                       zorder=10)
             
         if real_values is not None:
             ax.scatter(positions, real_values, 
                       edgecolor=colors[color_idx], marker=markers[marker_idx],
-                      facecolor='none', s=20, 
+                      facecolor='none', s=15, 
                       label=f'Meas @ {target_lumi} fb$^{{-1}}$', zorder=10)
     
     # Dodaj legendę
