@@ -112,7 +112,7 @@ def add_parameter_info(ax, loc='upper left'):
         x, y = 0.98, 0.02
         halign, valign = 'right', 'bottom'
     
-    ax.text(x, y, param_text, transform=ax.transAxes, fontsize=8,
+    ax.text(x, y, param_text, transform=ax.transAxes, fontsize=7,
             verticalalignment=valign, horizontalalignment=halign, bbox=props)
 
 
