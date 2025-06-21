@@ -245,7 +245,7 @@ def plot_group_averages(df_group_averages, plot_by='time'):
             
             if x_values:  # Only proceed if we have ratio data
                 # Plot ratio
-                ax_ratio.plot(x_values, ratio_values, color='gray', marker='o', markersize=2, linestyle='none')
+                ax_ratio.plot(x_values, ratio_values, color='black', marker='o', markersize=2, linestyle='none')
                 ax_ratio.axhline(y=1.0, color='gray', linestyle='--', alpha=0.5)  # Solid reference line at ratio = 1
                 
                 # Set ratio plot labels and grid
