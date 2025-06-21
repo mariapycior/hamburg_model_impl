@@ -763,7 +763,7 @@ def plot_currents_vs_position(summary_df: pd.DataFrame, target_luminosities: lis
         target_luminosities: List of target luminosity values used for the plot
         output_path: Optional path to save the plot
     """
-    fig, ax = plt.subplots(figsize=(5, 5))
+    fig, ax = plt.subplots(figsize=(7, 5))
     
     markers = ['o', '^', 's', 'D']
     colors = ['blue', 'green', 'purple', 'red']
