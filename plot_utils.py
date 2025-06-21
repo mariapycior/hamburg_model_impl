@@ -743,11 +743,19 @@ def plot_integrated_luminosity(df: pd.DataFrame, output_path: str = None):
     """Plot integrated luminosity over time."""
     try:
         plt.figure(figsize=DEFAULT_FIGURE_SIZE)
-        df['integrated_luminosity'].plot(zorder=DATA_ZORDER)
-        plt.title('Luminosity vs Time')
-        plt.xlabel('Year')
-        plt.ylabel(r'Luminosity [fb$^{-1}$]')
-        plt.grid(True)
+        df['integrated_luminosity'].plot(zorder=DATA_ZORDER, linewidth=2)
+        plt.title(r'Integrated $\mathbf{Delivered}$ Luminosity vs Time', fontsize=10)
+        plt.xlabel('Year', fontsize=10)
+        plt.ylabel(r'Integrated Luminosity [fb$^{-1}$]', fontsize=10)
+        plt.xticks(fontsize=8)
+        plt.yticks(fontsize=8)
+        
+        # Add double density grid
+        import matplotlib.ticker as mticker
+        plt.gca().xaxis.set_minor_locator(mticker.AutoMinorLocator(2))
+        plt.gca().yaxis.set_minor_locator(mticker.AutoMinorLocator(2))
+        plt.grid(True, linestyle='-', alpha=0.4)
+        plt.grid(which='minor', linestyle='-', alpha=0.2)
         if output_path:
             plt.savefig(output_path)
         # Wykres gotowy do wyświetlenia
