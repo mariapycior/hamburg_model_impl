@@ -63,7 +63,7 @@ def add_parameter_info(ax, loc='upper left'):
             param_text += f"\n$\\mathbf{{{temp_info.replace(' ', '\\ ')}}}$"
         
     if TEMPERATURE_CORRECTION_ENABLED:
-        param_text += f"\nTemp. correction: +{TEMPERATURE_CORRECTION_DELTA} K (to current)"
+        param_text += f"\nTemp. correction: +{TEMPERATURE_CORRECTION_DELTA} K"
     
     props = dict(boxstyle='round', facecolor='white', alpha=0.7)
     
