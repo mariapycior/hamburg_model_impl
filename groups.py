@@ -161,8 +161,8 @@ sensors_z_200_400 = [
     'VL16_CB'   # z = 290mm
 ]
 
-# Legend: "400mm < |z| ≤ 700mm"
-sensors_z_400_700 = [
+# Legend: "400mm < |z| ≤ 650mm"
+sensors_z_400_6500 = [
     'VL19_AT',  # z = 435mm
     'VL19_AB',  # z = 435mm
     'VL19_CT',  # z = 450mm
@@ -173,15 +173,15 @@ sensors_z_400_700 = [
     'VL22_CB',  # z = 600mm
     'VL23_AT',  # z = 635mm
     'VL23_AB',  # z = 635mm
+]
+
+# Legend: "|z| > 650mm"
+sensors_z_gt_650 = [
+    
     'VL23_CT',  # z = 650mm
     'VL23_CB'   # z = 650mm
     'VL24_AT',  # z = 685mm
     'VL24_AB',  # z = 685mm
-]
-
-# Legend: "|z| > 700mm"
-sensors_z_gt_700 = [
-
     'VL24_CT',  # z = 700mm
     'VL24_CB',  # z = 700mm
     'VL25_AT',  # z = 735mm
@@ -214,8 +214,8 @@ legend_texts = {
     'sensors_z_50_100': "50mm < |z| ≤ 100mm",
     'sensors_z_100_200': "100mm < |z| ≤ 200mm",
     'sensors_z_200_400': "200mm < |z| ≤ 400mm",
-    'sensors_z_400_700': "400mm < |z| ≤ 700mm",
-    'sensors_z_gt_700_abs': "|z| > 700mm"
+    'sensors_z_400_700': "400mm < |z| ≤ 650mm",
+    'sensors_z_gt_700_abs': "|z| > 650mm"
 }
 
 # Grouping mode definitions
@@ -240,8 +240,8 @@ group_modes = {
     'tb': {
         'title': "Sensors by Position (T/B)",
         'groups': [
-            (sensors_type_t, "- (T)", 0),
-            (sensors_type_b, "- (B)", 1)
+            (sensors_type_t, "T", 0),
+            (sensors_type_b, "B", 1)
         ]
     },
     'z_position': {
@@ -251,8 +251,8 @@ group_modes = {
             (sensors_z_50_100, legend_texts['sensors_z_50_100'], 1),
             (sensors_z_100_200, legend_texts['sensors_z_100_200'], 2),
             (sensors_z_200_400, legend_texts['sensors_z_200_400'], 3),
-            (sensors_z_400_700, legend_texts['sensors_z_400_700'], 4),
-            (sensors_z_gt_700, "|z| > 700mm", 5)  # lub legend_texts['sensors_z_gt_700_abs'] jeśli zmienisz nazwę zmiennej
+            (sensors_z_400_650, legend_texts['sensors_z_400_650'], 4),
+            (sensors_z_gt_650, "|z| > 650mm", 5)  # lub legend_texts['sensors_z_gt_700_abs'] jeśli zmienisz nazwę zmiennej
         ]
 
     },
