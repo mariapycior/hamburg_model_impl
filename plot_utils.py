@@ -37,6 +37,7 @@ def plot_group_averages(df_group_averages, plot_by='time'):
             group_names.append(col[4:])
     # Limit to first 3 groups
     group_names = group_names[:3]
+    #group_names = group_names[-3:]
     n_groups = len(group_names)
     if n_groups == 0:
         print("No data to plot group averages.")

@@ -214,8 +214,8 @@ legend_texts = {
     'sensors_z_50_100': "50mm < |z| ≤ 100mm",
     'sensors_z_100_200': "100mm < |z| ≤ 200mm",
     'sensors_z_200_400': "200mm < |z| ≤ 400mm",
-    'sensors_z_400_700': "400mm < |z| ≤ 650mm",
-    'sensors_z_gt_700_abs': "|z| > 650mm"
+    'sensors_z_400_650': "400mm < |z| ≤ 650mm",
+    'sensors_z_gt_650_abs': "|z| > 650mm"
 }
 
 # Grouping mode definitions
