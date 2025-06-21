@@ -277,8 +277,9 @@ def plot_simulated_vs_real(df: pd.DataFrame, sensor_name: str, output_path: str 
     ax.set_ylabel('Leakage Current [mA]')
     if not show_ratio:
         ax.set_xlabel('Year')  # Only add xlabel if no ratio plot
-    ax.set_title(f'Measured vs Simulated Leakage Current for Sensor {sensor_number}', fontsize=10)
+    ax.set_title(f'Meas. vs Sim. Leakage Current (Sensor {sensor_number})', fontsize=10)
     ax.grid(True)
+    plt.xticks(rotation=45)
     # Usunięto legendę z wykresu z sensorami
     
     # Add ratio plot if enabled
@@ -299,6 +300,7 @@ def plot_simulated_vs_real(df: pd.DataFrame, sensor_name: str, output_path: str 
             ax_ratio.minorticks_on()
             ax_ratio.grid(True, alpha=0.3)
             ax_ratio.grid(True, which='minor', alpha=0.15)
+            plt.xticks(rotation=45)
             
             # Hide x-labels on main plot
             plt.setp(ax_main.get_xticklabels(), visible=False)
@@ -763,7 +765,7 @@ def plot_currents_vs_position(summary_df: pd.DataFrame, target_luminosities: lis
         target_luminosities: List of target luminosity values used for the plot
         output_path: Optional path to save the plot
     """
-    fig, ax = plt.subplots(figsize=(7, 5))
+    fig, ax = plt.subplots(figsize=(6, 5))
     
     markers = ['o', '^', 's', 'D']
     colors = ['blue', 'green', 'purple', 'red']
