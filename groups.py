@@ -162,7 +162,7 @@ sensors_z_200_400 = [
 ]
 
 # Legend: "400mm < |z| ≤ 650mm"
-sensors_z_400_6500 = [
+sensors_z_400_650 = [
     'VL19_AT',  # z = 435mm
     'VL19_AB',  # z = 435mm
     'VL19_CT',  # z = 450mm
