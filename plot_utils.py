@@ -362,7 +362,7 @@ def add_parameter_info(ax, loc='upper left'):
     
     # Jeśli temperatura correction jest włączona, dodaj żółty box
     if TEMPERATURE_CORRECTION_ENABLED:
-        temp_correction_text = f"Temp. correction: +{TEMPERATURE_CORRECTION_DELTA} K (on current)"
+        temp_correction_text = f"Temp. correction: +{TEMPERATURE_CORRECTION_DELTA} K (on temp)"
         yellow_props = dict(boxstyle='round', facecolor='yellow', alpha=0.7)
         
         ax.text(x, y, temp_correction_text, transform=ax.transAxes, fontsize=7,
