@@ -3,7 +3,7 @@ import matplotlib.pyplot as plt
 import pandas as pd
 import numpy as np
 from params import Parameters
-from config import SIMULATION_PERIOD, NTC, LUMINOSITY, TEMPERATURE_CORRECTION_ENABLED, TEMPERATURE_CORRECTION_DELTA, CROSS_SECTIONS
+from config import SIMULATION_PERIOD, NTC, TEMPERATURE_CORRECTION_ENABLED, TEMPERATURE_CORRECTION_DELTA
 from config_plot import (
     CURRENT_TEMP_MODE, REFERENCE_TEMPERATURE,
     USE_LINES_FOR_SIMULATION, SHOW_ERROR_BANDS, ERROR_PERCENTAGE, PLOT_RESAMPLING_PERIOD,
@@ -66,7 +66,7 @@ def plot_group_averages(df_group_averages, plot_by='time'):
     if plot_by == 'time':
         x_data = df_group_averages.index
         x_min, x_max = x_data.min(), x_data.max()
-        x_label = 'Year'
+        x_label = ''  # Nie pokazujemy etykiety Year
     elif plot_by == 'luminosity':
         x_data = df_group_averages['integrated_luminosity']
         x_min, x_max = x_data.min(), x_data.max()
@@ -135,7 +135,7 @@ def plot_group_averages(df_group_averages, plot_by='time'):
         
         # Add subplot title with group name
         if group == 'all':
-            ax_main.set_title('Mean Values from All Sensors', fontsize=10)
+            ax_main.set_title('Mean from all sensors', fontsize=10)
             add_parameter_info(ax_main, loc='upper left')
         else:
             ax_main.set_title(f'Group: {group}', fontsize=10)
@@ -303,15 +303,15 @@ def add_parameter_info(ax, loc='upper left'):
     
     param_text = (
         #f"$\sigma$ (7 TeV), $\sigma$ (13 TeV) = {CROSS_SECTIONS}\n"
-        f"$\\alpha_I$: {params.alpha_I:.2e} A/cm\n"
-        f"$\\alpha_0^*$: {params.alpha_0_star:.2e} A/cm\n"
-        f"$\\beta$: {params.beta:.2e} A/cm\n"
-        f"$E_I$: {params.E_I:.2f} eV\n"
-        f"$V$: {params.V:.3f} cm$^3$\n"
-        f"$E_{{eff}}$: {params.E_eff:.2f} eV\n"
-        f"Simulation timestep: {timestep:.1f} h\n"
-        f"Thermistor: NTC{NTC}\n"
-        f"{'Recorded' if LUMINOSITY == 'recorded' else 'Delivered'} Luminosity"
+        #f"$\\alpha_I$: {params.alpha_I:.2e} A/cm\n"
+        #f"$\\alpha_0^*$: {params.alpha_0_star:.2e} A/cm\n"
+        #f"$\\beta$: {params.beta:.2e} A/cm\n"
+        #f"$E_I$: {params.E_I:.2f} eV\n"
+        #f"$V$: {params.V:.3f} cm$^3$\n"
+        #f"$E_{{eff}}$: {params.E_eff:.2f} eV\n"
+        f"Simulation timestep: {timestep:.1f} h"
+        #f"Thermistor: NTC{NTC}\n"
+        #f"{'Recorded' if LUMINOSITY == 'recorded' else 'Delivered'} Luminosity"
     )
     
     # Add resampling period information
@@ -344,9 +344,6 @@ def add_parameter_info(ax, loc='upper left'):
         else:
             param_text += f"\n$\\mathbf{{{temp_info.replace(' ', '\\ ')}}}$"
         
-    if TEMPERATURE_CORRECTION_ENABLED:
-        param_text += f"\nTemp. correction: +{TEMPERATURE_CORRECTION_DELTA} K"
-    
     props = dict(boxstyle='round', facecolor='white', alpha=0.7)
     
     # Ustaw pozycję na podstawie parametru loc
@@ -363,8 +360,13 @@ def add_parameter_info(ax, loc='upper left'):
         x, y = 0.98, 0.02
         halign, valign = 'right', 'bottom'
     
-    ax.text(x, y, param_text, transform=ax.transAxes, fontsize=7,
-            verticalalignment=valign, horizontalalignment=halign, bbox=props)
+    # Jeśli temperatura correction jest włączona, dodaj żółty box
+    if TEMPERATURE_CORRECTION_ENABLED:
+        temp_correction_text = f"Temp. correction: +{TEMPERATURE_CORRECTION_DELTA} K (on current)"
+        yellow_props = dict(boxstyle='round', facecolor='yellow', alpha=0.7)
+        
+        ax.text(x, y, temp_correction_text, transform=ax.transAxes, fontsize=7,
+                verticalalignment=valign, horizontalalignment=halign, bbox=yellow_props)
 
 
 
@@ -508,7 +510,7 @@ def plot_simulated_vs_real(df: pd.DataFrame, sensor_name: str):
     
     # Dodaj etykietę Year tylko jeśli nie ma ratio
     if not show_ratio:
-        ax.set_xlabel('Year')
+        #ax.set_xlabel('Year')
         # Obróć etykiety na osi X o 45 stopni
         for label in ax.get_xticklabels():
             label.set_rotation(45)
@@ -529,7 +531,7 @@ def plot_simulated_vs_real(df: pd.DataFrame, sensor_name: str):
             
             # Set ratio plot labels and grid
             ax_ratio.set_ylabel('Sim/Meas')
-            ax_ratio.set_xlabel('Year')
+            #ax_ratio.set_xlabel('Year')
             # Obróć etykiety na osi X o 45 stopni
             for label in ax_ratio.get_xticklabels():
                 label.set_rotation(45)
@@ -690,7 +692,7 @@ def plot_sensors_data(df: pd.DataFrame, sensors: list, column_prefix: str, title
     
     # Dodaj etykietę Year tylko jeśli nie ma ratio
     if not hasattr(plt.gcf(), 'ratio_axes') or not plt.gcf().ratio_axes:
-        ax.set_xlabel('Year')
+        #ax.set_xlabel('Year')
         # Obróć etykiety na osi X o 45 stopni
         for label in ax.get_xticklabels():
             label.set_rotation(45)
