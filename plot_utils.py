@@ -135,7 +135,7 @@ def plot_group_averages(df_group_averages, plot_by='time'):
         
         # Add subplot title with group name
         if group == 'all':
-            ax_main.set_title('Mean from all sensors', fontsize=10)
+            ax_main.set_title('Mean Values from All Sensors', fontsize=10)
             add_parameter_info(ax_main, loc='upper left')
         else:
             ax_main.set_title(f'Group: {group}', fontsize=10)
