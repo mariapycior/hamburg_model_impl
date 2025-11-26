@@ -435,12 +435,8 @@ def plot_all_sensors(df: pd.DataFrame, sensors: list, output_dir: str = None,
                 min_val = min(min_val, curr_min)
                 max_val = max(max_val, curr_max)
     
-    # Ustaw wspólny zakres osi Y z 10% marginesem
-    if min_val != float('inf') and max_val != float('-inf'):
-        y_range_margin = (max_val - min_val) * 0.1
-        y_range = (max(0, min_val - y_range_margin), max_val + y_range_margin)
-    else:
-        y_range = None
+    # Ustaw wspólny zakres osi Y - maksymalna wartość to 0.36
+    y_range = (0, 0.36)
     
     # Plot simulated current for all sensors (no error bands when plotting all sensors)
     sim_output = None if output_dir is None else os.path.join(output_dir, 'all_sensors_simulated.png')
