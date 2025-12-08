@@ -26,6 +26,8 @@ def parse_arguments():
                         help='List all available sensors')
     parser.add_argument('--plot-currents-vs-position', action='store_true',
                         help='Plot currents vs position for all sensors')
+    parser.add_argument('--plot-by', type=str, choices=['time', 'luminosity','fluence'], default='time',
+                        help="X-axis for group averages plots (default: 'time')")
     return parser.parse_args()
 
 def list_available_sensors(simulated_path):
@@ -77,7 +79,7 @@ def process_and_plot_data(result_df, sensors_to_use, args):
         plot_utils.plot_currents_vs_position(curr_vs_pos_df, TARGET_LUMINOSITIES)
         group_averages_df = plot_utils.plot_all_sensors(result_df, sensors_to_use)
         print(group_averages_df)
-        plot_utils.plot_group_averages(group_averages_df)
+        plot_utils.plot_group_averages(group_averages_df, plot_by=args.plot_by)
         #plot_utils.plot_all_currents_vs_luminosity(result_df, sensors_to_use)
         #plot_utils.plot_all_currents_vs_fluence(result_df, sensors_to_use)
 
