@@ -3,7 +3,7 @@ import matplotlib.pyplot as plt
 import pandas as pd
 import numpy as np
 from params import Parameters
-from config import SIMULATION_PERIOD, NTC, TEMPERATURE_CORRECTION_ENABLED, TEMPERATURE_CORRECTION_DELTA
+from config import SIMULATION_PERIOD, NTC, TEMPERATURE_CORRECTION_ENABLED, TEMPERATURE_CORRECTION_DELTA, CROSS_SECTIONS
 from config_plot import (
     CURRENT_TEMP_MODE, REFERENCE_TEMPERATURE,
     USE_LINES_FOR_SIMULATION, SHOW_ERROR_BANDS, ERROR_PERCENTAGE, PLOT_RESAMPLING_PERIOD,
@@ -36,8 +36,8 @@ def plot_group_averages(df_group_averages, plot_by='time'):
         if col.startswith('sim_') and not col.endswith('_std'):
             group_names.append(col[4:])
     # Limit to first 3 groups
-    group_names = group_names[:3]
-    #group_names = group_names[-3:]
+    group_names = group_names[-1:]
+    #group_names = group_names[:]
     n_groups = len(group_names)
     if n_groups == 0:
         print("No data to plot group averages.")
@@ -302,15 +302,15 @@ def add_parameter_info(ax, loc='upper left'):
     timestep = pd.to_timedelta(SIMULATION_PERIOD.lower()).total_seconds() / 3600
     
     param_text = (
-        #f"$\sigma$ (7 TeV), $\sigma$ (13 TeV) = {CROSS_SECTIONS}\n"
-        #f"$\\alpha_I$: {params.alpha_I:.2e} A/cm\n"
-        #f"$\\alpha_0^*$: {params.alpha_0_star:.2e} A/cm\n"
-        #f"$\\beta$: {params.beta:.2e} A/cm\n"
-        #f"$E_I$: {params.E_I:.2f} eV\n"
-        #f"$V$: {params.V:.3f} cm$^3$\n"
-        #f"$E_{{eff}}$: {params.E_eff:.2f} eV\n"
-        f"Simulation timestep: {timestep:.1f} h"
-        #f"Thermistor: NTC{NTC}\n"
+        f"$\sigma$ (7 TeV), $\sigma$ (13 TeV) = {CROSS_SECTIONS}\n"
+        f"$\\alpha_I$: {params.alpha_I:.2e} A/cm\n"
+        f"$\\alpha_0^*$: {params.alpha_0_star:.2e} A/cm\n"
+        f"$\\beta$: {params.beta:.2e} A/cm\n"
+        f"$E_I$: {params.E_I:.2f} eV\n"
+        f"$V$: {params.V:.3f} cm$^3$\n"
+        f"$E_{{eff}}$: {params.E_eff:.2f} eV\n"
+        f"Simulation timestep: {timestep:.1f} h\n"
+        f"Thermistor: NTC{NTC}"
         #f"{'Recorded' if LUMINOSITY == 'recorded' else 'Delivered'} Luminosity"
     )
     
@@ -360,6 +360,8 @@ def add_parameter_info(ax, loc='upper left'):
         x, y = 0.98, 0.02
         halign, valign = 'right', 'bottom'
     
+    ax.text(x, y, param_text, transform=ax.transAxes, fontsize=7,
+            verticalalignment=valign, horizontalalignment=halign, bbox=props)
     # Jeśli temperatura correction jest włączona, dodaj żółty box
     if TEMPERATURE_CORRECTION_ENABLED:
         temp_correction_text = f"Temp. correction: +{TEMPERATURE_CORRECTION_DELTA} K (on temp)"
