@@ -493,7 +493,11 @@ def plot_sensors_data(df: pd.DataFrame, sensors: list, column_prefix: str, title
                     for sensor_list, group_label, color_idx in mode_info['groups']:
                         if sensor in sensor_list:
                             # Use color from GROUP_COLORS and label from group_modes
-                            sensor_color = GROUP_COLORS[SENSOR_GROUPING_MODE][color_idx % len(GROUP_COLORS[SENSOR_GROUPING_MODE])]
+                            palette = GROUP_COLORS.get(SENSOR_GROUPING_MODE)
+                            if palette:
+                                sensor_color = palette[color_idx % len(palette)]
+                            else:
+                                sensor_color = None
                             sensor_group = group_label
                             found = True
                             break

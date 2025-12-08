@@ -178,7 +178,7 @@ group_modes = {
     'all': {
         'title': "All Sensors",
         'groups': [
-            (all_sensors, "All sensors", 0)
+            (all_sensors, 'all', 0)
         ]
     },
     'side': {
