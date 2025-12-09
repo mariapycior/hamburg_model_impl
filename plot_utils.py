@@ -799,6 +799,8 @@ def plot_currents_vs_position(summary_df: pd.DataFrame, target_luminosities: lis
     markers = ['o', '^', 's', 'D']
     colors = ['blue', 'green', 'purple', 'red']
     
+    legend_pairs = []
+
     for i, target_lumi in enumerate(target_luminosities):
         lumi_str = f'_f{target_lumi:.1f}'
         sim_col = f'current_sim{lumi_str}'
@@ -814,21 +816,54 @@ def plot_currents_vs_position(summary_df: pd.DataFrame, target_luminosities: lis
         color_idx = i % len(colors)
         marker_idx = i % len(markers)
         
+        sim_handle = None
+        real_handle = None
+
         if sim_values is not None:
-            ax.scatter(positions, sim_values, 
-                      color=colors[color_idx], marker=markers[marker_idx],
-                      s=15, label=f'Sim @ {target_lumi} fb$^{{-1}}$', 
-                      zorder=10)
-            
+            sim_handle = ax.scatter(
+                positions, sim_values,
+                color=colors[color_idx], marker=markers[marker_idx],
+                s=15, label=f'Sim @ {target_lumi} fb$^{{-1}}$',
+                zorder=10
+            )
+
         if real_values is not None:
-            ax.scatter(positions, real_values, 
-                      edgecolor=colors[color_idx], marker=markers[marker_idx],
-                      facecolor='none', s=15, 
-                      label=f'Meas @ {target_lumi} fb$^{{-1}}$', zorder=10)
+            real_handle = ax.scatter(
+                positions, real_values,
+                edgecolor=colors[color_idx], marker=markers[marker_idx],
+                facecolor='none', s=15,
+                label=f'Meas @ {target_lumi} fb$^{{-1}}$', zorder=10
+            )
+
+        legend_pairs.append((sim_handle, real_handle))
     
-    # Dodaj legendę
-    ax.legend(loc='upper right', bbox_to_anchor=(1, 1), 
-                      fontsize=7, title='Luminosity', title_fontsize=7)
+    # Dodaj legendę w dwóch kolumnach (Sim / Meas w jednym wierszu)
+    fallback_handle = plt.Line2D([], [], linestyle='None')
+    sim_handles, sim_labels = [], []
+    real_handles, real_labels = [], []
+
+    for sim_handle, real_handle in legend_pairs:
+        if sim_handle is not None:
+            sim_handles.append(sim_handle)
+            sim_labels.append(sim_handle.get_label())
+        elif real_handle is not None:
+            sim_handles.append(fallback_handle)
+            sim_labels.append('')
+
+        if real_handle is not None:
+            real_handles.append(real_handle)
+            real_labels.append(real_handle.get_label())
+        elif sim_handle is not None:
+            real_handles.append(fallback_handle)
+            real_labels.append('')
+
+    handles = sim_handles + real_handles
+    labels = sim_labels + real_labels
+
+    if handles:
+        ax.legend(handles, labels, loc='upper right', bbox_to_anchor=(1, 1),
+                  fontsize=7, title='Luminosity', title_fontsize=7,
+                  ncol=2, columnspacing=0.8, handletextpad=0.4)
     
     # Dodaj box z informacjami w lewym górnym rogu
     info_text = ""
