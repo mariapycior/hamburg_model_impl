@@ -11,7 +11,7 @@ from config_plot import (
     SCATTER_MARKER_SIZE, LINE_WIDTH, ERROR_BAND_ALPHA, REAL_DATA_COLOR, SIMULATED_DATA_COLOR, ERROR_BAND_COLOR,
     DEFAULT_FIGURE_SIZE, MULTI_SUBPLOT_FIGURE_SIZE, ERROR_BAND_ZORDER, DATA_ZORDER,
     SHOW_RATIO_FOR_SINGLE_SENSOR, RATIO_PLOT_HEIGHT, SENSOR_GROUPING_MODE, GROUP_COLORS,
-    SHOW_PARAMETER_INFO_BOX, PARAMETER_INFO_FIELDS
+    SHOW_PARAMETER_INFO_BOX, PARAMETER_INFO_FIELDS, SHOW_PLOT_TITLES
 )
 from VeloDetectorElement import VeloDetectorElement
 import matplotlib.gridspec as gridspec
@@ -42,7 +42,7 @@ def plot_group_averages(df_group_averages: pd.DataFrame, plot_by: str = 'time'):
     except ImportError:
         pass
 
-    x_label = 'Year'
+    x_label = None
     if plot_by == 'luminosity' and 'integrated_luminosity' in df_group_averages.columns:
         x_axis = df_group_averages['integrated_luminosity']
         x_label = 'Integrated Luminosity (fb$^{-1}$)'
@@ -54,7 +54,8 @@ def plot_group_averages(df_group_averages: pd.DataFrame, plot_by: str = 'time'):
     fig_width = DEFAULT_FIGURE_SIZE[0] * 1.5 if n_groups > 2 else DEFAULT_FIGURE_SIZE[0]
     fig_height = DEFAULT_FIGURE_SIZE[1]
     fig = plt.figure(figsize=(fig_width, fig_height))
-    fig.suptitle(suptitle, fontsize=12)
+    if SHOW_PLOT_TITLES:
+        fig.suptitle(suptitle, fontsize=12)
 
     if SHOW_RATIO_FOR_SINGLE_SENSOR:
         grid = gridspec.GridSpec(2, n_groups, height_ratios=[1 - RATIO_PLOT_HEIGHT, RATIO_PLOT_HEIGHT])
@@ -98,7 +99,8 @@ def plot_group_averages(df_group_averages: pd.DataFrame, plot_by: str = 'time'):
         ax_main = plt.subplot(grid[0, idx])
         main_axes.append(ax_main)
 
-        ax_main.set_title('Mean of all sensors' if group.lower() == 'all sensors' else f'Group: {group}', fontsize=10)
+        if SHOW_PLOT_TITLES:
+            ax_main.set_title('Mean of all sensors' if group.lower() == 'all sensors' else f'Group: {group}', fontsize=10)
 
         sim_series = df_group_averages.get(sim_col)
         real_series = df_group_averages.get(real_col)
@@ -153,7 +155,8 @@ def plot_group_averages(df_group_averages: pd.DataFrame, plot_by: str = 'time'):
                 ax_ratio.scatter(ratio_x, ratio_points, color='black', s=SCATTER_MARKER_SIZE, alpha=0.7)
                 ax_ratio.axhline(y=1.0, color='gray', linestyle='-', alpha=0.7)
                 ax_ratio.set_ylabel('Sim/Meas')
-                ax_ratio.set_xlabel(x_label)
+                if x_label:
+                    ax_ratio.set_xlabel(x_label)
                 ax_ratio.grid(True)
                 ax_ratio.yaxis.set_minor_locator(mticker.AutoMinorLocator(2))
                 ax_ratio.grid(which='minor', axis='y', linestyle=':', alpha=0.3)
@@ -161,8 +164,8 @@ def plot_group_averages(df_group_averages: pd.DataFrame, plot_by: str = 'time'):
                 all_ratio_values.extend(ratio_points)
         else:
             for label in ax_main.get_xticklabels():
-                label.set_rotation(45)
-                label.set_ha('right')
+                # label.set_rotation(45)
+                label.set_ha('center')
 
     if ratio_axes and all_ratio_values:
         ratio_array = np.array(all_ratio_values)
@@ -172,8 +175,8 @@ def plot_group_averages(df_group_averages: pd.DataFrame, plot_by: str = 'time'):
         for ax in ratio_axes:
             ax.set_ylim(lower, upper)
             for label in ax.get_xticklabels():
-                label.set_rotation(45)
-                label.set_ha('right')
+                # label.set_rotation(45)
+                label.set_ha('center')
 
     if main_axes:
         add_parameter_info(main_axes[0], loc='upper left')
@@ -182,7 +185,8 @@ def plot_group_averages(df_group_averages: pd.DataFrame, plot_by: str = 'time'):
         plt.subplots_adjust(hspace=0.1)
     else:
         for ax in main_axes:
-            ax.set_xlabel(x_label)
+            if x_label:
+                ax.set_xlabel(x_label)
     plt.tight_layout()
     plt.show()
 
@@ -436,7 +440,8 @@ def plot_simulated_vs_real(df: pd.DataFrame, sensor_name: str):
     
     ax.set_ylabel('Leakage Current [mA]')
     if not show_ratio:
-        ax.set_xlabel('Year')  # Only add xlabel if no ratio plot
+        # Axis label intentionally omitted when ratio subplot is disabled
+        pass
     # ax.set_title(f'Measured vs Simulated Leakage Current for Sensor {sensor_number}')
     ax.grid(True)
     ax.legend(fontsize=7)
@@ -455,7 +460,7 @@ def plot_simulated_vs_real(df: pd.DataFrame, sensor_name: str):
             
             # Set ratio plot labels and grid
             ax_ratio.set_ylabel('Sim/Meas')
-            ax_ratio.set_xlabel('Year')
+            # ax_ratio.set_xlabel('Year')
             ax_ratio.grid(True, alpha=0.3)
             
             # Save reference to ratio axes for later checks
@@ -617,7 +622,8 @@ def plot_sensors_data(df: pd.DataFrame, sensors: list, column_prefix: str, title
     
     # Dodaj etykietę Year tylko jeśli nie ma ratio
     if not hasattr(plt.gcf(), 'ratio_axes') or not plt.gcf().ratio_axes:
-        ax.set_xlabel('Year')
+        # Axis label intentionally omitted when ratio subplot is disabled
+        pass
     # ax.set_title(title)
     ax.grid(True)
     plt.tight_layout()
@@ -750,7 +756,8 @@ def plot_currents_vs_parameter(df: pd.DataFrame, sensor_name: str, param_type: s
     add_parameter_info(ax)
     ax.set_xlabel(x_label)
     ax.set_ylabel('Leakage Current (mA)')
-    ax.set_title(f'Leakage Current vs {title_param} for Sensor {sensor_number}')
+    if SHOW_PLOT_TITLES:
+        ax.set_title(f'Leakage Current vs {title_param} for Sensor {sensor_number}')
     ax.grid(True)
     ax.legend()
     
@@ -823,7 +830,8 @@ def plot_all_currents_vs_fluence(df: pd.DataFrame, sensors: list, output_dir: st
         
         ax.set_xlabel('Fluence (n/cm²)')
         ax.set_ylabel('Leakage Current (mA)')
-        ax.set_title('Simulated Leakage Current vs Fluence for All Sensors')
+        if SHOW_PLOT_TITLES:
+            ax.set_title('Simulated Leakage Current vs Fluence for All Sensors')
         ax.set_xlim(x_min, x_max)
         ax.set_ylim(y_min, y_max)
         ax.grid(True)
@@ -845,7 +853,8 @@ def plot_all_currents_vs_fluence(df: pd.DataFrame, sensors: list, output_dir: st
         
         ax.set_xlabel('Fluence (n/cm²)')
         ax.set_ylabel('Leakage Current (mA)')
-        ax.set_title('Real Leakage Current vs Fluence for All Sensors')
+        if SHOW_PLOT_TITLES:
+            ax.set_title('Real Leakage Current vs Fluence for All Sensors')
         ax.set_xlim(x_min, x_max)
         ax.set_ylim(y_min, y_max)
         ax.grid(True)
@@ -914,7 +923,8 @@ def plot_all_currents_vs_luminosity(df: pd.DataFrame, sensors: list, output_dir:
         
         ax.set_xlabel('Integrated Luminosity (fb$^{-1}$)')
         ax.set_ylabel('Leakage Current (mA)')
-        ax.set_title('Simulated Leakage Current vs Integrated Luminosity for All Sensors')
+        if SHOW_PLOT_TITLES:
+            ax.set_title('Simulated Leakage Current vs Integrated Luminosity for All Sensors')
         ax.set_xlim(x_min, x_max)
         ax.set_ylim(y_min, y_max)
         ax.grid(True)
@@ -935,7 +945,8 @@ def plot_all_currents_vs_luminosity(df: pd.DataFrame, sensors: list, output_dir:
         
         ax.set_xlabel('Integrated Luminosity (fb$^{-1}$)')
         ax.set_ylabel('Leakage Current (mA)')
-        ax.set_title('Real Leakage Current vs Integrated Luminosity for All Sensors')
+        if SHOW_PLOT_TITLES:
+            ax.set_title('Real Leakage Current vs Integrated Luminosity for All Sensors')
         ax.set_xlim(x_min, x_max)
         ax.set_ylim(y_min, y_max)
         ax.grid(True)
@@ -953,7 +964,8 @@ def plot_integrated_luminosity(df: pd.DataFrame):
         plt.figure(figsize=DEFAULT_FIGURE_SIZE)
         df['integrated_luminosity'].plot(zorder=DATA_ZORDER)
         # plt.title('Integrated Luminosity vs Time')
-        plt.xlabel('Year')
+        # plt.xlabel('Year')
+        pass
         plt.ylabel('Integrated Luminosity [fb$^{-1}$]')
         plt.grid(True)
         plt.grid(True, which='minor', linestyle=':', alpha=0.3)
