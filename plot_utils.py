@@ -10,7 +10,7 @@ from config_plot import (
     SCATTER_MARKER_SIZE, LINE_WIDTH, ERROR_BAND_ALPHA, REAL_DATA_COLOR, SIMULATED_DATA_COLOR, ERROR_BAND_COLOR,
     DEFAULT_FIGURE_SIZE, MULTI_SUBPLOT_FIGURE_SIZE, ERROR_BAND_ZORDER, DATA_ZORDER,
     SHOW_RATIO_FOR_SINGLE_SENSOR, RATIO_PLOT_HEIGHT,
-    SHOW_PARAMETER_INFO_BOX, PARAMETER_INFO_FIELDS
+    SHOW_PARAMETER_INFO_BOX, PARAMETER_INFO_FIELDS, SHOW_PLOT_TITLES
 )
 from VeloDetectorElement import VeloDetectorElement
 import matplotlib.gridspec as gridspec
@@ -162,7 +162,8 @@ def setup_subplot(ax, x_data, y_data, color, label, title, ylabel, xlim, ylim=No
     if ylim:
         ax.set_ylim(ylim)
     ax.set_ylabel(ylabel)
-    ax.set_title(title, fontsize=10)
+    if SHOW_PLOT_TITLES:
+        ax.set_title(title, fontsize=10)
     ax.grid(True)
     # Usunięto legendę z wykresu z sensorami
 
@@ -186,7 +187,8 @@ def plot_leakage_current(df: pd.DataFrame, sensor_name: str,
     sensor_number = get_sensor_number(sensor_name)
     
     # Add main title at the top
-    fig.suptitle(f'Simulation and Measurements for Sensor {sensor_number} (NTC01)', fontsize=10)
+    if SHOW_PLOT_TITLES:
+        fig.suptitle(f'Simulation and Measurements for Sensor {sensor_number} (NTC01)', fontsize=10)
     
     setup_subplot(axes[0], df.index, df[sim_col], SIMULATED_DATA_COLOR, 'Leakage Current Simulated', 
                  '', 'Current [mA]', 
@@ -291,8 +293,9 @@ def plot_simulated_vs_real(df: pd.DataFrame, sensor_name: str, output_path: str 
     
     ax.set_ylabel('Leakage Current [mA]')
     if not show_ratio:
-        ax.set_xlabel('Year')  # Only add xlabel if no ratio plot
-    ax.set_title(f'Meas. vs Sim. Leakage Current (Sensor {sensor_number})', fontsize=10)
+        pass  # Year xlabel omitted for compact layout
+    if SHOW_PLOT_TITLES:
+        ax.set_title(f'Meas. vs Sim. Leakage Current (Sensor {sensor_number})', fontsize=10)
     ax.grid(True)
     plt.xticks(rotation=45)
     # Usunięto legendę z wykresu z sensorami
@@ -404,7 +407,8 @@ def plot_sensors_data(df: pd.DataFrame, sensors: list, column_prefix: str, title
     if y_range is not None:
         ax.set_ylim(y_range)
     ax.set_ylabel('Leakage Current [mA]')
-    ax.set_title(title, fontsize=10)
+    if SHOW_PLOT_TITLES:
+        ax.set_title(title, fontsize=10)
     ax.grid(True)
     plt.tight_layout()
     # Usunięto legendę z wykresu z sensorami
@@ -536,7 +540,8 @@ def plot_currents_vs_parameter(df: pd.DataFrame, sensor_name: str, param_type: s
     add_parameter_info(ax)
     ax.set_xlabel(x_label)
     ax.set_ylabel('Leakage Current [mA]')
-    ax.set_title(f'Leakage Current vs {title_param} for Sensor {sensor_number}', fontsize=10)
+    if SHOW_PLOT_TITLES:
+        ax.set_title(f'Leakage Current vs {title_param} for Sensor {sensor_number}', fontsize=10)
     ax.grid(True)
     # Usunięto legendę z wykresu z sensorami
     
@@ -625,7 +630,8 @@ def plot_all_currents_vs_fluence(df: pd.DataFrame, sensors: list, output_dir: st
         
         ax.set_xlabel(r'Fluence [$1\,\mathrm{MeV}\, \mathrm{n}_{\mathrm{eq}}/\mathrm{cm}^2$]')
         ax.set_ylabel('Leakage Current [mA]')
-        ax.set_title('Simulated Leakage Current vs Fluence for All Sensors', fontsize=10)
+        if SHOW_PLOT_TITLES:
+            ax.set_title('Simulated Leakage Current vs Fluence for All Sensors', fontsize=10)
         ax.set_xlim(x_min, x_max)
         ax.set_ylim(y_min, y_max)
         ax.grid(True)
@@ -647,7 +653,8 @@ def plot_all_currents_vs_fluence(df: pd.DataFrame, sensors: list, output_dir: st
         
         ax.set_xlabel(r'Fluence [$1\,\mathrm{MeV}\, \mathrm{n}_{\mathrm{eq}}/\mathrm{cm}^2$]')
         ax.set_ylabel('Leakage Current [mA]')
-        ax.set_title('Measured Leakage Current vs Fluence for All Sensors', fontsize=10)
+        if SHOW_PLOT_TITLES:
+            ax.set_title('Measured Leakage Current vs Fluence for All Sensors', fontsize=10)
         ax.set_xlim(x_min, x_max)
         ax.set_ylim(y_min, y_max)
         ax.grid(True)
@@ -717,7 +724,8 @@ def plot_all_currents_vs_luminosity(df: pd.DataFrame, sensors: list, output_dir:
         
         ax.set_xlabel(r'Luminosity [fb$^{-1}$]')
         ax.set_ylabel('Leakage Current [mA]')
-        ax.set_title('Simulated Leakage Current vs Luminosity for All Sensors', fontsize=10)
+        if SHOW_PLOT_TITLES:
+            ax.set_title('Simulated Leakage Current vs Luminosity for All Sensors', fontsize=10)
         ax.set_xlim(x_min, x_max)
         ax.set_ylim(y_min, y_max)
         ax.grid(True)
@@ -738,7 +746,8 @@ def plot_all_currents_vs_luminosity(df: pd.DataFrame, sensors: list, output_dir:
         
         ax.set_xlabel(r'Luminosity [fb$^{-1}$]')
         ax.set_ylabel('Leakage Current [mA]')
-        ax.set_title('Measured Leakage Current vs Luminosity for All Sensors', fontsize=10)
+        if SHOW_PLOT_TITLES:
+            ax.set_title('Measured Leakage Current vs Luminosity for All Sensors', fontsize=10)
         ax.set_xlim(x_min, x_max)
         ax.set_ylim(y_min, y_max)
         ax.grid(True)
@@ -755,8 +764,9 @@ def plot_integrated_luminosity(df: pd.DataFrame, output_path: str = None):
     try:
         plt.figure(figsize=DEFAULT_FIGURE_SIZE)
         df['integrated_luminosity'].plot(zorder=DATA_ZORDER, linewidth=2)
-        plt.title(r'Integrated $\mathbf{Delivered}$ Luminosity vs Time', fontsize=10)
-        plt.xlabel('Year', fontsize=10)
+        if SHOW_PLOT_TITLES:
+            plt.title(r'Integrated $\mathbf{Delivered}$ Luminosity vs Time', fontsize=10)
+        # plt.xlabel('Year', fontsize=10)  # redundant label removed
         plt.ylabel(r'Integrated Luminosity [fb$^{-1}$]', fontsize=10)
         plt.xticks(fontsize=8)
         plt.yticks(fontsize=8)
@@ -850,7 +860,8 @@ def plot_currents_vs_position(summary_df: pd.DataFrame, target_luminosities: lis
     
     ax.set_xlabel('Sensor Z Position [mm]')
     ax.set_ylabel('Leakage Current [mA]')
-    ax.set_title('Leakage Current vs Sensor Position at Different Luminosities', fontsize=10)
+    if SHOW_PLOT_TITLES:
+        ax.set_title('Leakage Current vs Sensor Position at Different Luminosities', fontsize=10)
     ax.grid(True)
     plt.tight_layout()
     
