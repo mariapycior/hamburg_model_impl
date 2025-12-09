@@ -8,6 +8,20 @@ from params import Parameters
 from config import SIMULATION_PERIOD, NTC, LUMINOSITY, TEMPERATURE_CORRECTION_ENABLED, TEMPERATURE_CORRECTION_DELTA, CROSS_SECTIONS
 from VeloDetectorElement import VeloDetectorElement
 
+COLOR_PALETTES = [
+    ('#1f77b4', '#1f77b4', '#aec7e8'),
+    ('#ff7f0e', '#ff7f0e', '#ffbb78'),
+    ('#2ca02c', '#2ca02c', '#98df8a'),
+    ('#d62728', '#d62728', '#ff9896'),
+    ('#9467bd', '#9467bd', '#c5b0d5'),
+    ('#8c564b', '#8c564b', '#c49c94'),
+    ('#e377c2', '#e377c2', '#f7b6d2'),
+    ('#7f7f7f', '#7f7f7f', '#c7c7c7'),
+    ('#bcbd22', '#bcbd22', '#dbdb8d'),
+    ('#17becf', '#17becf', '#9edae5')
+]
+
+
 def get_sensor_position(sensor_code):
     """Get sensor position (Z coordinate) from sensor code using VeloDetectorElement."""
     try:
@@ -41,31 +55,43 @@ from config_plot import (
     CURRENT_TEMP_MODE, REFERENCE_TEMPERATURE,
     USE_LINES_FOR_SIMULATION, SHOW_ERROR_BANDS, ERROR_PERCENTAGE, PLOT_RESAMPLING_PERIOD,
     SCATTER_MARKER_SIZE, LINE_WIDTH, ERROR_BAND_ALPHA, REAL_DATA_COLOR, SIMULATED_DATA_COLOR, ERROR_BAND_COLOR,
-    COLOR_PALETTES, DEFAULT_FIGURE_SIZE, MULTI_SUBPLOT_FIGURE_SIZE, ERROR_BAND_ZORDER, DATA_ZORDER,
-    SHOW_RATIO, RATIO_PLOT_HEIGHT, SHOW_RATIO_FOR_MULTIPLE_SENSORS
+    DEFAULT_FIGURE_SIZE, MULTI_SUBPLOT_FIGURE_SIZE, ERROR_BAND_ZORDER, DATA_ZORDER,
+    SHOW_RATIO, RATIO_PLOT_HEIGHT, SHOW_RATIO_FOR_MULTIPLE_SENSORS,
+    SHOW_PARAMETER_INFO_BOX, PARAMETER_INFO_FIELDS
 )
 
 
 def add_parameter_info(ax, loc='upper left'):
+    if not SHOW_PARAMETER_INFO_BOX:
+        return
+
     params = Parameters()
     timestep = pd.to_timedelta(SIMULATION_PERIOD.lower()).total_seconds() / 3600
-    
-    param_text = (
-        #f"$\sigma$ (7 TeV), $\sigma$ (13 TeV) = {CROSS_SECTIONS}\n"
-        f"$\\alpha_I$: {params.alpha_I:.2e} A/cm\n"
-        f"$\\alpha_0^*$: {params.alpha_0_star:.2e} A/cm\n"
-        f"$\\beta$: {params.beta:.2e} A/cm\n"
-        f"$E_I$: {params.E_I:.2f} eV\n"
-        f"$V$: {params.V:.3f} cm$^3$\n"
-        f"$E_{{eff}}$: {params.E_eff:.2f} eV\n"
-        f"Simulation timestep: {timestep:.1f} h\n"
-        f"Thermistor: NTC{NTC}\n"
-        f"{'Recorded' if LUMINOSITY == 'recorded' else 'Delivered'} Luminosity"
-    )
-    
-    # Add resampling period information
-    if PLOT_RESAMPLING_PERIOD:
-        # Convert shorthand period to more readable format
+
+    include = lambda key: PARAMETER_INFO_FIELDS.get(key, True)
+
+    lines = []
+
+    if include('alpha_I'):
+        lines.append(f"$\\alpha_I$: {params.alpha_I:.2e} A/cm")
+    if include('alpha_0_star'):
+        lines.append(f"$\\alpha_0^*$: {params.alpha_0_star:.2e} A/cm")
+    if include('beta'):
+        lines.append(f"$\\beta$: {params.beta:.2e} A/cm")
+    if include('E_I'):
+        lines.append(f"$E_I$: {params.E_I:.2f} eV")
+    if include('V'):
+        lines.append(f"$V$: {params.V:.3f} cm$^3$")
+    if include('E_eff'):
+        lines.append(f"$E_{{eff}}$: {params.E_eff:.2f} eV")
+    if include('timestep'):
+        lines.append(f"Simulation timestep: {timestep:.1f} h")
+    if include('thermistor'):
+        lines.append(f"Thermistor: NTC{NTC}")
+    if include('luminosity_mode'):
+        lines.append('Recorded Luminosity' if LUMINOSITY == 'recorded' else 'Delivered Luminosity')
+
+    if include('resampling') and PLOT_RESAMPLING_PERIOD:
         period_display = PLOT_RESAMPLING_PERIOD
         if period_display == '1W':
             period_display = '1 week'
@@ -75,33 +101,37 @@ def add_parameter_info(ax, loc='upper left'):
             period_display = '1 day'
         elif period_display.endswith('D'):
             period_display = period_display.replace('D', ' days')
-        
-        param_text += f"\nData averaged over {period_display}"
-    
-    temp_info = ""
-    if CURRENT_TEMP_MODE == 'adjust_real':
-        temp_info = "Adjusted meas. to ref. temperature"
-    elif CURRENT_TEMP_MODE == 'adjust_sim':
-        temp_info = "Adjusted ref. to meas. temperature"
-    elif CURRENT_TEMP_MODE == 'adjust_both':
-        temp_info = f"Adjusted both to {REFERENCE_TEMPERATURE:.2f} K"
-    
-    if temp_info:
-        # Formatujemy tekst z jawnie dodanymi spacjami w LaTeX
-        if CURRENT_TEMP_MODE == 'adjust_both':
-            param_text += f"\n$\\mathbf{{Adjusted\\ both\\ to\\ {REFERENCE_TEMPERATURE:.2f}\\ K}}$"
-        else:
-            param_text += f"\n$\\mathbf{{{temp_info.replace(' ', '\\ ')}}}$"
-        
-    if TEMPERATURE_CORRECTION_ENABLED:
-        param_text += f"\nTemp. correction: +{TEMPERATURE_CORRECTION_DELTA} K"
-    
+        lines.append(f"Data averaged over {period_display}")
+
+    if include('temperature_adjustment'):
+        temp_info = ""
+        if CURRENT_TEMP_MODE == 'adjust_real':
+            temp_info = "Adjusted meas. to ref. temperature"
+        elif CURRENT_TEMP_MODE == 'adjust_sim':
+            temp_info = "Adjusted ref. to meas. temperature"
+        elif CURRENT_TEMP_MODE == 'adjust_both':
+            temp_info = f"Adjusted both to {REFERENCE_TEMPERATURE:.2f} K"
+
+        if temp_info:
+            if CURRENT_TEMP_MODE == 'adjust_both':
+                lines.append(f"$\\mathbf{{Adjusted\\ both\\ to\\ {REFERENCE_TEMPERATURE:.2f}\\ K}}$")
+            else:
+                lines.append(f"$\\mathbf{{{temp_info.replace(' ', '\\ ')}}}$")
+
+    if include('temperature_correction') and TEMPERATURE_CORRECTION_ENABLED:
+        lines.append(f"Temp. correction: +{TEMPERATURE_CORRECTION_DELTA} K")
+
+    if not lines:
+        return
+
+    param_text = "\n".join(lines)
+
     props = dict(boxstyle='round', facecolor='white', alpha=0.7)
-    
+
     # Ustaw pozycję na podstawie parametru loc
     x, y = 0.02, 0.98  # domyślnie upper left
     halign, valign = 'left', 'top'
-    
+
     if loc == 'upper right':
         x, y = 0.98, 0.98
         halign = 'right'
@@ -111,7 +141,7 @@ def add_parameter_info(ax, loc='upper left'):
     elif loc == 'lower right':
         x, y = 0.98, 0.02
         halign, valign = 'right', 'bottom'
-    
+
     ax.text(x, y, param_text, transform=ax.transAxes, fontsize=7,
             verticalalignment=valign, horizontalalignment=halign, bbox=props)
 
@@ -397,7 +427,7 @@ def plot_simulated_vs_real(df: pd.DataFrame, sensor_name, output_path: str = Non
     ax.set_ylabel(r'Leakage Current [mA]')
     # Opis osi X tylko jeśli nie ma ratio
     if not (SHOW_RATIO and SHOW_RATIO_FOR_MULTIPLE_SENSORS):
-        ax.set_xlabel(r'Year')
+        pass  # xlabel intentionally omitted for clarity
     
     # Różne ustawienia wykresu
     ax.set_ylabel(r'Leakage Current [mA]')
@@ -466,7 +496,7 @@ def plot_simulated_vs_real(df: pd.DataFrame, sensor_name, output_path: str = Non
             # Dodaj linię odniesienia przy ratio=1.0
             ax_ratio.axhline(y=1.0, color='gray', linestyle='-', alpha=0.7)
             ax_ratio.set_ylabel('Sim/Meas')
-            ax_ratio.set_xlabel('Year')
+            ax_ratio.set_xlabel('Year')  # ratio subplot retains label
             ax_ratio.grid(True, alpha=0.3)
         ax_ratio.minorticks_on()
         ax_ratio.grid(True, which='minor', alpha=0.15)
@@ -1119,7 +1149,7 @@ def plot_integrated_luminosity(df: pd.DataFrame, output_path: str = None):
         plt.figure(figsize=DEFAULT_FIGURE_SIZE)
         df['integrated_luminosity'].plot(zorder=DATA_ZORDER)
         plt.title('Integrated Luminosity vs Year')
-        plt.xlabel('Year')
+        # plt.xlabel('Year')
         plt.ylabel(r'Integrated Luminosity [fb$^{-1}$]')
         plt.grid(True)
         if output_path:
