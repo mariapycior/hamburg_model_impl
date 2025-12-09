@@ -8,7 +8,7 @@ from params import Parameters
 from config import SIMULATION_PERIOD, NTC, LUMINOSITY, TEMPERATURE_CORRECTION_ENABLED, TEMPERATURE_CORRECTION_DELTA, CROSS_SECTIONS
 from VeloDetectorElement import VeloDetectorElement
 
-COLOR_PALETTES = [
+'''COLOR_PALETTES = [
     ('#1f77b4', '#1f77b4', '#aec7e8'),
     ('#ff7f0e', '#ff7f0e', '#ffbb78'),
     ('#2ca02c', '#2ca02c', '#98df8a'),
@@ -20,7 +20,7 @@ COLOR_PALETTES = [
     ('#bcbd22', '#bcbd22', '#dbdb8d'),
     ('#17becf', '#17becf', '#9edae5')
 ]
-
+'''
 
 def get_sensor_position(sensor_code):
     """Get sensor position (Z coordinate) from sensor code using VeloDetectorElement."""
@@ -56,7 +56,7 @@ from config_plot import (
     USE_LINES_FOR_SIMULATION, SHOW_ERROR_BANDS, ERROR_PERCENTAGE, PLOT_RESAMPLING_PERIOD,
     SCATTER_MARKER_SIZE, LINE_WIDTH, ERROR_BAND_ALPHA, REAL_DATA_COLOR, SIMULATED_DATA_COLOR, ERROR_BAND_COLOR,
     DEFAULT_FIGURE_SIZE, MULTI_SUBPLOT_FIGURE_SIZE, ERROR_BAND_ZORDER, DATA_ZORDER,
-    SHOW_RATIO, RATIO_PLOT_HEIGHT, SHOW_RATIO_FOR_MULTIPLE_SENSORS,
+    SHOW_RATIO, RATIO_PLOT_HEIGHT, COLOR_PALETTES, SHOW_RATIO_FOR_MULTIPLE_SENSORS,
     SHOW_PARAMETER_INFO_BOX, PARAMETER_INFO_FIELDS, SHOW_PLOT_TITLES
 )
 
@@ -286,7 +286,7 @@ def plot_leakage_current(df: pd.DataFrame, sensor_name,
         if real_col in df.columns and df[real_col].notna().any():
             ax.scatter(df.index, df[real_col], 
                       color=real_colors[i], s=SCATTER_MARKER_SIZE, 
-                      label='Measured', zorder=DATA_ZORDER)
+                      label='Measured data', zorder=DATA_ZORDER)
             real_plot_created = True
     
     # Formatowanie drugiego subplotu
@@ -454,7 +454,7 @@ def plot_simulated_vs_real(df: pd.DataFrame, sensor_name, output_path: str = Non
     labels = [l for h, l in filtered]
     black_dot = Line2D([0], [0], marker='o', color='w', markerfacecolor='black', markersize=5, linestyle='')
     handles.append(black_dot)
-    labels.append('Measured')
+    labels.append('Measured data')
     ax.legend(handles=handles, labels=labels, fontsize=7)
     
     # Dodaj ratio plot
@@ -849,7 +849,7 @@ def plot_currents_vs_parameter(df: pd.DataFrame, sensor_name, param_type: str = 
     handles, labels = ax.get_legend_handles_labels()
     black_dot = Line2D([0], [0], marker='o', color='w', markerfacecolor='black', markersize=5, linestyle='')
     handles.append(black_dot)
-    labels.append('Measured')
+    labels.append('Measured data')
     
     ax.legend(handles=handles, labels=labels, fontsize=7)
     
