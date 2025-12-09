@@ -9,32 +9,43 @@ from config_plot import (
     USE_LINES_FOR_SIMULATION, SHOW_ERROR_BANDS, ERROR_PERCENTAGE, PLOT_RESAMPLING_PERIOD,
     SCATTER_MARKER_SIZE, LINE_WIDTH, ERROR_BAND_ALPHA, REAL_DATA_COLOR, SIMULATED_DATA_COLOR, ERROR_BAND_COLOR,
     DEFAULT_FIGURE_SIZE, MULTI_SUBPLOT_FIGURE_SIZE, ERROR_BAND_ZORDER, DATA_ZORDER,
-    SHOW_RATIO_FOR_SINGLE_SENSOR, RATIO_PLOT_HEIGHT
+    SHOW_RATIO_FOR_SINGLE_SENSOR, RATIO_PLOT_HEIGHT,
+    SHOW_PARAMETER_INFO_BOX, PARAMETER_INFO_FIELDS
 )
 from VeloDetectorElement import VeloDetectorElement
 import matplotlib.gridspec as gridspec
 
 
 def add_parameter_info(ax, loc='upper left'):
+    if not SHOW_PARAMETER_INFO_BOX:
+        return
+
     params = Parameters()
     timestep = pd.to_timedelta(SIMULATION_PERIOD.lower()).total_seconds() / 3600
-    
-    param_text = (
-        #f"$\sigma$ (7 TeV), $\sigma$ (13 TeV) = {CROSS_SECTIONS}\n"
-        f"$\\alpha_I$: {params.alpha_I:.2e} A/cm\n"
-        f"$\\alpha_0^*$: {params.alpha_0_star:.2e} A/cm\n"
-        f"$\\beta$: {params.beta:.2e} A/cm\n"
-        f"$E_I$: {params.E_I:.2f} eV\n"
-        f"$V$: {params.V:.3f} cm$^3$\n"
-        f"$E_{{eff}}$: {params.E_eff:.2f} eV\n"
-        f"Simulation timestep: {timestep:.1f} h\n"
-        f"Thermistor: NTC{NTC}\n"
-        f"{'Recorded' if LUMINOSITY == 'recorded' else 'Delivered'} Luminosity"
-    )
-    
-    # Add resampling period information
-    if PLOT_RESAMPLING_PERIOD:
-        # Convert shorthand period to more readable format
+    include = lambda key: PARAMETER_INFO_FIELDS.get(key, True)
+
+    lines = []
+
+    if include('alpha_I'):
+        lines.append(f"$\\alpha_I$: {params.alpha_I:.2e} A/cm")
+    if include('alpha_0_star'):
+        lines.append(f"$\\alpha_0^*$: {params.alpha_0_star:.2e} A/cm")
+    if include('beta'):
+        lines.append(f"$\\beta$: {params.beta:.2e} A/cm")
+    if include('E_I'):
+        lines.append(f"$E_I$: {params.E_I:.2f} eV")
+    if include('V'):
+        lines.append(f"$V$: {params.V:.3f} cm$^3$")
+    if include('E_eff'):
+        lines.append(f"$E_{{eff}}$: {params.E_eff:.2f} eV")
+    if include('timestep'):
+        lines.append(f"Simulation timestep: {timestep:.1f} h")
+    if include('thermistor'):
+        lines.append(f"Thermistor: NTC{NTC}")
+    if include('luminosity_mode'):
+        lines.append('Recorded Luminosity' if LUMINOSITY == 'recorded' else 'Delivered Luminosity')
+
+    if include('resampling') and PLOT_RESAMPLING_PERIOD:
         period_display = PLOT_RESAMPLING_PERIOD
         if period_display == '1W':
             period_display = '1 week'
@@ -44,27 +55,31 @@ def add_parameter_info(ax, loc='upper left'):
             period_display = '1 day'
         elif period_display.endswith('D'):
             period_display = period_display.replace('D', ' days')
-        
-        param_text += f"\nData averaged over {period_display}"
-    
-    temp_info = ""
-    if CURRENT_TEMP_MODE == 'adjust_real':
-        temp_info = "Adjusted meas. to ref. temperature"
-    elif CURRENT_TEMP_MODE == 'adjust_sim':
-        temp_info = "Adjusted ref. to meas. temperature"
-    elif CURRENT_TEMP_MODE == 'adjust_both':
-        temp_info = f"Adjusted both to {REFERENCE_TEMPERATURE:.2f} K"
-    
-    if temp_info:
-        # Formatujemy tekst z jawnie dodanymi spacjami w LaTeX
-        if CURRENT_TEMP_MODE == 'adjust_both':
-            param_text += f"\n$\\mathbf{{Adjusted\\ both\\ to\\ {REFERENCE_TEMPERATURE:.2f}\\ K}}$"
-        else:
-            param_text += f"\n$\\mathbf{{{temp_info.replace(' ', '\\ ')}}}$"
-        
-    if TEMPERATURE_CORRECTION_ENABLED:
-        param_text += f"\nTemp. correction: +{TEMPERATURE_CORRECTION_DELTA} K"
-    
+        lines.append(f"Data averaged over {period_display}")
+
+    if include('temperature_adjustment'):
+        temp_info = ""
+        if CURRENT_TEMP_MODE == 'adjust_real':
+            temp_info = "Adjusted meas. to ref. temperature"
+        elif CURRENT_TEMP_MODE == 'adjust_sim':
+            temp_info = "Adjusted ref. to meas. temperature"
+        elif CURRENT_TEMP_MODE == 'adjust_both':
+            temp_info = f"Adjusted both to {REFERENCE_TEMPERATURE:.2f} K"
+
+        if temp_info:
+            if CURRENT_TEMP_MODE == 'adjust_both':
+                lines.append(f"$\\mathbf{{Adjusted\\ both\\ to\\ {REFERENCE_TEMPERATURE:.2f}\\ K}}$")
+            else:
+                lines.append(f"$\\mathbf{{{temp_info.replace(' ', '\\ ')}}}$")
+
+    if include('temperature_correction') and TEMPERATURE_CORRECTION_ENABLED:
+        lines.append(f"Temp. correction: +{TEMPERATURE_CORRECTION_DELTA} K")
+
+    if not lines:
+        return
+
+    param_text = "\n".join(lines)
+
     props = dict(boxstyle='round', facecolor='white', alpha=0.7)
     
     # Ustaw pozycję na podstawie parametru loc
