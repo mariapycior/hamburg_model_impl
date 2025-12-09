@@ -862,7 +862,7 @@ def plot_currents_vs_position(summary_df: pd.DataFrame, target_luminosities: lis
 
     if handles:
         ax.legend(handles, labels, loc='upper right', bbox_to_anchor=(1, 1),
-                  fontsize=7, title='Luminosity', title_fontsize=7,
+                  fontsize=7, title='Delivered Luminosity', title_fontsize=7,
                   ncol=2, columnspacing=0.8, handletextpad=0.4)
     
     # Dodaj box z informacjami w lewym górnym rogu
@@ -870,7 +870,7 @@ def plot_currents_vs_position(summary_df: pd.DataFrame, target_luminosities: lis
     
     # Dodaj informację o dostarczonej luminosności
     if LUMINOSITY == "delivered":
-        info_text += "Delivered Luminosity\n"
+        info_text += ""#"Delivered Luminosity\n"
     else:
         info_text += "Recorded Luminosity\n"
     
@@ -893,7 +893,7 @@ def plot_currents_vs_position(summary_df: pd.DataFrame, target_luminosities: lis
     ax.text(0.02, 0.98, info_text, transform=ax.transAxes, fontsize=7,
             verticalalignment='top', horizontalalignment='left', bbox=props)
     
-    ax.set_xlabel('Sensor Z Position [mm]')
+    ax.set_xlabel('Sensor z Position [mm]')
     ax.set_ylabel('Leakage Current [mA]')
     if SHOW_PLOT_TITLES:
         ax.set_title('Leakage Current vs Sensor Position at Different Luminosities', fontsize=10)
