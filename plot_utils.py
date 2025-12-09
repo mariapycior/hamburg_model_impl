@@ -10,7 +10,8 @@ from config_plot import (
     USE_LINES_FOR_SIMULATION, SHOW_ERROR_BANDS, ERROR_PERCENTAGE, PLOT_RESAMPLING_PERIOD,
     SCATTER_MARKER_SIZE, LINE_WIDTH, ERROR_BAND_ALPHA, REAL_DATA_COLOR, SIMULATED_DATA_COLOR, ERROR_BAND_COLOR,
     DEFAULT_FIGURE_SIZE, MULTI_SUBPLOT_FIGURE_SIZE, ERROR_BAND_ZORDER, DATA_ZORDER,
-    SHOW_RATIO_FOR_SINGLE_SENSOR, RATIO_PLOT_HEIGHT, SENSOR_GROUPING_MODE, GROUP_COLORS
+    SHOW_RATIO_FOR_SINGLE_SENSOR, RATIO_PLOT_HEIGHT, SENSOR_GROUPING_MODE, GROUP_COLORS,
+    SHOW_PARAMETER_INFO_BOX, PARAMETER_INFO_FIELDS
 )
 from VeloDetectorElement import VeloDetectorElement
 import matplotlib.gridspec as gridspec
@@ -128,8 +129,6 @@ def plot_group_averages(df_group_averages: pd.DataFrame, plot_by: str = 'time'):
                 ax_main.scatter(real_series.index, real_series.values, color=REAL_DATA_COLOR, s=SCATTER_MARKER_SIZE, label='Measured')
 
         ax_main.set_ylabel('Average Leakage Current [mA]')
-        if plot_by == 'luminosity':
-            ax_main.set_xlabel(x_label)
         ax_main.set_ylim(y_min, y_max)
         ax_main.grid(True)
         ax_main.yaxis.set_minor_locator(mticker.AutoMinorLocator(2))
@@ -181,6 +180,9 @@ def plot_group_averages(df_group_averages: pd.DataFrame, plot_by: str = 'time'):
 
     if ratio_axes:
         plt.subplots_adjust(hspace=0.1)
+    else:
+        for ax in main_axes:
+            ax.set_xlabel(x_label)
     plt.tight_layout()
     plt.show()
 
@@ -217,22 +219,32 @@ def get_group_averages(df: pd.DataFrame, sensors: list, include_std: bool = True
     return out_df
 
 def add_parameter_info(ax, loc='upper left'):
+    if not SHOW_PARAMETER_INFO_BOX:
+        return
+
     params = Parameters()
     timestep = pd.to_timedelta(SIMULATION_PERIOD.lower()).total_seconds() / 3600
-    
-    param_text = (
-        f"$\\alpha_I$: {params.alpha_I:.2e} A/cm\n"
-        f"$\\alpha_0^*$: {params.alpha_0_star:.2e} A/cm\n"
-        f"$\\beta$: {params.beta:.2e} A/cm\n"
-        f"$E_I$: {params.E_I:.2f} eV\n"
-        f"$V$: {params.V:.3f} cm$^3$\n"
-        f"$E_{{eff}}$: {params.E_eff:.2f} eV\n"
-        f"Timestep: {timestep:.1f} h"
-    )
-    
-    # Add resampling period information
-    if PLOT_RESAMPLING_PERIOD:
-        # Convert shorthand period to more readable format
+
+    include = lambda key: PARAMETER_INFO_FIELDS.get(key, True)
+
+    lines: list[str] = []
+
+    if include('alpha_I'):
+        lines.append(f"$\\alpha_I$: {params.alpha_I:.2e} A/cm")
+    if include('alpha_0_star'):
+        lines.append(f"$\\alpha_0^*$: {params.alpha_0_star:.2e} A/cm")
+    if include('beta'):
+        lines.append(f"$\\beta$: {params.beta:.2e} A/cm")
+    if include('E_I'):
+        lines.append(f"$E_I$: {params.E_I:.2f} eV")
+    if include('V'):
+        lines.append(f"$V$: {params.V:.3f} cm$^3$")
+    if include('E_eff'):
+        lines.append(f"$E_{{eff}}$: {params.E_eff:.2f} eV")
+    if include('timestep'):
+        lines.append(f"Timestep: {timestep:.1f} h")
+
+    if include('resampling') and PLOT_RESAMPLING_PERIOD:
         period_display = PLOT_RESAMPLING_PERIOD
         if period_display == '1W':
             period_display = '1 week'
@@ -242,26 +254,30 @@ def add_parameter_info(ax, loc='upper left'):
             period_display = '1 day'
         elif period_display.endswith('D'):
             period_display = period_display.replace('D', ' days')
-        
-        param_text += f"\nData averaged over {period_display}"
-    
-    temp_info = ""
-    if CURRENT_TEMP_MODE == 'adjust_real':
-        temp_info = "Adjusted real to sim. temperature"
-    elif CURRENT_TEMP_MODE == 'adjust_sim':
-        temp_info = "Adjusted sim. to real temperature"
-    elif CURRENT_TEMP_MODE == 'adjust_both':
-        temp_info = f"Adjusted both to {REFERENCE_TEMPERATURE:.2f} K"
-    
-    if temp_info:
-        # Formatujemy tekst z jawnie dodanymi spacjami w LaTeX
-        if CURRENT_TEMP_MODE == 'adjust_both':
-            param_text += f"\n$\\mathbf{{Adjusted\\ both\\ to\\ {REFERENCE_TEMPERATURE:.2f}\\ K}}$"
-        else:
-            param_text += f"\n$\\mathbf{{{temp_info.replace(' ', '\\ ')}}}$"
-        
-    if TEMPERATURE_CORRECTION_ENABLED:
-        param_text += f"\nTemp. correction: +{TEMPERATURE_CORRECTION_DELTA} K"
+        lines.append(f"Data averaged over {period_display}")
+
+    if include('temperature_adjustment'):
+        temp_info = ""
+        if CURRENT_TEMP_MODE == 'adjust_real':
+            temp_info = "Adjusted real to sim. temperature"
+        elif CURRENT_TEMP_MODE == 'adjust_sim':
+            temp_info = "Adjusted sim. to real temperature"
+        elif CURRENT_TEMP_MODE == 'adjust_both':
+            temp_info = f"Adjusted both to {REFERENCE_TEMPERATURE:.2f} K"
+
+        if temp_info:
+            if CURRENT_TEMP_MODE == 'adjust_both':
+                lines.append(f"$\\mathbf{{Adjusted\\ both\\ to\\ {REFERENCE_TEMPERATURE:.2f}\\ K}}$")
+            else:
+                lines.append(f"$\\mathbf{{{temp_info.replace(' ', '\\ ')}}}$")
+
+    if include('temperature_correction') and TEMPERATURE_CORRECTION_ENABLED:
+        lines.append(f"Temp. correction: +{TEMPERATURE_CORRECTION_DELTA} K")
+
+    if not lines:
+        return
+
+    param_text = "\n".join(lines)
     
     props = dict(boxstyle='round', facecolor='white', alpha=0.7)
     
