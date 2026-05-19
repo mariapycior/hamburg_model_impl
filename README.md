@@ -2,24 +2,17 @@
 
 Branch extends `main` with sensor **grouping and mean ± std plots**. Sensors are grouped by type (R/Phi), side (A/C), and z-position as defined in `groups.py`. Plots show the mean current with a shaded standard deviation band for each group.
 
-## Input data
+## Getting data
 
-```
-in_data/
-├── fluence/      # avgFluenceBinned_10T_74_80.csv
-├── current/      # 2011_current.csv, 2012_current.csv, ls1_current.csv,
-│                 # 2016_current.csv, 2017_current.csv, 2018_current.csv
-├── temperature/  # temperatureNTC01_10T_YYYY.csv  (one per year, 2011–2018)
-└── lumi/         # lumi_binned.csv
+Config and input data files are stored in the `data` branch. After cloning, run once:
+
+```bash
+git checkout origin/data -- config.py config_plot.py params.py in_data/
 ```
 
-## Config files (gitignored – create locally)
+This places all required files in your working directory without switching branches. Keep them in your local `.gitignore` to avoid committing them.
 
-| File | Purpose |
-|------|---------|
-| `config.py` | Paths, NTC setting, luminosity type, simulation period |
-| `config_plot.py` | Plot options; set `SENSOR_GROUPING_MODE` (`'type'`, `'side'`, `'z_position'`) |
-| `params.py` | Hamburg model parameters |
+Set `SENSOR_GROUPING_MODE` in `config_plot.py` to `'type'`, `'side'`, or `'z_position'`.
 
 ## Usage
 
