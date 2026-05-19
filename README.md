@@ -2,26 +2,15 @@
 
 Branch extends `main` to support **plotting up to 5 sensors simultaneously** on a single figure.
 
-## Input data
+## Getting data
 
-Same directory structure as `main`:
+Config and input data files are stored in the `data` branch. After cloning, run once:
 
-```
-in_data/
-├── fluence/      # avgFluenceBinned_10T_74_80.csv
-├── current/      # 2011_current.csv, 2012_current.csv, ls1_current.csv,
-│                 # 2016_current.csv, 2017_current.csv, 2018_current.csv
-├── temperature/  # temperatureNTC01_10T_YYYY.csv  (one per year, 2011–2018)
-└── lumi/         # lumi_binned.csv
+```bash
+git checkout origin/data -- config.py config_plot.py params.py in_data/
 ```
 
-## Config files (gitignored – create locally)
-
-| File | Purpose |
-|------|---------|
-| `config.py` | Paths, NTC setting, luminosity type, simulation period |
-| `config_plot.py` | Plot display options |
-| `params.py` | Hamburg model parameters |
+This places all required files in your working directory without switching branches. Keep them in your local `.gitignore` to avoid committing them.
 
 ## Usage
 
