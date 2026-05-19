@@ -2,28 +2,17 @@
 
 Hamburg model implementation for VELO silicon strip detector sensors (LHCb experiment, 2011–2018). Simulates leakage current from fluence, temperature, and luminosity data, and compares with measured values per sensor.
 
-## Input data
+## Getting data
 
-Create the directory structure below and place input files accordingly:
+Config and input data files are stored in the `data` branch. After cloning, run once:
 
+```bash
+git checkout origin/data -- config.py config_plot.py params.py in_data/
 ```
-in_data/
-├── fluence/      # avgFluenceBinned_10T_74_80.csv
-├── current/      # 2011_current.csv, 2012_current.csv, ls1_current.csv,
-│                 # 2016_current.csv, 2017_current.csv, 2018_current.csv
-├── temperature/  # temperatureNTC01_10T_YYYY.csv  (one per year, 2011–2018)
-└── lumi/         # lumi_binned.csv
-```
+
+This places all required files in your working directory without switching branches. Keep them in your local `.gitignore` to avoid committing them.
 
 Output is written to `out_data/data/simulated_df.csv`.
-
-## Config files (gitignored – create locally)
-
-| File | Purpose |
-|------|---------|
-| `config.py` | Paths, NTC setting, luminosity type, simulation period |
-| `config_plot.py` | Plot display options (colors, font sizes, etc.) |
-| `params.py` | Hamburg model parameters (α, k, etc.) |
 
 ## Usage
 
