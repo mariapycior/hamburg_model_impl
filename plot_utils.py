@@ -412,9 +412,7 @@ def plot_sensors_data(df: pd.DataFrame, sensors: list, column_prefix: str, title
     
     if columns:
         data_df = df[columns]
-        valid_count = data_df.notna().sum(axis=1)
         mean_data = data_df.mean(axis=1)
-        mean_data[valid_count <= (len(columns) // 2)] = float('nan')
         mean_data = mean_data.sort_index()
         ax.plot(mean_data.index, mean_data.values, color='black', linewidth=3, 
                 label=f'Mean ({"real" if column_prefix == "real_current" else "simulated"})', 
@@ -475,7 +473,7 @@ def plot_all_sensors(df: pd.DataFrame, sensors: list, output_dir: str = None,
                 max_val = max(max_val, curr_max)
     
     # Ustaw wspólny zakres osi Y - maksymalna wartość to 0.36
-    y_range = (0, 0.36)
+    y_range = (0, 0.56)
     
     # Plot simulated current for all sensors (no error bands when plotting all sensors)
     sim_output = None if output_dir is None else os.path.join(output_dir, 'all_sensors_simulated.png')
@@ -587,6 +585,7 @@ def plot_currents_vs_cumulative_fluence(df: pd.DataFrame, sensor_name: str, outp
 def plot_all_currents_vs_fluence(df: pd.DataFrame, sensors: list, output_dir: str = None):
     """Plot all sensors currents against fluence in two separate plots using continuous lines.
     Both plots use the same axis scales for better comparison."""
+    min_points_for_mean = 5
     # Check if any sensors have fluence data
     has_fluence_data = False
     for sensor in sensors:
@@ -649,6 +648,35 @@ def plot_all_currents_vs_fluence(df: pd.DataFrame, sensors: list, output_dir: st
             fluence_col = f"delivered_fluence_{sensor}"
             sim_col = f"current_{sensor}"
             ax.plot(sim_data[fluence_col], sim_data[sim_col], linewidth=LINE_WIDTH, label=f"Sensor {sensor_number}", zorder=DATA_ZORDER)
+
+        sim_pairs = [sensor for sensor in sensors if f"current_{sensor}" in temp_df.columns and f"delivered_fluence_{sensor}" in temp_df.columns]
+        if sim_pairs:
+            sim_frames = []
+            for sensor in sim_pairs:
+                fluence_col = f"delivered_fluence_{sensor}"
+                sim_col = f"current_{sensor}"
+                curve_df = temp_df[[fluence_col, sim_col]].dropna().sort_values(fluence_col)
+                if not curve_df.empty:
+                    sim_frames.append(pd.DataFrame({
+                        'sensor': sensor,
+                        'x': curve_df[fluence_col].to_numpy(),
+                        'current': curve_df[sim_col].to_numpy(),
+                    }))
+            if sim_frames:
+                sim_all = pd.concat(sim_frames, ignore_index=True).sort_values('x')
+                sim_bin_width = 1e12
+                sim_x_min, sim_x_max = sim_all['x'].min(), sim_all['x'].max()
+                sim_bin_edges = np.arange(sim_x_min, sim_x_max + sim_bin_width, sim_bin_width)
+                if len(sim_bin_edges) < 2:
+                    sim_bin_edges = np.array([sim_x_min, sim_x_min + sim_bin_width])
+                sim_all['x_bin'] = pd.cut(sim_all['x'], bins=sim_bin_edges, include_lowest=True)
+                sim_mean_df = sim_all.groupby('x_bin', observed=True).agg(
+                    x=('x', 'mean'), current=('current', 'mean'), n_contributors=('sensor', 'nunique')
+                ).reset_index(drop=True)
+                sim_mean_df = sim_mean_df[sim_mean_df['n_contributors'] > min_points_for_mean].dropna(subset=['x', 'current']).sort_values('x')
+                print(f"[Mean simulated vs fluence] points with n>{min_points_for_mean}: {len(sim_mean_df)}")
+                ax.plot(sim_mean_df['x'], sim_mean_df['current'], color='black', linewidth=3,
+                        label='Mean (simulated)', zorder=DATA_ZORDER+1)
         
         add_parameter_info(ax)
         
@@ -672,6 +700,39 @@ def plot_all_currents_vs_fluence(df: pd.DataFrame, sensors: list, output_dir: st
             fluence_col = f"delivered_fluence_{sensor}"
             real_col = f"real_current_{sensor}"
             ax.plot(real_data[fluence_col], real_data[real_col], linewidth=LINE_WIDTH, label=f"Sensor {sensor_number}", zorder=DATA_ZORDER)
+
+        real_pairs = [sensor for sensor in sensors if f"real_current_{sensor}" in temp_df.columns and f"delivered_fluence_{sensor}" in temp_df.columns]
+        if real_pairs:
+            real_frames = []
+            for sensor in real_pairs:
+                fluence_col = f"delivered_fluence_{sensor}"
+                real_col = f"real_current_{sensor}"
+                curve_df = temp_df[[fluence_col, real_col]].dropna().sort_values(fluence_col)
+                if not curve_df.empty:
+                    real_frames.append(pd.DataFrame({
+                        'sensor': sensor,
+                        'x': curve_df[fluence_col].to_numpy(),
+                        'current': curve_df[real_col].to_numpy(),
+                    }))
+
+            if real_frames:
+                real_all = pd.concat(real_frames, ignore_index=True).sort_values('x')
+                real_bin_width = 1e12
+                real_x_min = real_all['x'].min()
+                real_x_max = real_all['x'].max()
+                real_bin_edges = np.arange(real_x_min, real_x_max + real_bin_width, real_bin_width)
+                if len(real_bin_edges) < 2:
+                    real_bin_edges = np.array([real_x_min, real_x_min + real_bin_width])
+                real_all['x_bin'] = pd.cut(real_all['x'], bins=real_bin_edges, include_lowest=True)
+                real_mean_df = real_all.groupby('x_bin', observed=True).agg(
+                    x=('x', 'mean'),
+                    current=('current', 'mean'),
+                    n_contributors=('sensor', 'nunique'),
+                ).reset_index(drop=True)
+                real_mean_df = real_mean_df[real_mean_df['n_contributors'] > min_points_for_mean].dropna(subset=['x', 'current']).sort_values('x')
+                print(f"[Mean measured vs fluence] points with n>{min_points_for_mean}: {len(real_mean_df)}")
+                ax.plot(real_mean_df['x'], real_mean_df['current'], color='black', linewidth=3,
+                    label='Mean (real)', zorder=DATA_ZORDER+1)
         
         add_parameter_info(ax)
         
@@ -692,6 +753,7 @@ def plot_all_currents_vs_fluence(df: pd.DataFrame, sensors: list, output_dir: st
 def plot_all_currents_vs_luminosity(df: pd.DataFrame, sensors: list, output_dir: str = None):
     """Plot all sensors currents against integrated luminosity in two separate plots using continuous lines.
     Both plots use the same axis scales for better comparison."""
+    min_points_for_mean = 20
     if 'integrated_luminosity' not in df.columns:
         print("No integrated luminosity data found")
         return
@@ -743,6 +805,17 @@ def plot_all_currents_vs_luminosity(df: pd.DataFrame, sensors: list, output_dir:
             sensor_number = get_sensor_number(sensor)
             sim_col = f"current_{sensor}"
             ax.plot(sim_data['integrated_luminosity'], sim_data[sim_col], linewidth=LINE_WIDTH, label=f"Sensor {sensor_number}", zorder=DATA_ZORDER)
+
+        sim_current_cols = [f"current_{sensor}" for sensor in sensors if f"current_{sensor}" in temp_df.columns]
+        if sim_current_cols:
+            sim_current_df = temp_df[sim_current_cols]
+            sim_count = sim_current_df.notna().sum(axis=1)
+            sim_mean_current = sim_current_df.mean(axis=1)
+            sim_mean_df = pd.DataFrame({'x': temp_df['integrated_luminosity'], 'current': sim_mean_current, 'n_contributors': sim_count})
+            sim_mean_df = sim_mean_df[sim_mean_df['n_contributors'] > min_points_for_mean].dropna(subset=['x', 'current']).sort_values('x')
+            print(f"[Mean simulated vs luminosity] points with n>{min_points_for_mean}: {len(sim_mean_df)}")
+            ax.plot(sim_mean_df['x'], sim_mean_df['current'], color='black', linewidth=3,
+                    label='Mean (simulated)', zorder=DATA_ZORDER+1)
         
         add_parameter_info(ax)
         
@@ -765,6 +838,17 @@ def plot_all_currents_vs_luminosity(df: pd.DataFrame, sensors: list, output_dir:
             sensor_number = get_sensor_number(sensor)
             real_col = f"real_current_{sensor}"
             ax.plot(real_data['integrated_luminosity'], real_data[real_col], linewidth=LINE_WIDTH, label=f"Sensor {sensor_number}", zorder=DATA_ZORDER)
+
+        real_current_cols = [f"real_current_{sensor}" for sensor in sensors if f"real_current_{sensor}" in temp_df.columns]
+        if real_current_cols:
+            real_current_df = temp_df[real_current_cols]
+            real_count = real_current_df.notna().sum(axis=1)
+            real_mean_current = real_current_df.mean(axis=1)
+            real_mean_df = pd.DataFrame({'x': temp_df['integrated_luminosity'], 'current': real_mean_current, 'n_contributors': real_count})
+            real_mean_df = real_mean_df[real_mean_df['n_contributors'] > min_points_for_mean].dropna(subset=['x', 'current']).sort_values('x')
+            print(f"[Mean measured vs luminosity] points with n>{min_points_for_mean}: {len(real_mean_df)}")
+            ax.plot(real_mean_df['x'], real_mean_df['current'], color='black', linewidth=3,
+                    label='Mean (real)', zorder=DATA_ZORDER+1)
         
         add_parameter_info(ax)
         
