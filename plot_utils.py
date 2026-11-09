@@ -409,7 +409,7 @@ def plot_sensors_data(df: pd.DataFrame, sensors: list, column_prefix: str, title
                     else:
                         ax.scatter(y_sorted.index, y_sorted.values, s=SCATTER_MARKER_SIZE, 
                                   label=f"Sensor {sensor_number}", zorder=DATA_ZORDER)
-    
+   # add removing outliers from mean 
     if columns:
         data_df = df[columns]
         mean_data = data_df.mean(axis=1)
@@ -632,7 +632,9 @@ def plot_all_currents_vs_fluence(df: pd.DataFrame, sensors: list, output_dir: st
                 real_data_by_sensor[sensor] = real_data
                 all_fluence_values.extend(real_data[fluence_col].values)
                 all_current_values.extend(real_data[real_col].values)
-    
+
+    print([s for s, df in real_data_by_sensor.items() if (df.iloc[:, 0] > 0.59).any()])
+
     # Determine common axis limits
     if all_fluence_values and all_current_values:
         x_min = min(all_fluence_values)
@@ -664,6 +666,7 @@ def plot_all_currents_vs_fluence(df: pd.DataFrame, sensors: list, output_dir: st
                     }))
             if sim_frames:
                 sim_all = pd.concat(sim_frames, ignore_index=True).sort_values('x')
+                print("Nazwy sensorów:", sorted(sim_all['sensor'].unique()))
                 sim_bin_width = 1e12
                 sim_x_min, sim_x_max = sim_all['x'].min(), sim_all['x'].max()
                 sim_bin_edges = np.arange(sim_x_min, sim_x_max + sim_bin_width, sim_bin_width)
@@ -710,7 +713,7 @@ def plot_all_currents_vs_fluence(df: pd.DataFrame, sensors: list, output_dir: st
                 curve_df = temp_df[[fluence_col, real_col]].dropna().sort_values(fluence_col)
                 if not curve_df.empty:
                     real_frames.append(pd.DataFrame({
-                        'sensor': sensor,
+                        'sensor': sensor,        
                         'x': curve_df[fluence_col].to_numpy(),
                         'current': curve_df[real_col].to_numpy(),
                     }))
@@ -724,11 +727,12 @@ def plot_all_currents_vs_fluence(df: pd.DataFrame, sensors: list, output_dir: st
                 if len(real_bin_edges) < 2:
                     real_bin_edges = np.array([real_x_min, real_x_min + real_bin_width])
                 real_all['x_bin'] = pd.cut(real_all['x'], bins=real_bin_edges, include_lowest=True)
-                real_mean_df = real_all.groupby('x_bin', observed=True).agg(
-                    x=('x', 'mean'),
-                    current=('current', 'mean'),
-                    n_contributors=('sensor', 'nunique'),
+                excluded = ['VL07_CB', 'VL08_CB', 'VL08_CT', ' ', 'VL16_CB']
+
+                real_mean_df = real_all[~real_all['sensor'].isin(excluded)].groupby('x_bin', observed=True).agg(
+                    x=('x', 'mean'), current=('current', 'mean'), n_contributors=('sensor', 'nunique')
                 ).reset_index(drop=True)
+                # add removing outliers from mean
                 real_mean_df = real_mean_df[real_mean_df['n_contributors'] > min_points_for_mean].dropna(subset=['x', 'current']).sort_values('x')
                 print(f"[Mean measured vs fluence] points with n>{min_points_for_mean}: {len(real_mean_df)}")
                 ax.plot(real_mean_df['x'], real_mean_df['current'], color='black', linewidth=3,
@@ -744,7 +748,8 @@ def plot_all_currents_vs_fluence(df: pd.DataFrame, sensors: list, output_dir: st
         ax.set_ylim(y_min, y_max)
         ax.grid(True)
         plt.tight_layout()
-        # Usunięto legendę z wykresu z sensorami
+        
+        #plt.legend()
         if output_dir is not None:
             plt.savefig(os.path.join(output_dir, "all_real_vs_fluence.png"), bbox_inches='tight')
     else:
@@ -841,7 +846,11 @@ def plot_all_currents_vs_luminosity(df: pd.DataFrame, sensors: list, output_dir:
 
         real_current_cols = [f"real_current_{sensor}" for sensor in sensors if f"real_current_{sensor}" in temp_df.columns]
         if real_current_cols:
-            real_current_df = temp_df[real_current_cols]
+            excluded = ['VL07_CB', 'VL08_CB', 'VL08_CT', 'VL16_CB']
+           # excluded = []
+            mean_cols = [col for col in real_current_cols if col.replace('real_current_', '') not in excluded]
+
+            real_current_df = temp_df[mean_cols]
             real_count = real_current_df.notna().sum(axis=1)
             real_mean_current = real_current_df.mean(axis=1)
             real_mean_df = pd.DataFrame({'x': temp_df['integrated_luminosity'], 'current': real_mean_current, 'n_contributors': real_count})
@@ -860,7 +869,7 @@ def plot_all_currents_vs_luminosity(df: pd.DataFrame, sensors: list, output_dir:
         ax.set_ylim(y_min, y_max)
         ax.grid(True)
         plt.tight_layout()
-        # Usunięto legendę z wykresu z sensorami
+
         if output_dir is not None:
             plt.savefig(os.path.join(output_dir, "all_real_vs_luminosity.png"), bbox_inches='tight')
     else:

@@ -67,7 +67,7 @@ def process_and_plot_data(result_df, sensors_to_use, args):
         plot_utils.plot_simulated_vs_real(result_df, sensor)
         #plot_utils.plot_leakage_current(result_df, sensor)
         plot_utils.plot_currents_vs_parameter(result_df, sensor, param_type='luminosity')
-        #plot_utils.plot_currents_vs_parameter(result_df, sensor, param_type='fluence')
+        plot_utils.plot_currents_vs_parameter(result_df, sensor, param_type='fluence')
     else:
         print(f"Creating plots for all {len(sensors_to_use)} sensors")
         plot_utils.plot_currents_vs_position(curr_vs_pos_df, TARGET_LUMINOSITIES)
